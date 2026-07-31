@@ -60,9 +60,9 @@ String formatSshEnvironmentLines(Map<String, String> environment) {
   return names.map((name) => '$name=${environment[name]}').join('\n');
 }
 
-String? validateSshEnvironmentLines(String source) {
+String? validateSshEnvironmentLines(String? source) {
   try {
-    parseSshEnvironmentLines(source);
+    parseSshEnvironmentLines(source ?? '');
     return null;
   } on FormatException catch (error) {
     return error.message.toString();
