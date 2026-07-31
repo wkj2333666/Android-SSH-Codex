@@ -126,6 +126,7 @@ EMPTY=
     });
 
     test('validates valid input', () {
+      expect(validateSshEnvironmentLines(null), isNull);
       expect(
         validateSshEnvironmentLines('A=one\nTOKEN=a=b\n\nEMPTY='),
         isNull,

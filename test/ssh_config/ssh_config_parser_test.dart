@@ -157,6 +157,27 @@ Host api.prod
       });
     });
 
+    test('keeps target values while adding later Host star defaults', () {
+      final config = SshConfig.parse('''
+Host target
+  SetEnv TARGET=target-value
+Host *
+  SetEnv TARGET=fallback-value GLOBAL=global-value
+''');
+
+      final host = config.resolve('target');
+
+      expect(host.environment, {
+        'TARGET': 'target-value',
+        'GLOBAL': 'global-value',
+      });
+      expect(host.warnings, hasLength(1));
+      expect(host.warnings.single, contains('TARGET'));
+      expect(host.warnings.single, isNot(contains('target-value')));
+      expect(host.warnings.single, isNot(contains('fallback-value')));
+      expect(host.warnings.single, isNot(contains('global-value')));
+    });
+
     test('warns safely about conflicting duplicate values', () {
       final config = SshConfig.parse('''
 Host duplicate
