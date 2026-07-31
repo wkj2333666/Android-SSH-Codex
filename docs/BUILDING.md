@@ -35,6 +35,10 @@ Application backup is disabled so encrypted preferences cannot be restored onto
 a device without the matching keystore key. OpenHarmony uses its dedicated
 secure-storage implementation.
 
+Android builds disable Flutter Impeller and use Skia. This is a compatibility
+fallback for legacy Huawei GPU drivers on HarmonyOS 4.x devices that can leave
+the Impeller launch surface black before the first Flutter frame is visible.
+
 ## Remote host requirements
 
 - POSIX shell and OpenSSH server with Unix-socket forwarding enabled.

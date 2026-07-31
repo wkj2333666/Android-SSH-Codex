@@ -15,8 +15,8 @@
 **Files:**
 - Create: `test/tool/prepare_android_test.dart`
 
-- [ ] Read `tool/prepare_android.sh` and assert that it generates the `EnableImpeller` metadata with value `false`.
-- [ ] Push the test-only commit and confirm GitHub CI fails on the missing metadata.
+- [x] Read `tool/prepare_android.sh` and assert that it generates the `EnableImpeller` metadata with value `false`.
+- [x] Push the test-only commit and confirm GitHub CI fails on the missing metadata.
 
 ### Task 2: Disable Impeller
 
@@ -25,9 +25,9 @@
 - Modify: `docs/BUILDING.md`
 - Modify: `pubspec.yaml`
 
-- [ ] Insert the metadata beneath the generated Android `<application>` element only when it is absent.
-- [ ] Document the HarmonyOS 4.x GPU compatibility fallback.
-- [ ] Set the diagnostic package version to `0.1.2+3`.
+- [x] Insert the metadata beneath the generated Android `<application>` element only when it is absent.
+- [x] Document the HarmonyOS 4.x GPU compatibility fallback.
+- [x] Set the diagnostic package version to `0.1.2+3`.
 
 ### Task 3: Verify and publish diagnostic
 
