@@ -33,6 +33,9 @@ final class HostKeyMismatchException implements Exception {
 String formatHostKeyFingerprint(List<int> bytes) =>
     'SHA256:${base64Encode(bytes).replaceFirst(RegExp(r'=+$'), '')}';
 
+String? normalizePrivateKeyPassphrase(String? value) =>
+    value == null || value.trim().isEmpty ? null : value;
+
 typedef HostKeyPrompt = Future<bool> Function(HostKeyChallenge challenge);
 
 final class SshConnection {
@@ -128,7 +131,10 @@ final class SshConnector {
     }
     final identities = privateKey == null || privateKey.trim().isEmpty
         ? null
-        : SSHKeyPair.fromPem(privateKey, passphrase);
+        : SSHKeyPair.fromPem(
+            privateKey,
+            normalizePrivateKeyPassphrase(passphrase),
+          );
     return SSHClient(
       socket,
       username: user,
