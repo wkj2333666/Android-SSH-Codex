@@ -15,8 +15,7 @@ final class SshConfig {
       if (tokens.isEmpty) continue;
       final first = tokens.first;
       final separator = first.indexOf('=');
-      final originalKey =
-          separator < 0 ? first : first.substring(0, separator);
+      final originalKey = separator < 0 ? first : first.substring(0, separator);
       final key = originalKey.toLowerCase();
       final values = <String>[
         if (separator >= 0 && separator + 1 < first.length)
