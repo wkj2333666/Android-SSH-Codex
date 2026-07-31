@@ -4,7 +4,7 @@
 
 **Goal:** Produce a single-variable Android diagnostic APK that renders with Skia instead of Impeller.
 
-**Architecture:** The Android platform generation script writes Flutter's documented `EnableImpeller=false` application metadata. A source-level regression test locks this generated configuration while GitHub Actions performs all Flutter tests and platform builds.
+**Architecture:** The Android platform generation script calls an XML-aware normalizer that writes Flutter's documented `EnableImpeller=false` application metadata. Executable fixture tests lock insertion, replacement, duplicate removal, scope, and idempotence while GitHub Actions performs all tests and platform builds.
 
 **Tech Stack:** Flutter 3.35.7, Android Manifest metadata, Flutter tests, GitHub Actions.
 
@@ -13,19 +13,20 @@
 ### Task 1: Prove the configuration is absent
 
 **Files:**
-- Create: `test/tool/prepare_android_test.dart`
+- Create: `test/tool/configure_android_manifest_test.py`
 
-- [x] Read `tool/prepare_android.sh` and assert that it generates the `EnableImpeller` metadata with value `false`.
+- [x] Execute the Android Manifest normalizer against fixtures and assert that it produces one application-scoped `EnableImpeller=false` entry.
 - [x] Push the test-only commit and confirm GitHub CI fails on the missing metadata.
 
 ### Task 2: Disable Impeller
 
 **Files:**
 - Modify: `tool/prepare_android.sh`
+- Create: `tool/configure_android_manifest.py`
 - Modify: `docs/BUILDING.md`
 - Modify: `pubspec.yaml`
 
-- [x] Insert the metadata beneath the generated Android `<application>` element only when it is absent.
+- [x] Normalize missing, enabled, or duplicate metadata to one disabled entry beneath the generated Android `<application>` element.
 - [x] Document the HarmonyOS 4.x GPU compatibility fallback.
 - [x] Set the diagnostic package version to `0.1.2+3`.
 

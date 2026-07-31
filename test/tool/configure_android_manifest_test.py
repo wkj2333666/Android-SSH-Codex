@@ -16,13 +16,18 @@ class ConfigureAndroidManifestTest(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp_dir.cleanup)
         self.manifest = Path(self.temp_dir.name) / "AndroidManifest.xml"
+        self.write_manifest(("true",))
+
+    def write_manifest(self, impeller_values):
+        impeller_entries = "\n".join(
+            f'    <meta-data android:name="{IMPELLER_METADATA}" android:value="{value}" />'
+            for value in impeller_values
+        )
         self.manifest.write_text(
             f"""<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="{ANDROID_NAMESPACE}">
   <application android:label="Android SSH Codex">
-    <meta-data
-        android:name="{IMPELLER_METADATA}"
-        android:value="true" />
+{impeller_entries}
     <meta-data android:name="example.setting" android:value="false" />
     <activity android:name=".MainActivity" />
     <activity android:name=".SecondaryActivity" />
@@ -31,6 +36,15 @@ class ConfigureAndroidManifestTest(unittest.TestCase):
 """,
             encoding="utf-8",
         )
+
+    def impeller_entries(self):
+        application = ET.parse(self.manifest).getroot().find("application")
+        self.assertIsNotNone(application)
+        return application, [
+            entry
+            for entry in application.findall("meta-data")
+            if entry.get(ANDROID_NAME) == IMPELLER_METADATA
+        ]
 
     def configure(self):
         return subprocess.run(
@@ -48,16 +62,30 @@ class ConfigureAndroidManifestTest(unittest.TestCase):
         result = self.configure()
         self.assertEqual(result.returncode, 0, result.stderr)
 
-        application = ET.parse(self.manifest).getroot().find("application")
-        self.assertIsNotNone(application)
-        entries = [
-            entry
-            for entry in application.findall("meta-data")
-            if entry.get(ANDROID_NAME) == IMPELLER_METADATA
-        ]
+        application, entries = self.impeller_entries()
         self.assertEqual(len(entries), 1)
         self.assertEqual(entries[0].get(ANDROID_VALUE), "false")
         self.assertEqual(len(application.findall("activity")), 2)
+
+    def test_inserts_missing_impeller_entry(self):
+        self.write_manifest(())
+
+        result = self.configure()
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+        _, entries = self.impeller_entries()
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0].get(ANDROID_VALUE), "false")
+
+    def test_removes_duplicate_impeller_entries(self):
+        self.write_manifest(("true", "false", "true"))
+
+        result = self.configure()
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+        _, entries = self.impeller_entries()
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0].get(ANDROID_VALUE), "false")
 
     def test_configuration_is_idempotent(self):
         first_result = self.configure()
