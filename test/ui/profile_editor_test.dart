@@ -110,6 +110,36 @@ Host pi
     expect(result(), isNull);
   });
 
+  testWidgets('invalid collapsed environment expands to reveal its error', (
+    tester,
+  ) async {
+    final result = await _openEditor(tester, profile: _profile());
+    await _openAdvancedSsh(tester);
+    await tester.enterText(
+      _fieldFinder('Environment variables'),
+      'VALID=ok\nmissing-equals',
+    );
+    await tester.tap(find.text('Advanced SSH'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(result(), isNull);
+    expect(
+      find.text(
+        'Invalid environment assignment on line 2: '
+        'Environment assignment must contain an equals sign.',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      _textField(tester, 'Environment variables').controller!.text,
+      'VALID=ok\nmissing-equals',
+    );
+  });
+
   testWidgets('valid Save returns the parsed environment map', (tester) async {
     final result = await _openEditor(tester, profile: _profile());
     await _openAdvancedSsh(tester);
