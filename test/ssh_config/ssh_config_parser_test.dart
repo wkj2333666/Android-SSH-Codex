@@ -112,5 +112,122 @@ Host other
       expect(work.proxyJump, isNull);
       expect(work.warnings, contains(contains('Match')));
     });
+
+    test('resolves multiple SetEnv directives and assignments', () {
+      final config = SshConfig.parse('''
+Host single
+  SetEnv ONLY=one
+Host multiple
+  SetEnv FIRST=one SECOND=two
+  SetEnv THIRD=three
+''');
+
+      expect(config.resolve('single').environment, {'ONLY': 'one'});
+      expect(config.resolve('multiple').environment, {
+        'FIRST': 'one',
+        'SECOND': 'two',
+        'THIRD': 'three',
+      });
+    });
+
+    test('preserves quoted spaces and additional equals signs in values', () {
+      final config = SshConfig.parse('''
+Host values
+  SetEnv GREETING="hello world" TOKEN=a=b
+''');
+
+      expect(config.resolve('values').environment, {
+        'GREETING': 'hello world',
+        'TOKEN': 'a=b',
+      });
+    });
+
+    test('uses the first value per variable across matching sections', () {
+      final config = SshConfig.parse('''
+Host *.prod
+  SetEnv BACKEND=first SHARED=from-pattern
+Host api.prod
+  SetEnv BACKEND=later REGION=us-east
+''');
+
+      expect(config.resolve('api.prod').environment, {
+        'BACKEND': 'first',
+        'SHARED': 'from-pattern',
+        'REGION': 'us-east',
+      });
+    });
+
+    test('warns safely about conflicting duplicate values', () {
+      final config = SshConfig.parse('''
+Host duplicate
+  SetEnv TOKEN=first-secret
+  SetEnv TOKEN=second-secret
+''');
+
+      final host = config.resolve('duplicate');
+
+      expect(host.environment, {'TOKEN': 'first-secret'});
+      expect(host.warnings, hasLength(1));
+      expect(host.warnings.single, contains('TOKEN'));
+      expect(host.warnings.single, isNot(contains('first-secret')));
+      expect(host.warnings.single, isNot(contains('second-secret')));
+    });
+
+    test('omits invalid assignments while preserving valid assignments', () {
+      final config = SshConfig.parse('''
+Host partial
+  SetEnv GOOD=good-secret INVALID-NAME=invalid-secret ALSO=also-secret
+''');
+
+      final host = config.resolve('partial');
+
+      expect(host.environment, {
+        'GOOD': 'good-secret',
+        'ALSO': 'also-secret',
+      });
+      expect(host.warnings, hasLength(1));
+      expect(host.warnings.single, contains('SetEnv'));
+      expect(host.warnings.single, isNot(contains('good-secret')));
+      expect(host.warnings.single, isNot(contains('invalid-secret')));
+      expect(host.warnings.single, isNot(contains('also-secret')));
+    });
+
+    test('keeps IPQoS unsupported', () {
+      final config = SshConfig.parse('''
+Host qos
+  IPQoS none
+''');
+
+      expect(
+        config.resolve('qos').warnings,
+        contains('Unsupported SSH directive: IPQoS'),
+      );
+    });
+
+    test('continues to parse equals syntax for existing directives', () {
+      final config = SshConfig.parse('''
+Host=alias
+  HostName=value.example
+  Port=2222
+''');
+
+      final host = config.resolve('alias');
+
+      expect(host.hostName, 'value.example');
+      expect(host.port, 2222);
+    });
+
+    test('exposes an immutable resolved environment', () {
+      final config = SshConfig.parse('''
+Host immutable
+  SetEnv ORIGINAL=value
+''');
+      final environment = config.resolve('immutable').environment;
+
+      expect(
+        () => environment['ADDED'] = 'value',
+        throwsUnsupportedError,
+      );
+    });
   });
 }
