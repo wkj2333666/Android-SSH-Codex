@@ -36,6 +36,20 @@ String formatHostKeyFingerprint(List<int> bytes) =>
 String? normalizePrivateKeyPassphrase(String? value) =>
     value == null || value.trim().isEmpty ? null : value;
 
+typedef PrivateKeyParser = List<SSHKeyPair> Function(
+  String privateKey,
+  String? passphrase,
+);
+
+List<SSHKeyPair>? parsePrivateKeyIdentities(
+  String? privateKey,
+  String? passphrase, {
+  PrivateKeyParser parser = SSHKeyPair.fromPem,
+}) {
+  if (privateKey == null || privateKey.trim().isEmpty) return null;
+  return parser(privateKey, normalizePrivateKeyPassphrase(passphrase));
+}
+
 typedef HostKeyPrompt = Future<bool> Function(HostKeyChallenge challenge);
 
 final class SshConnection {
@@ -129,12 +143,7 @@ final class SshConnector {
     if (user.trim().isEmpty) {
       throw ArgumentError('SSH user is required for $label');
     }
-    final identities = privateKey == null || privateKey.trim().isEmpty
-        ? null
-        : SSHKeyPair.fromPem(
-            privateKey,
-            normalizePrivateKeyPassphrase(passphrase),
-          );
+    final identities = parsePrivateKeyIdentities(privateKey, passphrase);
     return SSHClient(
       socket,
       username: user,
