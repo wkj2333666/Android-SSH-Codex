@@ -1,7 +1,85 @@
 import 'package:android_ssh_codex/src/transport/codex_daemon.dart';
+import 'package:dartssh2/dartssh2.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('bootstrap passes the exact environment to the SSH command runner',
+      () async {
+    final environment = Map<String, String>.unmodifiable({
+      'LC_CODEX_BACKEND': 'sub2api',
+      'CODEX_LABEL': 'mobile client',
+    });
+    var calls = 0;
+    String? receivedCommand;
+    Map<String, String>? receivedEnvironment;
+
+    final output = await CodexDaemon.bootstrap(
+      (command, {environment}) async {
+        calls++;
+        receivedCommand = command;
+        receivedEnvironment = environment;
+        return const [115, 111, 99, 107, 101, 116];
+      },
+      environment: environment,
+    );
+
+    expect(calls, 1);
+    expect(receivedCommand, CodexDaemon.bootstrapScript);
+    expect(identical(receivedEnvironment, environment), isTrue);
+    expect(output, const [115, 111, 99, 107, 101, 116]);
+  });
+
+  test('bootstrap omits an empty environment from the SSH request', () async {
+    Map<String, String>? receivedEnvironment = const {'unexpected': 'value'};
+
+    await CodexDaemon.bootstrap(
+      (command, {environment}) async {
+        receivedEnvironment = environment;
+        return const [];
+      },
+      environment: const {},
+    );
+
+    expect(receivedEnvironment, isNull);
+  });
+
+  test('bootstrap explains server environment rejection without leaking value',
+      () async {
+    const value = 'top-secret-value';
+
+    await expectLater(
+      CodexDaemon.bootstrap(
+        (command, {environment}) async {
+          throw SSHChannelRequestError(
+            'Failed to set environment variable: SECRET_NAME',
+          );
+        },
+        environment: const {'SECRET_NAME': value},
+      ),
+      throwsA(
+        isA<StateError>()
+            .having((error) => error.message, 'message', contains('SECRET_NAME'))
+            .having((error) => error.message, 'message', contains('AcceptEnv'))
+            .having((error) => error.message, 'message', isNot(contains(value))),
+      ),
+    );
+  });
+
+  test('bootstrap propagates unrelated channel request errors unchanged',
+      () async {
+    final rejection = SSHChannelRequestError('Failed to execute');
+
+    try {
+      await CodexDaemon.bootstrap(
+        (command, {environment}) async => throw rejection,
+        environment: const {'MODE': 'review'},
+      );
+      fail('Expected the runner to fail.');
+    } catch (error) {
+      expect(identical(error, rejection), isTrue);
+    }
+  });
+
   test('bootstrap is namespaced, locked, and never signals a process', () {
     const script = CodexDaemon.bootstrapScript;
 
