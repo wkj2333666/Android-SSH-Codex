@@ -187,18 +187,18 @@ Use commit message `feat: persist SSH environment profiles`.
 - Modify: `lib/src/ui/profile_editor.dart`
 - Modify: `test/ui/profile_editor_test.dart`
 
-- [ ] **Step 1: Add failing widget tests**
+- [x] **Step 1: Add failing widget tests**
 
 Cover an existing profile rendering sorted `NAME=value` lines, SSH config
 import filling the field, a missing `=` preventing Save with a line-specific
 error, duplicate names preventing Save, and a valid Save returning a
 `ProfileDraft.profile.environment` map.
 
-- [ ] **Step 2: Push the test-only commit and verify RED remotely**
+- [x] **Step 2: Push the test-only commit and verify RED remotely**
 
 Expected failure: no `Advanced SSH` tile or `Environment variables` field.
 
-- [ ] **Step 3: Implement the editor**
+- [x] **Step 3: Implement the editor**
 
 Add an `_environment` controller initialized with
 `formatSshEnvironmentLines(profile?.environment ?? const {})`, dispose it,
@@ -227,12 +227,12 @@ ExpansionTile(
 On import, replace its text with the resolved environment. On save, parse once
 after form validation and pass the map to `HostProfile(environment: ...)`.
 
-- [ ] **Step 4: Push and verify GREEN remotely**
+- [x] **Step 4: Push and verify GREEN remotely**
 
 Expected: all widget tests pass without overflow at the existing test viewport;
 analysis and both platform builds pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 Use commit message `feat: edit SSH environment variables`.
 
