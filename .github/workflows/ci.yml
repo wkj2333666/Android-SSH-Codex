@@ -33,6 +33,7 @@ jobs:
       - run: flutter pub get
       - name: Verify dependency lock
         run: git diff --exit-code -- pubspec.lock
+      - run: python3 -m unittest discover -s test/tool -p '*_test.py'
       - run: dart format --output=none --set-exit-if-changed lib test
       - run: flutter analyze
       - run: flutter test --reporter expanded
