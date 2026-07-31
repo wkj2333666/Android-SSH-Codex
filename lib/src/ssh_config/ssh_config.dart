@@ -1,3 +1,5 @@
+import 'ssh_environment.dart';
+
 final class SshConfig {
   SshConfig._(this._sections, this._parseWarnings);
 
@@ -11,8 +13,16 @@ final class SshConfig {
     for (final rawLine in source.split(RegExp(r'\r?\n'))) {
       final tokens = _tokenize(rawLine);
       if (tokens.isEmpty) continue;
-      final key = tokens.first.toLowerCase();
-      final values = tokens.skip(1).toList(growable: false);
+      final first = tokens.first;
+      final separator = first.indexOf('=');
+      final originalKey =
+          separator < 0 ? first : first.substring(0, separator);
+      final key = originalKey.toLowerCase();
+      final values = <String>[
+        if (separator >= 0 && separator + 1 < first.length)
+          first.substring(separator + 1),
+        ...tokens.skip(1),
+      ];
       if (values.isEmpty) continue;
       if (key == 'host') {
         current = _HostSection(values);
@@ -24,9 +34,15 @@ final class SshConfig {
           warnings.add('Unsupported SSH directive: Match');
         }
       } else {
-        current.directives.add(_Directive(key, values.join(' ')));
+        if (key == 'setenv') {
+          current.directives.addAll(
+            values.map((value) => _Directive(key, value)),
+          );
+        } else {
+          current.directives.add(_Directive(key, values.join(' ')));
+        }
         if (!_supportedDirectives.contains(key)) {
-          final warning = 'Unsupported SSH directive: ${tokens.first}';
+          final warning = 'Unsupported SSH directive: $originalKey';
           if (!warnings.contains(warning)) warnings.add(warning);
         }
       }
@@ -46,6 +62,7 @@ final class SshConfig {
     int? port;
     String? proxyJumpValue;
     final identityFiles = <String>[];
+    final environment = <String, String>{};
     final warnings = _parseWarnings.toList();
 
     for (final section in _sections) {
@@ -72,6 +89,23 @@ final class SshConfig {
           case 'proxyjump':
             proxyJumpValue ??= directive.value;
             break;
+          case 'setenv':
+            late final MapEntry<String, String> assignment;
+            try {
+              assignment = parseSshEnvironmentAssignment(directive.value);
+            } on FormatException {
+              const warning = 'Invalid SetEnv assignment.';
+              if (!warnings.contains(warning)) warnings.add(warning);
+              break;
+            }
+            final name = assignment.key;
+            if (!environment.containsKey(name)) {
+              environment[name] = assignment.value;
+            } else if (environment[name] != assignment.value) {
+              final warning = 'Duplicate SetEnv variable: $name';
+              if (!warnings.contains(warning)) warnings.add(warning);
+            }
+            break;
         }
       }
     }
@@ -89,6 +123,7 @@ final class SshConfig {
           user: jumpTarget.user ?? resolved.user,
           port: jumpTarget.port ?? resolved.port,
           identityFiles: resolved.identityFiles,
+          environment: resolved.environment,
           warnings: resolved.warnings,
         );
       }
@@ -100,6 +135,7 @@ final class SshConfig {
       user: user,
       port: port ?? 22,
       identityFiles: List.unmodifiable(identityFiles),
+      environment: Map.unmodifiable(environment),
       proxyJump: jump,
       warnings: List.unmodifiable(warnings),
     );
@@ -112,6 +148,7 @@ const _supportedDirectives = {
   'port',
   'identityfile',
   'proxyjump',
+  'setenv',
 };
 
 final class ResolvedSshHost {
@@ -121,6 +158,7 @@ final class ResolvedSshHost {
     required this.user,
     required this.port,
     this.identityFiles = const [],
+    this.environment = const {},
     this.proxyJump,
     this.warnings = const [],
   });
@@ -130,6 +168,7 @@ final class ResolvedSshHost {
   final String? user;
   final int port;
   final List<String> identityFiles;
+  final Map<String, String> environment;
   final ResolvedSshHost? proxyJump;
   final List<String> warnings;
 }
@@ -232,7 +271,7 @@ List<String> _tokenize(String line) {
     if (char == '#') break;
     if (char == '"' || char == "'") {
       quote = char;
-    } else if (char == '=' || RegExp(r'\s').hasMatch(char)) {
+    } else if (RegExp(r'\s').hasMatch(char)) {
       flush();
     } else {
       current.write(char);
