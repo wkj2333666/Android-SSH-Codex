@@ -61,7 +61,7 @@ Host pi
 ''',
     );
     await tester.enterText(_fieldFinder('Host alias'), 'pi');
-    await tester.tap(find.widgetWithText(FilledButton, 'Import'));
+    await tester.tap(find.text('Import'));
     await tester.pumpAndSettle();
 
     await _openAdvancedSsh(tester);
@@ -80,7 +80,7 @@ Host pi
       _fieldFinder('Environment variables'),
       'VALID=ok\nsecret-value',
     );
-    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
     expect(
@@ -100,7 +100,7 @@ Host pi
       _fieldFinder('Environment variables'),
       'TOKEN=first-secret\nTOKEN=second-secret',
     );
-    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
     expect(
@@ -117,7 +117,7 @@ Host pi
       _fieldFinder('Environment variables'),
       'LC_CODEX_BACKEND=sub2api\nTOKEN=a=b',
     );
-    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
     expect(result(), isNotNull);
