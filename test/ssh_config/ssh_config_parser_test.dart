@@ -213,6 +213,45 @@ Host partial
       expect(host.warnings.single, isNot(contains('also-secret')));
     });
 
+    test('names safe invalid assignments without exposing values', () {
+      final config = SshConfig.parse('''
+Host missing-equals
+  SetEnv SAFE_NAME
+''');
+
+      final host = config.resolve('missing-equals');
+
+      expect(host.environment, isEmpty);
+      expect(host.warnings, ['Invalid SetEnv assignment for SAFE_NAME']);
+    });
+
+    test('uses a generic warning for unsafe environment names', () {
+      final config = SshConfig.parse('''
+Host unsafe-name
+  SetEnv INVALID-NAME=value
+''');
+
+      final host = config.resolve('unsafe-name');
+
+      expect(host.environment, isEmpty);
+      expect(host.warnings, ['Invalid SetEnv assignment.']);
+      expect(host.warnings.single, isNot(contains('INVALID-NAME')));
+      expect(host.warnings.single, isNot(contains('value')));
+    });
+
+    test('does not warn when duplicate values are identical', () {
+      final config = SshConfig.parse('''
+Host identical
+  SetEnv TOKEN=same-value
+  SetEnv TOKEN=same-value
+''');
+
+      final host = config.resolve('identical');
+
+      expect(host.environment, {'TOKEN': 'same-value'});
+      expect(host.warnings, isEmpty);
+    });
+
     test('keeps IPQoS unsupported', () {
       final config = SshConfig.parse('''
 Host qos
@@ -236,6 +275,60 @@ Host=alias
 
       expect(host.hostName, 'value.example');
       expect(host.port, 2222);
+    });
+
+    test('accepts every OpenSSH separator form for scalar directives', () {
+      final config = SshConfig.parse('''
+Host user-space
+  User alice
+Host user-equals
+  User=alice
+Host user-equals-before-space
+  User= alice
+Host user-space-before-equals
+  User =alice
+Host user-spaced-equals
+  User = alice
+''');
+
+      for (final alias in [
+        'user-space',
+        'user-equals',
+        'user-equals-before-space',
+        'user-space-before-equals',
+        'user-spaced-equals',
+      ]) {
+        final host = config.resolve(alias);
+        expect(host.user, 'alice', reason: alias);
+        expect(host.warnings, isEmpty, reason: alias);
+      }
+    });
+
+    test('accepts every OpenSSH separator form for SetEnv', () {
+      final config = SshConfig.parse('''
+Host setenv-space
+  SetEnv FOO=bar
+Host setenv-equals
+  SetEnv=FOO=bar
+Host setenv-equals-before-space
+  SetEnv= FOO=bar
+Host setenv-space-before-equals
+  SetEnv =FOO=bar
+Host setenv-spaced-equals
+  SetEnv = FOO=bar
+''');
+
+      for (final alias in [
+        'setenv-space',
+        'setenv-equals',
+        'setenv-equals-before-space',
+        'setenv-space-before-equals',
+        'setenv-spaced-equals',
+      ]) {
+        final host = config.resolve(alias);
+        expect(host.environment, {'FOO': 'bar'}, reason: alias);
+        expect(host.warnings, isEmpty, reason: alias);
+      }
     });
 
     test('exposes an immutable resolved environment', () {
