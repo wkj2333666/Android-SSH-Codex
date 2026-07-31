@@ -31,6 +31,6 @@
 
 ### Task 3: Verify and publish diagnostic
 
-- [ ] Confirm CI tests, Android APK/AAB, and OpenHarmony HAP builds pass remotely.
+- [x] Confirm CI tests, Android APK/AAB, and OpenHarmony HAP builds pass remotely.
 - [ ] Publish tag `v0.1.2-rc.1` as a GitHub prerelease.
 - [ ] Compare the published APK checksum with `SHA256SUMS.txt`.
