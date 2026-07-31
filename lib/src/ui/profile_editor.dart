@@ -23,6 +23,7 @@ class ProfileEditor extends StatefulWidget {
 
 class _ProfileEditorState extends State<ProfileEditor> {
   final _formKey = GlobalKey<FormState>();
+  final _advancedSsh = ExpansibleController();
   late final TextEditingController _label;
   late final TextEditingController _host;
   late final TextEditingController _user;
@@ -68,6 +69,7 @@ class _ProfileEditorState extends State<ProfileEditor> {
 
   @override
   void dispose() {
+    _advancedSsh.dispose();
     for (final controller in [
       _label,
       _host,
@@ -264,6 +266,8 @@ class _ProfileEditorState extends State<ProfileEditor> {
                   ],
                   const SizedBox(height: 12),
                   ExpansionTile(
+                    controller: _advancedSsh,
+                    maintainState: true,
                     tilePadding: EdgeInsets.zero,
                     title: const Text('Advanced SSH'),
                     children: [
@@ -320,7 +324,12 @@ class _ProfileEditorState extends State<ProfileEditor> {
   }
 
   void _save() {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      if (validateSshEnvironmentLines(_environment.text) != null) {
+        _advancedSsh.expand();
+      }
+      return;
+    }
     final environment = parseSshEnvironmentLines(_environment.text);
     final label = _label.text.trim();
     final safeLabel =
