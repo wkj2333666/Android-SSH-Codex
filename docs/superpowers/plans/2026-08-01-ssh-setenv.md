@@ -16,7 +16,7 @@
 - Modify: `test/transport/ssh_connector_test.dart`
 - Modify: `lib/src/transport/ssh_connector.dart`
 
-- [ ] **Step 1: Add a failing boundary regression test**
+- [x] **Step 1: Add a failing boundary regression test**
 
 Add tests for a new pure helper used by both target and ProxyJump clients:
 
@@ -31,11 +31,11 @@ test('preserves a non-empty private-key passphrase exactly', () {
 });
 ```
 
-- [ ] **Step 2: Push the test-only commit and verify RED remotely**
+- [x] **Step 2: Push the test-only commit and verify RED remotely**
 
 Commit the test, push `codex/ssh-setenv`, open a draft PR, and watch the `Analyze and test` job. Expected failure: `normalizePrivateKeyPassphrase` is undefined. Do not run tests locally.
 
-- [ ] **Step 3: Implement the minimal normalization**
+- [x] **Step 3: Implement the minimal normalization**
 
 Add this top-level helper and use it at the existing shared `SSHKeyPair.fromPem` call:
 
@@ -51,11 +51,11 @@ final identities = privateKey == null || privateKey.trim().isEmpty
       );
 ```
 
-- [ ] **Step 4: Push and verify GREEN remotely**
+- [x] **Step 4: Push and verify GREEN remotely**
 
 Expected GitHub CI: helper tests and all existing Flutter tests pass; analysis is clean. Confirm Android APK/AAB and OpenHarmony HAP jobs also pass before marking the task complete.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 Use commit message `fix: normalize empty SSH key passphrases`.
 
