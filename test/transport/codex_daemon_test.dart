@@ -14,12 +14,15 @@ void main() {
       String? receivedCommand;
       Map<String, String>? receivedEnvironment;
 
-      final SshCommandRunner runner = (command, {environment}) async {
+      Future<List<int>> runner(
+        String command, {
+        Map<String, String>? environment,
+      }) async {
         calls++;
         receivedCommand = command;
         receivedEnvironment = environment;
         return const [115, 111, 99, 107, 101, 116];
-      };
+      }
 
       final output = await CodexDaemon.bootstrap(
         runner,

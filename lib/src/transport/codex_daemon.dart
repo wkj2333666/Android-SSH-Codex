@@ -1,5 +1,34 @@
+import 'package:dartssh2/dartssh2.dart';
+
+typedef SshCommandRunner = Future<List<int>> Function(
+  String command, {
+  Map<String, String>? environment,
+});
+
 final class CodexDaemon {
   const CodexDaemon._();
+
+  static Future<List<int>> bootstrap(
+    SshCommandRunner run, {
+    required Map<String, String> environment,
+  }) async {
+    try {
+      return await run(
+        bootstrapScript,
+        environment: environment.isEmpty ? null : environment,
+      );
+    } on SSHChannelRequestError catch (error) {
+      final match = RegExp(
+        r'^Failed to set environment variable: ([A-Za-z_][A-Za-z0-9_]*)$',
+      ).firstMatch(error.message);
+      if (match == null) rethrow;
+      final name = match.group(1)!;
+      throw StateError(
+        'The SSH server rejected SetEnv $name. Allow it with AcceptEnv $name '
+        'in sshd_config, or remove it from this profile.',
+      );
+    }
+  }
 
   static const bootstrapScript = r'''
 set -eu

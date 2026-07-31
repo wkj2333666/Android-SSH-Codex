@@ -17,6 +17,12 @@ enum AppSection { hosts, tasks }
 
 enum RemoteConnectionPhase { disconnected, connecting, connected, reconnecting }
 
+Future<List<int>> bootstrapCodexForProfile(
+  SshCommandRunner run,
+  HostProfile profile,
+) =>
+    CodexDaemon.bootstrap(run, environment: profile.environment);
+
 final class AppController extends ChangeNotifier {
   AppController({required ProfileStore store})
       : _store = store,
@@ -147,7 +153,7 @@ final class AppController extends ChangeNotifier {
         prompt: _promptForHostKey,
       );
       final output = utf8.decode(
-        await ssh.client.run(CodexDaemon.bootstrapScript),
+        await bootstrapCodexForProfile(ssh.client.run, profile),
         allowMalformed: true,
       );
       final socketPath = output
