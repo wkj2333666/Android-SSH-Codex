@@ -179,10 +179,7 @@ Future<void> _openAdvancedSsh(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
-Finder _fieldFinder(String label) => find.byWidgetPredicate(
-      (widget) =>
-          widget is TextFormField && widget.decoration?.labelText == label,
-    );
+Finder _fieldFinder(String label) => find.widgetWithText(TextFormField, label);
 
 TextFormField _textField(WidgetTester tester, String label) =>
     tester.widget<TextFormField>(_fieldFinder(label));
