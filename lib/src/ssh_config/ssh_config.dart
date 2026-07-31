@@ -11,18 +11,11 @@ final class SshConfig {
     final warnings = <String>[];
 
     for (final rawLine in source.split(RegExp(r'\r?\n'))) {
-      final tokens = _tokenize(rawLine);
-      if (tokens.isEmpty) continue;
-      final first = tokens.first;
-      final separator = first.indexOf('=');
-      final originalKey = separator < 0 ? first : first.substring(0, separator);
+      final parsed = _parseDirectiveLine(rawLine);
+      if (parsed == null || parsed.arguments.isEmpty) continue;
+      final originalKey = parsed.originalKey;
       final key = originalKey.toLowerCase();
-      final values = <String>[
-        if (separator >= 0 && separator + 1 < first.length)
-          first.substring(separator + 1),
-        ...tokens.skip(1),
-      ];
-      if (values.isEmpty) continue;
+      final values = parsed.arguments;
       if (key == 'host') {
         current = _HostSection(values);
         sections.add(current);
@@ -93,7 +86,13 @@ final class SshConfig {
             try {
               assignment = parseSshEnvironmentAssignment(directive.value);
             } on FormatException {
-              const warning = 'Invalid SetEnv assignment.';
+              final separator = directive.value.indexOf('=');
+              final candidateName = separator < 0
+                  ? directive.value
+                  : directive.value.substring(0, separator);
+              final warning = isValidSshEnvironmentName(candidateName)
+                  ? 'Invalid SetEnv assignment for $candidateName'
+                  : 'Invalid SetEnv assignment.';
               if (!warnings.contains(warning)) warnings.add(warning);
               break;
             }
@@ -198,6 +197,13 @@ final class _Directive {
   final String value;
 }
 
+final class _ParsedDirective {
+  const _ParsedDirective(this.originalKey, this.arguments);
+
+  final String originalKey;
+  final List<String> arguments;
+}
+
 final class _JumpTarget {
   const _JumpTarget({required this.alias, this.user, this.port});
 
@@ -244,7 +250,37 @@ bool _globMatches(String pattern, String input) {
   return RegExp(buffer.toString(), caseSensitive: false).hasMatch(input);
 }
 
-List<String> _tokenize(String line) {
+_ParsedDirective? _parseDirectiveLine(String line) {
+  var index = 0;
+  while (index < line.length && RegExp(r'\s').hasMatch(line[index])) {
+    index++;
+  }
+  if (index == line.length || line[index] == '#') return null;
+
+  final keywordStart = index;
+  while (index < line.length) {
+    final char = line[index];
+    if (char == '#' || char == '=' || RegExp(r'\s').hasMatch(char)) break;
+    index++;
+  }
+  if (index == keywordStart) return null;
+  final originalKey = line.substring(keywordStart, index);
+
+  while (index < line.length && RegExp(r'\s').hasMatch(line[index])) {
+    index++;
+  }
+  if (index < line.length && line[index] == '=') index++;
+  while (index < line.length && RegExp(r'\s').hasMatch(line[index])) {
+    index++;
+  }
+
+  return _ParsedDirective(
+    originalKey,
+    _tokenizeArguments(line.substring(index)),
+  );
+}
+
+List<String> _tokenizeArguments(String line) {
   final tokens = <String>[];
   final current = StringBuffer();
   String? quote;

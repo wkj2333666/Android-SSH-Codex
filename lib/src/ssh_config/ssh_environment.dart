@@ -1,5 +1,8 @@
 final _sshEnvironmentName = RegExp(r'^[A-Za-z_][A-Za-z0-9_]*$');
 
+bool isValidSshEnvironmentName(String name) =>
+    _sshEnvironmentName.hasMatch(name);
+
 MapEntry<String, String> parseSshEnvironmentAssignment(String assignment) {
   final separator = assignment.indexOf('=');
   if (separator < 0) {
@@ -9,7 +12,7 @@ MapEntry<String, String> parseSshEnvironmentAssignment(String assignment) {
   }
 
   final name = assignment.substring(0, separator);
-  if (!_sshEnvironmentName.hasMatch(name)) {
+  if (!isValidSshEnvironmentName(name)) {
     throw const FormatException('Invalid environment variable name.');
   }
 
