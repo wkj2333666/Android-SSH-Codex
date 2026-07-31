@@ -55,7 +55,8 @@ final class HostProfile {
     String? identityFileHint,
     JumpHostProfile? proxyJump,
     Map<String, String> environment = const {},
-  }) => HostProfile._(
+  }) =>
+      HostProfile._(
         id: id,
         label: label,
         hostName: hostName,
