@@ -13,7 +13,7 @@ void main() {
       hostName: '10.0.0.8',
       user: 'codex',
       port: 22,
-      proxyJump: JumpHostProfile(
+      proxyJump: const JumpHostProfile(
         hostName: 'edge.example',
         user: 'jump',
       ),
