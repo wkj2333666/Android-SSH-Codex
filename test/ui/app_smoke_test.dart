@@ -23,7 +23,7 @@ void main() {
   ) async {
     final controller = AppController.memory();
     await controller.saveProfile(
-      const HostProfile(
+      HostProfile(
         id: 'lab',
         label: 'Lab',
         hostName: 'lab.example',

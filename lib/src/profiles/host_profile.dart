@@ -1,3 +1,5 @@
+import 'package:collection/collection.dart';
+
 import '../ssh_config/ssh_config.dart';
 
 enum HostAuthMethod { password, privateKey }
@@ -43,15 +45,38 @@ final class JumpHostProfile {
 }
 
 final class HostProfile {
-  const HostProfile({
+  factory HostProfile({
+    required String id,
+    required String label,
+    required String hostName,
+    required String user,
+    required int port,
+    HostAuthMethod authMethod = HostAuthMethod.password,
+    String? identityFileHint,
+    JumpHostProfile? proxyJump,
+    Map<String, String> environment = const {},
+  }) => HostProfile._(
+        id: id,
+        label: label,
+        hostName: hostName,
+        user: user,
+        port: port,
+        authMethod: authMethod,
+        identityFileHint: identityFileHint,
+        proxyJump: proxyJump,
+        environment: Map.unmodifiable(environment),
+      );
+
+  const HostProfile._({
     required this.id,
     required this.label,
     required this.hostName,
     required this.user,
     required this.port,
-    this.authMethod = HostAuthMethod.password,
-    this.identityFileHint,
-    this.proxyJump,
+    required this.authMethod,
+    required this.identityFileHint,
+    required this.proxyJump,
+    required this.environment,
   });
 
   factory HostProfile.fromResolved(ResolvedSshHost host) => HostProfile(
@@ -65,6 +90,7 @@ final class HostProfile {
             : HostAuthMethod.privateKey,
         identityFileHint:
             host.identityFiles.isEmpty ? null : host.identityFiles.first,
+        environment: host.environment,
         proxyJump: host.proxyJump == null
             ? null
             : JumpHostProfile(
@@ -88,6 +114,9 @@ final class HostProfile {
           orElse: () => HostAuthMethod.password,
         ),
         identityFileHint: json['identityFileHint'] as String?,
+        environment: json['environment'] is Map
+            ? (json['environment'] as Map).cast<String, String>()
+            : const {},
         proxyJump: json['proxyJump'] is Map
             ? JumpHostProfile.fromJson(
                 (json['proxyJump'] as Map).cast<String, dynamic>(),
@@ -103,6 +132,7 @@ final class HostProfile {
   final HostAuthMethod authMethod;
   final String? identityFileHint;
   final JumpHostProfile? proxyJump;
+  final Map<String, String> environment;
 
   HostProfile copyWith({
     String? id,
@@ -113,6 +143,7 @@ final class HostProfile {
     HostAuthMethod? authMethod,
     String? identityFileHint,
     JumpHostProfile? proxyJump,
+    Map<String, String>? environment,
     bool clearProxyJump = false,
   }) =>
       HostProfile(
@@ -124,6 +155,7 @@ final class HostProfile {
         authMethod: authMethod ?? this.authMethod,
         identityFileHint: identityFileHint ?? this.identityFileHint,
         proxyJump: clearProxyJump ? null : proxyJump ?? this.proxyJump,
+        environment: environment ?? this.environment,
       );
 
   Map<String, dynamic> toJson() => {
@@ -135,6 +167,7 @@ final class HostProfile {
         'authMethod': authMethod.name,
         if (identityFileHint != null) 'identityFileHint': identityFileHint,
         if (proxyJump != null) 'proxyJump': proxyJump!.toJson(),
+        if (environment.isNotEmpty) 'environment': environment,
       };
 
   @override
@@ -147,7 +180,11 @@ final class HostProfile {
       other.port == port &&
       other.authMethod == authMethod &&
       other.identityFileHint == identityFileHint &&
-      other.proxyJump == proxyJump;
+      other.proxyJump == proxyJump &&
+      const MapEquality<String, String>().equals(
+        other.environment,
+        environment,
+      );
 
   @override
   int get hashCode => Object.hash(
@@ -159,6 +196,7 @@ final class HostProfile {
         authMethod,
         identityFileHint,
         proxyJump,
+        const MapEquality<String, String>().hash(environment),
       );
 }
 

@@ -7,7 +7,7 @@ void main() {
   testWidgets('ProxyJump profiles expose independent credentials', (
     tester,
   ) async {
-    const profile = HostProfile(
+    final profile = HostProfile(
       id: 'private',
       label: 'Private host',
       hostName: '10.0.0.8',
@@ -19,11 +19,13 @@ void main() {
       ),
     );
 
-    await tester.pumpWidget(const MaterialApp(
-      home: Scaffold(
-        body: ProfileEditor(profile: profile, secret: HostSecret()),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ProfileEditor(profile: profile, secret: const HostSecret()),
+        ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('Jump password'), findsOneWidget);
