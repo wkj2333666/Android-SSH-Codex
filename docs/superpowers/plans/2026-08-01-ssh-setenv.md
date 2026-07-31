@@ -146,7 +146,7 @@ Use commit message `feat: parse SSH SetEnv directives`.
 - Modify: `test/profiles/host_profile_test.dart`
 - Modify: `test/ui/app_smoke_test.dart`
 
-- [ ] **Step 1: Add failing profile tests**
+- [x] **Step 1: Add failing profile tests**
 
 Extend import and JSON tests to require the environment map, verify old JSON
 without `environment` loads as `{}`, verify `copyWith(environment: {})` clears
@@ -159,12 +159,12 @@ expect(HostProfile.fromJson(oldJson).environment, isEmpty);
 expect(HostProfile.fromJson(profile.toJson()), profile);
 ```
 
-- [ ] **Step 2: Push the test-only commit and verify RED remotely**
+- [x] **Step 2: Push the test-only commit and verify RED remotely**
 
 Expected failure: `HostProfile.environment` and the `copyWith` parameter do not
 exist.
 
-- [ ] **Step 3: Implement immutable profile storage**
+- [x] **Step 3: Implement immutable profile storage**
 
 Change `HostProfile` to a factory backed by a private constructor so every
 incoming map is copied with `Map.unmodifiable`. Include `environment` in
@@ -172,12 +172,12 @@ incoming map is copied with `Map.unmodifiable`. Include `environment` in
 Implement content-based map equality and a stable entry hash. Remove `const`
 from the one test fixture that constructs `HostProfile` directly.
 
-- [ ] **Step 4: Push and verify GREEN remotely**
+- [x] **Step 4: Push and verify GREEN remotely**
 
 Expected: profile, startup, and UI smoke tests pass; old profile JSON remains
 compatible; platform builds pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 Use commit message `feat: persist SSH environment profiles`.
 
