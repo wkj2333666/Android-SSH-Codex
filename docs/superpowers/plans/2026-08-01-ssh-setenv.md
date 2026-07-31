@@ -67,7 +67,7 @@ Use commit message `fix: normalize empty SSH key passphrases`.
 - Modify: `lib/src/ssh_config/ssh_config.dart`
 - Modify: `test/ssh_config/ssh_config_parser_test.dart`
 
-- [ ] **Step 1: Add failing parser and codec tests**
+- [x] **Step 1: Add failing parser and codec tests**
 
 Cover these public APIs and outcomes:
 
@@ -94,11 +94,11 @@ expect(host.environment, {
 });
 ```
 
-- [ ] **Step 2: Push the test-only commit and verify RED remotely**
+- [x] **Step 2: Push the test-only commit and verify RED remotely**
 
 Expected failure: missing environment codec and `ResolvedSshHost.environment`.
 
-- [ ] **Step 3: Implement the environment codec**
+- [x] **Step 3: Implement the environment codec**
 
 Create a focused parser that splits on the first `=`, validates names with
 `RegExp(r'^[A-Za-z_][A-Za-z0-9_]*$')`, permits empty values, rejects NUL/CR/LF,
@@ -116,7 +116,7 @@ The line parser rejects duplicate names and reports the 1-based line number.
 The formatter emits entries sorted by name. The validator returns the parser's
 safe line-specific message or `null` and never includes an environment value.
 
-- [ ] **Step 4: Implement directive-aware tokenization and resolution**
+- [x] **Step 4: Implement directive-aware tokenization and resolution**
 
 Replace the current equals-as-universal-separator tokenizer with a directive
 splitter that treats only the first unquoted whitespace or `=` as the keyword
@@ -130,12 +130,12 @@ adds `Duplicate SetEnv variable: NAME`; invalid input adds
 including its value. Return `Map.unmodifiable(environment)` on
 `ResolvedSshHost.environment`.
 
-- [ ] **Step 5: Push and verify GREEN remotely**
+- [x] **Step 5: Push and verify GREEN remotely**
 
 Expected: all SSH config and environment tests pass, existing config semantics
 remain green, analysis is clean, and both platform jobs pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 Use commit message `feat: parse SSH SetEnv directives`.
 
