@@ -70,7 +70,10 @@ void main() {
         profile,
       );
 
-      expect(receivedCommand, CodexDaemon.bootstrapScript);
+      expect(
+        receivedCommand,
+        CodexDaemon.bootstrapCommand(profile.environment),
+      );
       expect(identical(receivedEnvironment, profile.environment), isTrue);
     },
   );
