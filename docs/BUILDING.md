@@ -38,11 +38,20 @@ secure-storage implementation.
 ## Remote host requirements
 
 - POSIX shell and OpenSSH server with Unix-socket forwarding enabled.
+- `AcceptEnv` permission in `sshd_config` for every profile environment name.
 - A current Codex CLI whose `codex app-server` supports Unix listeners.
 - A writable `$HOME` and either `$XDG_CACHE_HOME` or `$HOME/.cache`.
 - Network access required by the selected Codex provider.
 
-The app creates only
-`${XDG_CACHE_HOME:-$HOME/.cache}/android-ssh-codex/app-server.sock`. It does not
-inspect, replace, or stop the sockets and processes used by Codex Desktop, the
-CLI, or IDE extensions.
+For example, a profile containing `SetEnv LC_CODEX_BACKEND=sub2api` requires:
+
+```text
+AcceptEnv LC_CODEX_BACKEND
+```
+
+The app sends accepted values with SSH environment requests rather than shell
+interpolation. It creates only
+`${XDG_CACHE_HOME:-$HOME/.cache}/android-ssh-codex/app-server.sock`. When the
+profile environment fingerprint changes, it validates and restarts that
+app-owned process. It does not inspect, replace, or stop the sockets and
+processes used by Codex Desktop, the CLI, or IDE extensions.

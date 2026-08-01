@@ -244,7 +244,7 @@ Use commit message `feat: edit SSH environment variables`.
 - Modify: `test/transport/codex_daemon_test.dart`
 - Modify: `test/app_controller_startup_test.dart`
 
-- [ ] **Step 1: Add failing command-boundary tests**
+- [x] **Step 1: Add failing command-boundary tests**
 
 Define the desired injectable runner contract in tests:
 
@@ -255,18 +255,19 @@ typedef SshCommandRunner = Future<List<int>> Function(
 });
 ```
 
-Test that `CodexDaemon.bootstrap` invokes the runner once with
-`CodexDaemon.bootstrapScript` and the exact immutable profile map. Add a
+Test that `CodexDaemon.bootstrap` invokes the runner once with a command that
+contains `CodexDaemon.bootstrapScript`, an opaque environment fingerprint, and
+the exact immutable profile map. Add a
 rejection test whose runner throws
 `SSHChannelRequestError('Failed to set environment variable: SECRET_NAME')`;
 the surfaced error must contain `SECRET_NAME` and `AcceptEnv`, and must not
 contain the configured value.
 
-- [ ] **Step 2: Push the test-only commit and verify RED remotely**
+- [x] **Step 2: Push the test-only commit and verify RED remotely**
 
 Expected failure: `CodexDaemon.bootstrap` and the runner boundary are absent.
 
-- [ ] **Step 3: Implement the bootstrap boundary**
+- [x] **Step 3: Implement the bootstrap boundary**
 
 Add `CodexDaemon.bootstrap` accepting the runner and environment. It delegates
 without shell interpolation and catches only the dartssh2 environment rejection
@@ -281,14 +282,16 @@ throw StateError(
 
 Never include the environment value. Update `AppController` to call the helper
 using `ssh.client.run` and `profile.environment`, then decode its output exactly
-as before.
+as before. Persist only a SHA-256 environment fingerprint and restart the
+validated app-owned daemon when that fingerprint changes so an existing process
+cannot silently retain stale values.
 
-- [ ] **Step 4: Push and verify GREEN remotely**
+- [x] **Step 4: Push and verify GREEN remotely**
 
 Expected: the command-boundary and controller tests pass, all existing tests
 remain green, and Android/OpenHarmony builds pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 Use commit message `feat: apply SSH environment to Codex bootstrap`.
 
@@ -299,14 +302,14 @@ Use commit message `feat: apply SSH environment to Codex bootstrap`.
 - Modify: `docs/BUILDING.md`
 - Modify: `pubspec.yaml`
 
-- [ ] **Step 1: Update user and server documentation**
+- [x] **Step 1: Update user and server documentation**
 
 Document imported `SetEnv`, the Advanced SSH editor, the remote
 `AcceptEnv LC_CODEX_BACKEND` requirement, and an example using
 `LC_CODEX_BACKEND=sub2api`. State that arbitrary directives including `IPQoS`
 are not supported. Document that blank passphrases work with unencrypted keys.
 
-- [ ] **Step 2: Set release version**
+- [x] **Step 2: Set release version**
 
 Set `pubspec.yaml` to `version: 0.1.2+4`. Build number 4 is greater than the
 diagnostic `v0.1.2-rc.1` package while the release does not include that branch's
