@@ -8,6 +8,7 @@ environment:
 
 dependencies:
   collection: ^1.18.0
+  crypto: 3.0.7
   dartssh2: 2.22.2
   flutter:
     sdk: flutter

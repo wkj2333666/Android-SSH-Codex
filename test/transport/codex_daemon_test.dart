@@ -55,7 +55,7 @@ void main() {
 
     expect(first, reordered);
     expect(changed, isNot(first));
-    expect(first, matches(RegExp(r'^[0-9a-f]{16}$')));
+    expect(first, matches(RegExp(r'^[0-9a-f]{64}$')));
   });
 
   test('bootstrap omits an empty environment from the SSH request', () async {

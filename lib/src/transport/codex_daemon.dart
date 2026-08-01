@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:crypto/crypto.dart';
 import 'package:dartssh2/dartssh2.dart';
 
 typedef SshCommandRunner = Future<List<int>> Function(
@@ -15,13 +16,7 @@ final class CodexDaemon {
     final canonical = <String, String>{
       for (final name in names) name: environment[name]!,
     };
-    var hash = BigInt.parse('cbf29ce484222325', radix: 16);
-    final prime = BigInt.parse('100000001b3', radix: 16);
-    final mask = BigInt.parse('ffffffffffffffff', radix: 16);
-    for (final byte in utf8.encode(jsonEncode(canonical))) {
-      hash = ((hash ^ BigInt.from(byte)) * prime) & mask;
-    }
-    return hash.toRadixString(16).padLeft(16, '0');
+    return sha256.convert(utf8.encode(jsonEncode(canonical))).toString();
   }
 
   static String bootstrapCommand(Map<String, String> environment) =>
