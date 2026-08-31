@@ -116,7 +116,23 @@ class _Message extends StatelessWidget {
           color: user ? colors.primaryContainer : colors.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(12),
         ),
-        child: MarkdownContent(text: item.text),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment:
+              user ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          children: [
+            MarkdownContent(text: item.text),
+            if (user && item.status == 'sending') ...[
+              const SizedBox(height: 6),
+              const SizedBox(
+                key: Key('pending-user-progress'),
+                width: 12,
+                height: 12,
+                child: CircularProgressIndicator(strokeWidth: 1.5),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
