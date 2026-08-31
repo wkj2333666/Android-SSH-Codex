@@ -33,23 +33,22 @@ void main() {
   );
 
   test(
-    'unassigned pages exclude tasks belonging to a normalized project cwd',
+    'automatic cwd projects leave only empty-cwd tasks unassigned',
     () {
       final catalog = TaskCatalog();
-      const projects = [
-        RemoteProject(
-          id: 'repo',
-          hostId: 'pi',
-          name: 'Repo',
-          cwd: '/srv/repo/',
-        ),
+      final tasks = [
+        snapshot('repo-task', '/srv/repo'),
+        snapshot('scratch-task', '/tmp/scratch/'),
+        snapshot('loose-task', ''),
       ];
+      final projects = mergeRemoteProjects(
+        hostId: 'pi',
+        existing: const [],
+        discoveredCwds: tasks.map((task) => task.cwd),
+      );
 
       catalog.replaceUnassignedPage(
-        [
-          snapshot('project-task', '/srv/repo'),
-          snapshot('loose-task', '/tmp/scratch'),
-        ],
+        tasks,
         projects: projects,
         nextCursor: 'next',
       );
