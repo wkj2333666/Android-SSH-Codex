@@ -303,6 +303,63 @@ void main() {
     );
   });
 
+  test('RPC completion does not recreate a reconciled pending message', () {
+    final epoch = reducer.beginConnection();
+    reducer.appendPendingUserMessage(epoch, 'one', 'pending', 'Continue');
+    reducer.applyEvent(
+      epoch,
+      const TaskEvent.itemChanged(
+        'one',
+        TaskItem(
+          id: 'server-user',
+          kind: TaskItemKind.user,
+          text: 'Continue',
+        ),
+      ),
+    );
+
+    reducer.updatePendingUserMessageStatus(
+      epoch,
+      'one',
+      'pending',
+      'sent',
+    );
+
+    expect(
+      reducer.state.tasks['one']?.items.map((item) => item.id),
+      ['server-user'],
+    );
+  });
+
+  test('an older server event cannot consume a queued message', () {
+    final epoch = reducer.beginConnection();
+    reducer.applyEvent(
+      epoch,
+      const TaskEvent.itemChanged(
+        'one',
+        TaskItem(
+          id: 'queued',
+          kind: TaskItemKind.user,
+          text: 'Repeat',
+          status: 'queued',
+        ),
+      ),
+    );
+
+    reducer.applyEvent(
+      epoch,
+      const TaskEvent.itemChanged(
+        'one',
+        TaskItem(id: 'older', kind: TaskItemKind.user, text: 'Repeat'),
+      ),
+    );
+
+    expect(
+      reducer.state.tasks['one']?.items.map((item) => item.id),
+      ['queued', 'older'],
+    );
+  });
+
   test('latest page catch-up preserves older context and appends missed reply',
       () {
     final epoch = reducer.beginConnection();
