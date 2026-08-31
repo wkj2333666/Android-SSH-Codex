@@ -94,7 +94,7 @@ void main() {
     await expectLater(response, throwsA(isA<RpcDisconnectedException>()));
   });
 
-  test('times out an unanswered request and disconnects the client', () async {
+  test('a timed out request leaves the transport usable', () async {
     await client.close();
     transport = FakeTransport();
     client = JsonRpcClient(
@@ -111,8 +111,17 @@ void main() {
             .having((error) => error.method, 'method', 'thread/turns/list'),
       ),
     );
-    await client.close();
-    expect(transport.closeCalls, 1);
+
+    expect(transport.closeCalls, 0);
+    final nextResponse = client.request('model/list');
+    final nextRequest = jsonDecode(transport.sent.last) as Map<String, dynamic>;
+    transport.incoming.add(jsonEncode({
+      'id': nextRequest['id'],
+      'result': {'data': []},
+    }));
+
+    expect(await nextResponse, {'data': []});
+    expect(transport.closeCalls, 0);
   });
 
   test('closes public event streams when the transport disconnects', () async {

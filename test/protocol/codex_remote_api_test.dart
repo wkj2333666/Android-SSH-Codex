@@ -225,6 +225,34 @@ void main() {
     }
   });
 
+  test('resumes a thread without returning its unbounded history', () async {
+    final transport = _RecordingTransport();
+    final rpc = JsonRpcClient(transport)..start();
+    try {
+      final resuming = CodexRemoteApi(rpc).resumeThread('thr_large');
+      final request = jsonDecode(transport.sent.single) as Map<String, dynamic>;
+
+      expect(request, {
+        'method': 'thread/resume',
+        'id': 1,
+        'params': {
+          'threadId': 'thr_large',
+          'excludeTurns': true,
+        },
+      });
+      transport.incoming.add(jsonEncode({
+        'id': request['id'],
+        'result': {
+          'thread': {'id': 'thr_large', 'turns': <Object>[]},
+        },
+      }));
+
+      await resuming;
+    } finally {
+      await rpc.close();
+    }
+  });
+
   test('maps a persisted Codex thread to a task snapshot', () {
     final snapshot = CodexRemoteApi.parseThread({
       'id': 'thr_1',
