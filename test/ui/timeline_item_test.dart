@@ -110,6 +110,24 @@ void main() {
     expect(find.textContaining('Result', findRichText: true), findsOneWidget);
   });
 
+  testWidgets('a sending user message shows compact progress', (tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(
+        body: TimelineItemView(
+          item: TaskItem(
+            id: 'pending-user',
+            kind: TaskItemKind.user,
+            text: 'Continue the task',
+            status: 'sending',
+          ),
+        ),
+      ),
+    ));
+
+    expect(find.text('Continue the task'), findsOneWidget);
+    expect(find.byKey(const Key('pending-user-progress')), findsOneWidget);
+  });
+
   testWidgets('reasoning is collapsed until explicitly expanded',
       (tester) async {
     await tester.pumpWidget(const MaterialApp(

@@ -260,4 +260,92 @@ void main() {
       ['oldest', 'live value', 'recent'],
     );
   });
+
+  test('a pending user message is visible before the server responds', () {
+    final epoch = reducer.beginConnection();
+    final refresh = reducer.beginRefresh(epoch);
+    reducer.applyRefresh(refresh, [snapshot('one')], const {});
+
+    reducer.appendPendingUserMessage(
+      epoch,
+      'one',
+      'pending-1',
+      'Please continue',
+    );
+
+    final item = reducer.state.tasks['one']!.items.single;
+    expect(item.id, 'pending-1');
+    expect(item.kind, TaskItemKind.user);
+    expect(item.text, 'Please continue');
+    expect(item.status, 'sending');
+  });
+
+  test('the server user item replaces the oldest matching pending message', () {
+    final epoch = reducer.beginConnection();
+    reducer.appendPendingUserMessage(epoch, 'one', 'pending-1', 'Continue');
+    reducer.appendPendingUserMessage(epoch, 'one', 'pending-2', 'Continue');
+
+    reducer.applyEvent(
+      epoch,
+      const TaskEvent.itemChanged(
+        'one',
+        TaskItem(
+          id: 'server-user',
+          kind: TaskItemKind.user,
+          text: 'Continue',
+        ),
+      ),
+    );
+
+    expect(
+      reducer.state.tasks['one']?.items.map((item) => item.id),
+      ['server-user', 'pending-2'],
+    );
+  });
+
+  test('latest page catch-up preserves older context and appends missed reply',
+      () {
+    final epoch = reducer.beginConnection();
+    reducer.replaceItems(
+      epoch,
+      'one',
+      const [
+        TaskItem(id: 'old', kind: TaskItemKind.agent, text: 'Older context'),
+        TaskItem(id: 'overlap', kind: TaskItemKind.agent, text: 'Before drop'),
+        TaskItem(
+          id: 'pending',
+          kind: TaskItemKind.user,
+          text: 'Keep going',
+          status: 'sending',
+        ),
+      ],
+    );
+
+    reducer.mergeLatestItems(
+      epoch,
+      'one',
+      const [
+        TaskItem(
+          id: 'overlap',
+          kind: TaskItemKind.agent,
+          text: 'Before drop',
+        ),
+        TaskItem(
+          id: 'server-user',
+          kind: TaskItemKind.user,
+          text: 'Keep going',
+        ),
+        TaskItem(
+          id: 'missed-reply',
+          kind: TaskItemKind.agent,
+          text: 'Recovered reply',
+        ),
+      ],
+    );
+
+    expect(
+      reducer.state.tasks['one']?.items.map((item) => item.id),
+      ['old', 'overlap', 'server-user', 'missed-reply'],
+    );
+  });
 }
