@@ -158,9 +158,8 @@ final class CodexRemoteApi {
         if (cwd.isNotEmpty) cwds.add(cwd);
       }
       final nextCursor = page.nextCursor;
-      cursor = nextCursor != null && seenCursors.add(nextCursor)
-          ? nextCursor
-          : null;
+      cursor =
+          nextCursor != null && seenCursors.add(nextCursor) ? nextCursor : null;
     } while (cursor != null);
     return Set.unmodifiable(cwds);
   }
