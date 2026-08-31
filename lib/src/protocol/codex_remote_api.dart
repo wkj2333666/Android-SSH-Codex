@@ -154,7 +154,9 @@ final class CodexRemoteApi {
     do {
       final page = await readTaskPage(cursor: cursor);
       cwds.addAll(
-        page.tasks.map((task) => task.cwd.trim()).where((cwd) => cwd.isNotEmpty),
+        page.tasks
+            .map((task) => task.cwd.trim())
+            .where((cwd) => cwd.isNotEmpty),
       );
       final nextCursor = page.nextCursor;
       cursor = nextCursor != null && seenCursors.add(nextCursor)
