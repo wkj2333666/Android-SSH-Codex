@@ -248,12 +248,6 @@ List<TaskSnapshot> _unassigned(
       .toList(growable: false);
 }
 
-String normalizeRemoteCwd(String cwd) {
-  final normalized = cwd.trim();
-  if (normalized.length <= 1) return normalized;
-  return normalized.replaceFirst(RegExp(r'/+$'), '');
-}
-
 List<String> _uniqueIds(Iterable<TaskSnapshot> tasks) =>
     List.unmodifiable(tasks.map((task) => task.id).toSet());
 

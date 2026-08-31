@@ -499,17 +499,24 @@ final class AppController extends ChangeNotifier {
       while (true) {
         final shouldResetPages = resetNext;
         resetNext = false;
-        final project = selectedProject;
-        final selectedProjectId = project?.id;
+        final initialProject = selectedProject;
         final token = _taskReducer.beginRefresh(epoch);
         final loadedFuture = api.readLoadedThreadIds();
         final unassignedFuture = api.readTaskPage();
-        final projectFuture = project == null
+        final initialProjectFuture = initialProject == null
             ? Future<RemoteTaskPage?>.value()
-            : api.readTaskPage(cwd: project.cwd);
+            : api.readTaskPage(cwd: initialProject.cwd);
         final loadedThreadIds = await loadedFuture;
         final unassignedPage = await unassignedFuture;
-        final projectPage = await projectFuture;
+        if (api != _api || epoch != _epoch) return;
+        _discoverProjects(unassignedPage.tasks);
+        final project = selectedProject;
+        final selectedProjectId = project?.id;
+        final projectPage = project == null
+            ? null
+            : initialProject?.id == project.id
+                ? await initialProjectFuture
+                : await api.readTaskPage(cwd: project.cwd);
         if (api != _api || epoch != _epoch) return;
         if (selectedProjectId != _selectedProjectId) {
           resetNext = true;
@@ -673,7 +680,11 @@ final class AppController extends ChangeNotifier {
         cwd: normalizedCwd,
       ),
     );
-    _projects = await _store.readProjects(hostId);
+    _projects = mergeRemoteProjects(
+      hostId: hostId,
+      existing: await _store.readProjects(hostId),
+      discoveredCwds: _taskReducer.state.tasks.values.map((task) => task.cwd),
+    );
     _selectedProjectId = id;
     _selectedTaskId = null;
     _historyLoadState.clear();
@@ -686,7 +697,11 @@ final class AppController extends ChangeNotifier {
     final hostId = _selectedHostId;
     if (hostId == null) return;
     await _store.deleteProject(hostId, projectId);
-    _projects = await _store.readProjects(hostId);
+    _projects = mergeRemoteProjects(
+      hostId: hostId,
+      existing: await _store.readProjects(hostId),
+      discoveredCwds: _taskReducer.state.tasks.values.map((task) => task.cwd),
+    );
     if (_selectedProjectId == projectId) {
       _selectedProjectId = _projects.firstOrNull?.id;
       _selectedTaskId = null;
@@ -755,6 +770,7 @@ final class AppController extends ChangeNotifier {
     try {
       final page = await api.readTaskPage(cursor: cursor);
       if (api != _api || epoch != _epoch) return;
+      _discoverProjects(page.tasks);
       final token = _taskReducer.beginRefresh(epoch);
       _taskReducer.applyRefresh(
         token,
@@ -772,6 +788,23 @@ final class AppController extends ChangeNotifier {
     } finally {
       _loadingUnassignedPage = false;
       notifyListeners();
+    }
+  }
+
+  void _discoverProjects(Iterable<TaskSnapshot> tasks) {
+    final hostId = _selectedHostId;
+    if (hostId == null) return;
+    final projects = mergeRemoteProjects(
+      hostId: hostId,
+      existing: _projects,
+      discoveredCwds: tasks.map((task) => task.cwd),
+    );
+    if (listEquals(projects, _projects)) return;
+    _projects = projects;
+    if (_selectedProjectId == null ||
+        !_projects.any((project) => project.id == _selectedProjectId)) {
+      _selectedProjectId = _projects.firstOrNull?.id;
+      _taskCatalog.clearProjectPage();
     }
   }
 

@@ -49,3 +49,52 @@ final class RemoteProject {
   @override
   int get hashCode => Object.hash(id, hostId, name, cwd);
 }
+
+List<RemoteProject> mergeRemoteProjects({
+  required String hostId,
+  required Iterable<RemoteProject> existing,
+  required Iterable<String> discoveredCwds,
+}) {
+  final projectsByCwd = <String, RemoteProject>{};
+  for (final project in existing) {
+    if (project.hostId != hostId) continue;
+    final cwd = normalizeRemoteCwd(project.cwd);
+    if (cwd.isEmpty) continue;
+    projectsByCwd.putIfAbsent(
+      cwd,
+      () => project.copyWith(cwd: cwd),
+    );
+  }
+  for (final rawCwd in discoveredCwds) {
+    final cwd = normalizeRemoteCwd(rawCwd);
+    if (cwd.isEmpty || projectsByCwd.containsKey(cwd)) continue;
+    projectsByCwd[cwd] = RemoteProject(
+      id: _automaticProjectId(hostId, cwd),
+      hostId: hostId,
+      name: _automaticProjectName(cwd),
+      cwd: cwd,
+    );
+  }
+  final projects = projectsByCwd.values.toList(growable: false)
+    ..sort((first, second) {
+      final byName = first.name.toLowerCase().compareTo(
+            second.name.toLowerCase(),
+          );
+      return byName == 0 ? first.cwd.compareTo(second.cwd) : byName;
+    });
+  return List.unmodifiable(projects);
+}
+
+String normalizeRemoteCwd(String cwd) {
+  final normalized = cwd.trim();
+  if (normalized.length <= 1) return normalized;
+  return normalized.replaceFirst(RegExp(r'/+$'), '');
+}
+
+String _automaticProjectId(String hostId, String cwd) =>
+    'cwd:${Uri.encodeComponent(hostId)}:${Uri.encodeComponent(cwd)}';
+
+String _automaticProjectName(String cwd) {
+  final parts = cwd.split('/').where((part) => part.isNotEmpty);
+  return parts.isEmpty ? cwd : parts.last;
+}
