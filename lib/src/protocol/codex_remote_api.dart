@@ -147,6 +147,23 @@ final class CodexRemoteApi {
     );
   }
 
+  Future<Set<String>> readAllTaskCwds() async {
+    final cwds = <String>{};
+    final seenCursors = <String>{};
+    String? cursor;
+    do {
+      final page = await readTaskPage(cursor: cursor);
+      cwds.addAll(
+        page.tasks.map((task) => task.cwd.trim()).where((cwd) => cwd.isNotEmpty),
+      );
+      final nextCursor = page.nextCursor;
+      cursor = nextCursor != null && seenCursors.add(nextCursor)
+          ? nextCursor
+          : null;
+    } while (cursor != null);
+    return Set.unmodifiable(cwds);
+  }
+
   Future<Set<String>> readLoadedThreadIds() async {
     final loadedResult = _map(
       await _rpc.request('thread/loaded/list', const {}),

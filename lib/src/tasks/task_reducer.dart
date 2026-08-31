@@ -334,6 +334,25 @@ final class TaskReducer {
     );
   }
 
+  void updatePendingUserMessageStatus(
+    int epoch,
+    String taskId,
+    String itemId,
+    String status,
+  ) {
+    if (epoch != _state.epoch) return;
+    final current = _state.tasks[taskId];
+    if (current == null) return;
+    final index = current.items.indexWhere((item) => item.id == itemId);
+    if (index == -1) return;
+    final item = current.items[index];
+    if (!_isPendingUserItem(item)) return;
+    applyEvent(
+      epoch,
+      TaskEvent.itemChanged(taskId, item.copyWith(status: status)),
+    );
+  }
+
   void mergeLatestItems(
     int epoch,
     String taskId,
@@ -526,9 +545,7 @@ int _matchingPendingUserIndex(
 
 bool _isPendingUserItem(TaskItem item) =>
     item.kind == TaskItemKind.user &&
-    (item.status == 'sending' ||
-        item.status == 'sent' ||
-        item.status == 'queued');
+    (item.status == 'sending' || item.status == 'sent');
 
 TaskItem _preferCurrentStreamingItem(TaskItem current, TaskItem latest) {
   if (current.kind == TaskItemKind.agent &&
