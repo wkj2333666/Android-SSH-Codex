@@ -46,6 +46,8 @@ final class QueuedTaskMessage {
   final RemoteSkill? skill;
   final String? model;
   final String? effort;
+
+  String get timelineItemId => 'local-user:$id';
 }
 
 HostProfile? resolveAutoConnectProfile(
@@ -95,6 +97,12 @@ bool hasRemoteNotificationVisibleChange({
 }) =>
     event != null || activeTurnChanged;
 
+bool requiresThreadResumeForSend({
+  required bool owned,
+  required bool subscribed,
+}) =>
+    !owned || !subscribed;
+
 final class AppController extends ChangeNotifier {
   AppController({required ProfileStore store})
       : _store = store,
@@ -129,6 +137,7 @@ final class AppController extends ChangeNotifier {
   List<PendingApproval> _approvals = const [];
   Set<String> _ownedThreadIds = {};
   Set<String> _loadedThreadIds = {};
+  Set<String> _subscribedThreadIds = {};
   SshConnection? _ssh;
   SshUnixTunnel? _tunnel;
   JsonRpcClient? _rpc;
@@ -360,6 +369,7 @@ final class AppController extends ChangeNotifier {
       _requestSubscription = requests;
       _ownedThreadIds = ownedThreadIds;
       _loadedThreadIds = {};
+      _subscribedThreadIds = {};
       published = true;
       unawaited(rpc.done.then((_) => _handleTransportLoss(attempt, profile)));
       stage = ConnectionStage.refresh;
@@ -367,6 +377,15 @@ final class AppController extends ChangeNotifier {
       if (attempt != _connectionAttempt) return;
       _connectionPhase = RemoteConnectionPhase.connected;
       _reconnectAttempt = 0;
+      notifyListeners();
+      if (reconnecting) {
+        await _recoverSelectedTaskAfterReconnect(
+          api,
+          attempt: attempt,
+          epoch: _epoch,
+          profileId: profile.id,
+        );
+      }
       await _rememberAutoConnectHost(profile.id);
       if (attempt != _connectionAttempt) return;
       _refreshTimer = Timer.periodic(
@@ -778,6 +797,7 @@ final class AppController extends ChangeNotifier {
       return;
     }
     _loadedThreadIds = {..._loadedThreadIds, threadId};
+    _subscribedThreadIds = {..._subscribedThreadIds, threadId};
     _selectedTaskId = threadId;
     _taskReducer.applyEvent(
       _epoch,
@@ -860,23 +880,53 @@ final class AppController extends ChangeNotifier {
     required int epoch,
     required String profileId,
   }) async {
+    _setLocalUserMessageStatus(task.id, pending, 'sending', epoch: epoch);
     try {
-      await api.steerTurn(task.id, turnId, pending.text);
-      _ensureCurrentSession(api, attempt, epoch, profileId);
-      return TaskMessageDisposition.steered;
-    } on RpcRemoteException {
-      final refreshedTurnId = await api.readActiveTurnId(task.id);
-      _ensureCurrentSession(api, attempt, epoch, profileId);
-      if (refreshedTurnId == null) {
-        _activeTurnIds.remove(task.id);
-        _enqueuePrompt(task.id, pending);
-        return TaskMessageDisposition.queued;
+      try {
+        await api.steerTurn(task.id, turnId, pending.text);
+        _ensureCurrentSession(api, attempt, epoch, profileId);
+      } on RpcRemoteException {
+        final refreshedTurnId = await api.readActiveTurnId(task.id);
+        _ensureCurrentSession(api, attempt, epoch, profileId);
+        if (refreshedTurnId == null) {
+          _activeTurnIds.remove(task.id);
+          _setLocalUserMessageStatus(
+            task.id,
+            pending,
+            'queued',
+            epoch: epoch,
+          );
+          _enqueuePrompt(task.id, pending);
+          return TaskMessageDisposition.queued;
+        }
+        if (refreshedTurnId == turnId) rethrow;
+        _activeTurnIds[task.id] = refreshedTurnId;
+        await api.steerTurn(task.id, refreshedTurnId, pending.text);
+        _ensureCurrentSession(api, attempt, epoch, profileId);
       }
-      if (refreshedTurnId == turnId) rethrow;
-      _activeTurnIds[task.id] = refreshedTurnId;
-      await api.steerTurn(task.id, refreshedTurnId, pending.text);
-      _ensureCurrentSession(api, attempt, epoch, profileId);
+      _recordSubmittedPrompt(
+        task.id,
+        pending,
+        api: api,
+        attempt: attempt,
+        epoch: epoch,
+        profileId: profileId,
+      );
       return TaskMessageDisposition.steered;
+    } catch (exception) {
+      if (_isUncertainSubmissionFailure(exception)) {
+        _recordSubmittedPrompt(
+          task.id,
+          pending,
+          api: api,
+          attempt: attempt,
+          epoch: epoch,
+          profileId: profileId,
+        );
+        return TaskMessageDisposition.steered;
+      }
+      _setLocalUserMessageStatus(task.id, pending, 'failed', epoch: epoch);
+      rethrow;
     }
   }
 
@@ -894,34 +944,160 @@ final class AppController extends ChangeNotifier {
     final attempt = _connectionAttempt;
     final epoch = _epoch;
     final profileId = _selectedHostId!;
-    if (!_ownedThreadIds.contains(task.id) ||
-        !_loadedThreadIds.contains(task.id)) {
-      await api.resumeThread(task.id);
-      _ensureCurrentSession(api, attempt, epoch, profileId);
-      if (!await _claimThread(
+    _setLocalUserMessageStatus(task.id, pending, 'sending', epoch: epoch);
+    var turnRequested = false;
+    try {
+      if (requiresThreadResumeForSend(
+        owned: _ownedThreadIds.contains(task.id),
+        subscribed: _subscribedThreadIds.contains(task.id),
+      )) {
+        await api.resumeThread(task.id);
+        _ensureCurrentSession(api, attempt, epoch, profileId);
+        if (!await _claimThread(
+          task.id,
+          api: api,
+          attempt: attempt,
+          epoch: epoch,
+          profileId: profileId,
+        )) {
+          throw StateError('Connection changed before the task was claimed.');
+        }
+        _loadedThreadIds = {..._loadedThreadIds, task.id};
+        _subscribedThreadIds = {..._subscribedThreadIds, task.id};
+      }
+      turnRequested = true;
+      await api.startTurn(
         task.id,
+        pending.text,
+        skill: pending.skill,
+        model: pending.model,
+        effort: pending.effort,
+      );
+      _ensureCurrentSession(api, attempt, epoch, profileId);
+      _recordSubmittedPrompt(
+        task.id,
+        pending,
         api: api,
         attempt: attempt,
         epoch: epoch,
         profileId: profileId,
-      )) {
-        throw StateError('Connection changed before the task was claimed.');
+      );
+    } catch (exception) {
+      if (turnRequested && _isUncertainSubmissionFailure(exception)) {
+        _recordSubmittedPrompt(
+          task.id,
+          pending,
+          api: api,
+          attempt: attempt,
+          epoch: epoch,
+          profileId: profileId,
+        );
+        return;
       }
-      _loadedThreadIds = {..._loadedThreadIds, task.id};
+      _setLocalUserMessageStatus(task.id, pending, 'failed', epoch: epoch);
+      rethrow;
     }
-    await api.startTurn(
-      task.id,
-      pending.text,
-      skill: pending.skill,
-      model: pending.model,
-      effort: pending.effort,
-    );
-    _ensureCurrentSession(api, attempt, epoch, profileId);
+  }
+
+  void _setLocalUserMessageStatus(
+    String threadId,
+    QueuedTaskMessage pending,
+    String status, {
+    required int epoch,
+  }) {
     _taskReducer.applyEvent(
-      _epoch,
-      TaskEvent.statusChanged(task.id, TaskStatus.running),
+      epoch,
+      TaskEvent.itemChanged(
+        threadId,
+        TaskItem(
+          id: pending.timelineItemId,
+          kind: TaskItemKind.user,
+          text: pending.text,
+          status: status,
+        ),
+      ),
     );
     notifyListeners();
+  }
+
+  void _recordSubmittedPrompt(
+    String threadId,
+    QueuedTaskMessage pending, {
+    required CodexRemoteApi api,
+    required int attempt,
+    required int epoch,
+    required String profileId,
+  }) {
+    if (!_isCurrentSession(api, attempt, epoch, profileId)) return;
+    _setLocalUserMessageStatus(threadId, pending, 'sent', epoch: epoch);
+    _taskReducer.applyEvent(
+      epoch,
+      TaskEvent.statusChanged(threadId, TaskStatus.running),
+    );
+    notifyListeners();
+    unawaited(_catchUpTaskContext(
+      threadId,
+      api: api,
+      attempt: attempt,
+      epoch: epoch,
+      profileId: profileId,
+    ));
+  }
+
+  Future<void> _recoverSelectedTaskAfterReconnect(
+    CodexRemoteApi api, {
+    required int attempt,
+    required int epoch,
+    required String profileId,
+  }) async {
+    final threadId = _selectedTaskId;
+    if (threadId == null) return;
+    if (_ownedThreadIds.contains(threadId)) {
+      try {
+        await api.resumeThread(threadId);
+        _ensureCurrentSession(api, attempt, epoch, profileId);
+        _loadedThreadIds = {..._loadedThreadIds, threadId};
+        _subscribedThreadIds = {..._subscribedThreadIds, threadId};
+      } catch (exception) {
+        debugPrint('Could not restore selected task subscription: $exception');
+      }
+    }
+    await _catchUpTaskContext(
+      threadId,
+      api: api,
+      attempt: attempt,
+      epoch: epoch,
+      profileId: profileId,
+    );
+  }
+
+  Future<void> _catchUpTaskContext(
+    String threadId, {
+    required CodexRemoteApi api,
+    required int attempt,
+    required int epoch,
+    required String profileId,
+  }) async {
+    try {
+      final page = await api.readThreadTurnsPage(threadId);
+      if (!_isCurrentSession(api, attempt, epoch, profileId)) return;
+      _taskReducer.mergeLatestItems(epoch, threadId, page.items);
+      notifyListeners();
+    } catch (exception) {
+      debugPrint('Could not catch up selected task context: $exception');
+    }
+    try {
+      final activeTurnId = await api.readActiveTurnId(threadId);
+      if (!_isCurrentSession(api, attempt, epoch, profileId)) return;
+      if (activeTurnId == null) {
+        _activeTurnIds.remove(threadId);
+      } else {
+        _activeTurnIds[threadId] = activeTurnId;
+      }
+      notifyListeners();
+    } catch (exception) {
+      debugPrint('Could not refresh selected task turn state: $exception');
+    }
   }
 
   Future<void> _flushQueuedPrompt(String threadId) async {
@@ -1139,6 +1315,7 @@ final class AppController extends ChangeNotifier {
       return;
     }
     _loadedThreadIds = {..._loadedThreadIds, task.id};
+    _subscribedThreadIds = {..._subscribedThreadIds, task.id};
     _activeTurnIds.remove(task.id);
     _taskReducer.applyEvent(
       epoch,
@@ -1276,6 +1453,7 @@ final class AppController extends ChangeNotifier {
     _messageQueue.clear();
     _messageOperations.clear();
     _loadedThreadIds = {};
+    _subscribedThreadIds = {};
     _ownedThreadIds = {};
     _agentDeltaBatcher.clear();
     _epoch = _taskReducer.beginConnection();
@@ -1318,6 +1496,7 @@ final class AppController extends ChangeNotifier {
     _agentDeltaBatcher.clear();
     _approvals = const [];
     _models = const [];
+    _subscribedThreadIds = {};
     final notificationSubscription = _notificationSubscription;
     final requestSubscription = _requestSubscription;
     final rpc = _rpc;
@@ -1352,6 +1531,9 @@ final class AppController extends ChangeNotifier {
     super.dispose();
   }
 }
+
+bool _isUncertainSubmissionFailure(Object exception) =>
+    exception is RpcTimeoutException || exception is RpcDisconnectedException;
 
 String _friendlyError(Object exception) {
   if (exception is RpcRemoteException) return exception.message;
