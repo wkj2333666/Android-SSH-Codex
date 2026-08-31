@@ -181,7 +181,6 @@ final class JsonRpcClient {
     pending.cancel();
     final error = RpcTimeoutException(method, id, requestTimeout);
     pending.completer.completeError(error);
-    _disconnect(error);
   }
 
   void _disconnect([Object? error]) {

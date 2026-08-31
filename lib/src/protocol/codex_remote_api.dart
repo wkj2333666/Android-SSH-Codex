@@ -220,7 +220,10 @@ final class CodexRemoteApi {
   }
 
   Future<void> resumeThread(String threadId) async {
-    await _rpc.request('thread/resume', {'threadId': threadId});
+    await _rpc.request('thread/resume', {
+      'threadId': threadId,
+      'excludeTurns': true,
+    });
   }
 
   Future<void> startTurn(
