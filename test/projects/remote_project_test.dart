@@ -31,4 +31,47 @@ void main() {
       ),
     );
   });
+
+  test('discovers stable projects from normalized remote directories', () {
+    final first = mergeRemoteProjects(
+      hostId: 'pi',
+      existing: const [],
+      discoveredCwds: const ['/home/wkj/projects/cscg/', '/srv/mobile', ''],
+    );
+    final second = mergeRemoteProjects(
+      hostId: 'pi',
+      existing: const [],
+      discoveredCwds: const ['/srv/mobile/', '/home/wkj/projects/cscg'],
+    );
+
+    expect(first.map((project) => project.name), ['cscg', 'mobile']);
+    expect(first.map((project) => project.cwd), [
+      '/home/wkj/projects/cscg',
+      '/srv/mobile',
+    ]);
+    expect(
+      first.map((project) => project.id),
+      second.map((project) => project.id),
+    );
+  });
+
+  test('a stored project name overrides the discovered cwd default', () {
+    final projects = mergeRemoteProjects(
+      hostId: 'pi',
+      existing: const [
+        RemoteProject(
+          id: 'saved-cscg',
+          hostId: 'pi',
+          name: 'PC Bench',
+          cwd: '/home/wkj/projects/cscg/',
+        ),
+      ],
+      discoveredCwds: const ['/home/wkj/projects/cscg'],
+    );
+
+    expect(projects, hasLength(1));
+    expect(projects.single.id, 'saved-cscg');
+    expect(projects.single.name, 'PC Bench');
+    expect(projects.single.cwd, '/home/wkj/projects/cscg');
+  });
 }

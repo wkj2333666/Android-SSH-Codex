@@ -37,6 +37,28 @@ void main() {
     );
   });
 
+  test('an owned thread still resumes when this RPC is not subscribed', () {
+    expect(
+      requiresThreadResumeForSend(
+        owned: true,
+        subscribed: false,
+      ),
+      isTrue,
+    );
+    expect(
+      requiresThreadResumeForSend(
+        owned: true,
+        subscribed: true,
+      ),
+      isFalse,
+    );
+  });
+
+  test('an active turn resumes before steering when RPC is unsubscribed', () {
+    expect(requiresThreadResumeForSteer(subscribed: false), isTrue);
+    expect(requiresThreadResumeForSteer(subscribed: true), isFalse);
+  });
+
   test('auto-connect selection only accepts the remembered profile', () {
     final profiles = [
       HostProfile(

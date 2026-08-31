@@ -314,6 +314,105 @@ final class TaskReducer {
     _replaceTaskItems(current, merged);
   }
 
+  void appendPendingUserMessage(
+    int epoch,
+    String taskId,
+    String itemId,
+    String text,
+  ) {
+    applyEvent(
+      epoch,
+      TaskEvent.itemChanged(
+        taskId,
+        TaskItem(
+          id: itemId,
+          kind: TaskItemKind.user,
+          text: text,
+          status: 'sending',
+        ),
+      ),
+    );
+  }
+
+  void updatePendingUserMessageStatus(
+    int epoch,
+    String taskId,
+    String itemId,
+    String status,
+  ) {
+    if (epoch != _state.epoch) return;
+    final current = _state.tasks[taskId];
+    if (current == null) return;
+    final index = current.items.indexWhere((item) => item.id == itemId);
+    if (index == -1) return;
+    final item = current.items[index];
+    if (!_isPendingUserItem(item)) return;
+    applyEvent(
+      epoch,
+      TaskEvent.itemChanged(taskId, item.copyWith(status: status)),
+    );
+  }
+
+  void mergeLatestItems(
+    int epoch,
+    String taskId,
+    List<TaskItem> latestItems,
+  ) {
+    if (epoch != _state.epoch || latestItems.isEmpty) return;
+    final current = _state.tasks[taskId] ??
+        TaskRecord.placeholder(taskId, _state.eventRevision);
+    final currentItems = current.items;
+    if (currentItems.isEmpty) {
+      _replaceTaskItems(current, latestItems);
+      return;
+    }
+
+    final claimedPendingIndices = <int>{};
+    final overlapIndices = <int>[];
+    final latestIds = latestItems.map((item) => item.id).toSet();
+    final resolvedLatest = <TaskItem>[];
+    final seenLatestIds = <String>{};
+    for (final latest in latestItems) {
+      if (!seenLatestIds.add(latest.id)) continue;
+      var currentIndex = currentItems.indexWhere(
+        (item) => item.id == latest.id,
+      );
+      if (currentIndex == -1 && latest.kind == TaskItemKind.user) {
+        currentIndex = _matchingPendingUserIndex(
+          currentItems,
+          latest.text,
+          claimedPendingIndices,
+        );
+        if (currentIndex != -1) claimedPendingIndices.add(currentIndex);
+      }
+      if (currentIndex != -1) overlapIndices.add(currentIndex);
+      resolvedLatest.add(
+        currentIndex == -1
+            ? latest
+            : _preferCurrentStreamingItem(currentItems[currentIndex], latest),
+      );
+    }
+
+    final merged = <TaskItem>[];
+    if (overlapIndices.isEmpty) {
+      merged.addAll(currentItems);
+      merged.addAll(resolvedLatest);
+    } else {
+      final firstOverlap = overlapIndices.reduce((a, b) => a < b ? a : b);
+      final lastOverlap = overlapIndices.reduce((a, b) => a > b ? a : b);
+      merged.addAll(currentItems.take(firstOverlap).where(
+            (item) => !latestIds.contains(item.id),
+          ));
+      merged.addAll(resolvedLatest);
+      for (var index = lastOverlap + 1; index < currentItems.length; index++) {
+        if (claimedPendingIndices.contains(index)) continue;
+        final item = currentItems[index];
+        if (!latestIds.contains(item.id)) merged.add(item);
+      }
+    }
+    _replaceTaskItems(current, merged);
+  }
+
   void _replaceTaskItems(TaskRecord current, List<TaskItem> items) {
     final tasks = Map<String, TaskRecord>.of(_state.tasks)
       ..[current.id] = current.copyWith(items: List.unmodifiable(items));
@@ -394,11 +493,21 @@ final class TaskReducer {
           break;
         case _TaskEventType.item:
           final items = current.items.toList();
-          final index = items.indexWhere((item) => item.id == event.item!.id);
+          final changedItem = event.item!;
+          var index = items.indexWhere((item) => item.id == changedItem.id);
+          if (index == -1 &&
+              changedItem.kind == TaskItemKind.user &&
+              !_isPendingUserItem(changedItem)) {
+            index = _matchingPendingUserIndex(
+              items,
+              changedItem.text,
+              const <int>{},
+            );
+          }
           if (index == -1) {
-            items.add(event.item!);
+            items.add(changedItem);
           } else {
-            items[index] = event.item!;
+            items[index] = changedItem;
           }
           current = current.copyWith(
             items: List.unmodifiable(items),
@@ -416,6 +525,36 @@ final class TaskReducer {
       tasks: Map.unmodifiable(tasks),
     );
   }
+}
+
+int _matchingPendingUserIndex(
+  List<TaskItem> items,
+  String text,
+  Set<int> excludedIndices,
+) {
+  for (var index = 0; index < items.length; index++) {
+    final item = items[index];
+    if (!excludedIndices.contains(index) &&
+        _isPendingUserItem(item) &&
+        item.text == text) {
+      return index;
+    }
+  }
+  return -1;
+}
+
+bool _isPendingUserItem(TaskItem item) =>
+    item.kind == TaskItemKind.user &&
+    (item.status == 'sending' || item.status == 'sent');
+
+TaskItem _preferCurrentStreamingItem(TaskItem current, TaskItem latest) {
+  if (current.kind == TaskItemKind.agent &&
+      latest.kind == TaskItemKind.agent &&
+      current.text.length > latest.text.length &&
+      current.text.startsWith(latest.text)) {
+    return current;
+  }
+  return latest;
 }
 
 List<TaskItem> _mergeItems(

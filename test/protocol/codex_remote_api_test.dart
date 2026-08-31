@@ -94,6 +94,45 @@ void main() {
     }
   });
 
+  test('discovers project cwds across every 20-thread metadata page', () async {
+    final transport = _RecordingTransport();
+    final rpc = JsonRpcClient(transport)..start();
+    try {
+      final reading = CodexRemoteApi(rpc).readAllTaskCwds();
+      final firstRequest =
+          jsonDecode(transport.sent.single) as Map<String, dynamic>;
+      transport.incoming.add(jsonEncode({
+        'id': firstRequest['id'],
+        'result': {
+          'data': [
+            {'id': 'one', 'cwd': '/srv/one'},
+          ],
+          'nextCursor': 'page-2',
+        },
+      }));
+      await pumpEventQueue();
+
+      final secondRequest =
+          jsonDecode(transport.sent.last) as Map<String, dynamic>;
+      expect(secondRequest['params']['limit'], 20);
+      expect(secondRequest['params']['cursor'], 'page-2');
+      transport.incoming.add(jsonEncode({
+        'id': secondRequest['id'],
+        'result': {
+          'data': [
+            {'id': 'two', 'cwd': '/srv/two'},
+            {'id': 'loose', 'cwd': ''},
+          ],
+          'nextCursor': null,
+        },
+      }));
+
+      expect(await reading, {'/srv/one', '/srv/two'});
+    } finally {
+      await rpc.close();
+    }
+  });
+
   test('project continuation adds cwd and the opaque cursor', () async {
     final transport = _RecordingTransport();
     final rpc = JsonRpcClient(transport)..start();
@@ -220,6 +259,34 @@ void main() {
         'id': 1,
         'params': <String, dynamic>{},
       });
+    } finally {
+      await rpc.close();
+    }
+  });
+
+  test('resumes a thread without returning its unbounded history', () async {
+    final transport = _RecordingTransport();
+    final rpc = JsonRpcClient(transport)..start();
+    try {
+      final resuming = CodexRemoteApi(rpc).resumeThread('thr_large');
+      final request = jsonDecode(transport.sent.single) as Map<String, dynamic>;
+
+      expect(request, {
+        'method': 'thread/resume',
+        'id': 1,
+        'params': {
+          'threadId': 'thr_large',
+          'excludeTurns': true,
+        },
+      });
+      transport.incoming.add(jsonEncode({
+        'id': request['id'],
+        'result': {
+          'thread': {'id': 'thr_large', 'turns': <Object>[]},
+        },
+      }));
+
+      await resuming;
     } finally {
       await rpc.close();
     }
