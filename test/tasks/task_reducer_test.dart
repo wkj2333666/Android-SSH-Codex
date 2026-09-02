@@ -445,4 +445,37 @@ void main() {
       ['old', 'overlap', 'server-user', 'missed-reply'],
     );
   });
+
+  test('server user item reconciles a pending message across line endings', () {
+    final epoch = reducer.beginConnection();
+    reducer.replaceItems(
+      epoch,
+      'one',
+      const [
+        TaskItem(
+          id: 'local-user:queued-1',
+          kind: TaskItemKind.user,
+          text: 'Line one\nLine two',
+          status: 'sending',
+        ),
+      ],
+    );
+
+    reducer.applyEvent(
+      epoch,
+      const TaskEvent.itemChanged(
+        'one',
+        TaskItem(
+          id: 'server-user',
+          kind: TaskItemKind.user,
+          text: 'Line one\r\nLine two',
+        ),
+      ),
+    );
+
+    expect(
+      reducer.state.tasks['one']?.items.map((item) => item.id),
+      ['server-user'],
+    );
+  });
 }

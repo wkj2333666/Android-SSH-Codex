@@ -551,6 +551,42 @@ void main() {
     await tester.pump();
     expect(removedId, 'queued-1');
   });
+
+  test('queue panel hides messages already represented by a sending bubble',
+      () {
+    const messages = [
+      QueuedTaskMessage(id: 'queued-1', text: 'Continue'),
+      QueuedTaskMessage(id: 'queued-2', text: 'Then verify'),
+    ];
+    const timelineItems = [
+      TaskItem(
+        id: 'local-user:queued-1',
+        kind: TaskItemKind.user,
+        text: 'Continue',
+        status: 'sending',
+      ),
+    ];
+
+    expect(
+      visibleQueuedMessages(messages, timelineItems)
+          .map((message) => message.id),
+      ['queued-2'],
+    );
+  });
+
+  test('queue panel restores a message after its optimistic bubble fails', () {
+    const messages = [QueuedTaskMessage(id: 'queued-1', text: 'Continue')];
+    const timelineItems = [
+      TaskItem(
+        id: 'local-user:queued-1',
+        kind: TaskItemKind.user,
+        text: 'Continue',
+        status: 'failed',
+      ),
+    ];
+
+    expect(visibleQueuedMessages(messages, timelineItems), messages);
+  });
 }
 
 List<TaskItem> longTimelineItems() {

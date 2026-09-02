@@ -1,5 +1,6 @@
 import 'package:android_ssh_codex/src/tasks/task_reducer.dart';
 import 'package:android_ssh_codex/src/ui/timeline_entries.dart';
+import 'package:android_ssh_codex/src/ui/widgets/codex_directive_content.dart';
 import 'package:android_ssh_codex/src/ui/widgets/markdown_content.dart';
 import 'package:android_ssh_codex/src/ui/widgets/timeline_item.dart';
 import 'package:flutter/material.dart';
@@ -108,6 +109,98 @@ void main() {
     expect(markdown.builders, contains('latex'));
     expect(markdown.imageBuilder, isNotNull);
     expect(find.textContaining('Result', findRichText: true), findsOneWidget);
+  });
+
+  testWidgets('Markdown links open only safe web URLs', (tester) async {
+    final opened = <Uri>[];
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: MarkdownContent(
+          text: '[OpenAI](https://openai.com) [unsafe](javascript:alert(1))',
+          openExternalLink: (uri) async {
+            opened.add(uri);
+            return true;
+          },
+        ),
+      ),
+    ));
+
+    final markdown = tester.widget<MarkdownBody>(find.byType(MarkdownBody));
+    markdown.onTapLink!('OpenAI', 'https://openai.com', '');
+    await tester.pump();
+    expect(opened, [Uri.parse('https://openai.com')]);
+
+    markdown.onTapLink!('unsafe', 'javascript:alert(1)', '');
+    await tester.pump();
+    expect(opened, [Uri.parse('https://openai.com')]);
+    expect(
+      find.text('Only HTTP and HTTPS links can be opened.'),
+      findsOneWidget,
+    );
+  });
+
+  test('recognized Git directives are extracted from agent text', () {
+    final parsed = parseCodexDirectiveContent(
+      'Done. '
+      '::git-create-branch{cwd="/repo" branch="codex/fix"} '
+      '::git-commit{cwd="/repo"} '
+      '::git-push{cwd="/repo" branch="codex/fix"} '
+      '::git-create-pr{cwd="/repo" branch="codex/fix" '
+      'url="https://github.com/example/repo/pull/7" isDraft=false}',
+    );
+
+    expect(parsed.markdown, 'Done.');
+    expect(
+      parsed.directives.map((directive) => directive.name),
+      [
+        'git-create-branch',
+        'git-commit',
+        'git-push',
+        'git-create-pr',
+      ],
+    );
+    expect(parsed.directives.last.branch, 'codex/fix');
+    expect(
+      parsed.directives.last.webUri,
+      Uri.parse('https://github.com/example/repo/pull/7'),
+    );
+  });
+
+  test('unknown directives remain literal and unsafe PR links are inert', () {
+    final parsed = parseCodexDirectiveContent(
+      '::unknown{name="keep me"} '
+      '::git-create-pr{url="file:///tmp/private" isDraft=true}',
+    );
+
+    expect(parsed.markdown, '::unknown{name="keep me"}');
+    expect(parsed.directives, hasLength(1));
+    expect(parsed.directives.single.webUri, isNull);
+  });
+
+  testWidgets('agent Git directives render as a compact card without raw text',
+      (tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(
+        body: TimelineItemView(
+          item: TaskItem(
+            id: 'agent-git',
+            kind: TaskItemKind.agent,
+            text: 'Published. '
+                '::git-create-branch{cwd="/repo" branch="codex/fix"} '
+                '::git-push{cwd="/repo" branch="codex/fix"} '
+                '::git-create-pr{cwd="/repo" branch="codex/fix" '
+                'url="https://github.com/example/repo/pull/7" isDraft=false}',
+          ),
+        ),
+      ),
+    ));
+
+    expect(find.text('Published.'), findsOneWidget);
+    expect(find.textContaining('::git-'), findsNothing);
+    expect(find.byKey(const Key('git-activity-card')), findsOneWidget);
+    expect(find.text('Branch created'), findsOneWidget);
+    expect(find.text('Pushed'), findsOneWidget);
+    expect(find.text('Pull request'), findsOneWidget);
   });
 
   testWidgets('a sending user message shows compact progress', (tester) async {
