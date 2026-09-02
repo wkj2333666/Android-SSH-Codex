@@ -133,6 +133,60 @@ void main() {
     }
   });
 
+  test('project activity keeps the newest task timestamp for each cwd',
+      () async {
+    final transport = _RecordingTransport();
+    final rpc = JsonRpcClient(transport)..start();
+    try {
+      final reading = CodexRemoteApi(rpc).readProjectActivity();
+      final firstRequest =
+          jsonDecode(transport.sent.single) as Map<String, dynamic>;
+      transport.incoming.add(jsonEncode({
+        'id': firstRequest['id'],
+        'result': {
+          'data': [
+            {
+              'id': 'one-new',
+              'cwd': '/srv/one',
+              'updatedAt': '2026-09-02T08:00:00Z',
+            },
+            {
+              'id': 'two',
+              'cwd': '/srv/two',
+              'updatedAt': '2026-09-01T08:00:00Z',
+            },
+          ],
+          'nextCursor': 'page-2',
+        },
+      }));
+      await pumpEventQueue();
+
+      final secondRequest =
+          jsonDecode(transport.sent.last) as Map<String, dynamic>;
+      expect(secondRequest['params']['cursor'], 'page-2');
+      transport.incoming.add(jsonEncode({
+        'id': secondRequest['id'],
+        'result': {
+          'data': [
+            {
+              'id': 'one-old',
+              'cwd': '/srv/one',
+              'updatedAt': '2026-08-01T08:00:00Z',
+            },
+          ],
+          'nextCursor': null,
+        },
+      }));
+
+      expect(await reading, {
+        '/srv/one': DateTime.utc(2026, 9, 2, 8),
+        '/srv/two': DateTime.utc(2026, 9, 1, 8),
+      });
+    } finally {
+      await rpc.close();
+    }
+  });
+
   test('project continuation adds cwd and the opaque cursor', () async {
     final transport = _RecordingTransport();
     final rpc = JsonRpcClient(transport)..start();

@@ -79,6 +79,59 @@ void main() {
     expect(invoked, isTrue);
   });
 
+  testWidgets('project loading is not presented as an empty project',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: TaskListPane(
+          model: const TaskListPaneModel(
+            projects: [project],
+            selectedProjectId: project.id,
+            projectTasks: [],
+            unassignedTasks: [],
+            connected: true,
+            loadingProjectPage: true,
+          ),
+        ),
+      ),
+    ));
+
+    expect(find.text('No tasks in this project'), findsNothing);
+    expect(find.byKey(const Key('project-head-progress')), findsOneWidget);
+  });
+
+  testWidgets('tasks mode shows all recent tasks without project chrome',
+      (tester) async {
+    TaskListMode? selectedMode;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: TaskListPane(
+          model: TaskListPaneModel(
+            projects: const [project],
+            selectedProjectId: project.id,
+            projectTasks: [task('project', 'Project task', project.cwd)],
+            recentTasks: [task('recent', 'Recent task', '/srv/other')],
+            unassignedTasks: const [],
+            connected: true,
+            initialMode: TaskListMode.tasks,
+          ),
+          onModeChanged: (mode) => selectedMode = mode,
+        ),
+      ),
+    ));
+
+    expect(find.text('Recent tasks'), findsOneWidget);
+    expect(find.text('Recent task'), findsOneWidget);
+    expect(find.text('Project task'), findsNothing);
+    expect(find.text('Unassigned'), findsNothing);
+    expect(find.byType(DropdownButtonFormField<String>), findsNothing);
+
+    await tester.tap(find.text('Projects'));
+    await tester.pump();
+
+    expect(selectedMode, TaskListMode.projects);
+  });
+
   testWidgets('task timeline distinguishes loading, failure, and empty history',
       (tester) async {
     await tester.pumpWidget(const MaterialApp(

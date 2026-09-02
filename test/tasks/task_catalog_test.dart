@@ -82,6 +82,33 @@ void main() {
     expect(catalog.projectNextCursor, 'page-2');
   });
 
+  test('recent tasks stay ordered by latest update across pages', () {
+    final catalog = TaskCatalog();
+    final older = snapshot('older', '/repo');
+    final newest = TaskSnapshot(
+      id: 'newest',
+      title: 'Newest',
+      status: TaskStatus.completed,
+      cwd: '/repo',
+      updatedAt: DateTime.utc(2026, 9, 2),
+      items: const [],
+    );
+    final middle = TaskSnapshot(
+      id: 'middle',
+      title: 'Middle',
+      status: TaskStatus.completed,
+      cwd: '/repo',
+      updatedAt: DateTime.utc(2026, 8, 15),
+      items: const [],
+    );
+
+    catalog.replaceRecentPage([older, newest], nextCursor: 'page-2');
+    catalog.appendRecentPage([middle], nextCursor: null);
+
+    expect(catalog.recentTaskIds, ['newest', 'middle', 'older']);
+    expect(catalog.recentNextCursor, isNull);
+  });
+
   test('a stale detail completion cannot clear a newer selection', () {
     final state = TaskDetailLoadState();
     final first = state.begin('first');
