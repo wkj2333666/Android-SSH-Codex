@@ -25,7 +25,8 @@ class TimelineItemView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return switch (item.kind) {
-      TaskItemKind.user || TaskItemKind.agent =>
+      TaskItemKind.user ||
+      TaskItemKind.agent =>
         _Message(item: item, copyText: copyText),
       _ => _ActivityCard(item: item),
     };
