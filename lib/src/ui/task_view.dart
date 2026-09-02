@@ -49,20 +49,11 @@ String restoreComposerDraft({
 
 List<QueuedTaskMessage> visibleQueuedMessages(
   List<QueuedTaskMessage> messages,
-  List<TaskItem> timelineItems,
-) {
-  final representedIds = timelineItems
-      .where(
-        (item) =>
-            item.kind == TaskItemKind.user &&
-            (item.status == 'sending' || item.status == 'sent'),
-      )
-      .map((item) => item.id)
-      .toSet();
-  return messages
-      .where((message) => !representedIds.contains(message.timelineItemId))
-      .toList(growable: false);
-}
+  Set<String> inFlightMessageIds,
+) =>
+    messages
+        .where((message) => !inFlightMessageIds.contains(message.id))
+        .toList(growable: false);
 
 class TaskView extends StatefulWidget {
   const TaskView({required this.controller, required this.task, super.key});
@@ -126,7 +117,7 @@ class _TaskViewState extends State<TaskView> {
         .toList(growable: false);
     final queuedMessages = visibleQueuedMessages(
       widget.controller.queuedMessagesForTask(task.id),
-      task.items,
+      widget.controller.inFlightQueuedMessageIdsForTask(task.id),
     );
     final timelineState = TaskTimelineRenderState(
       items: task.items,

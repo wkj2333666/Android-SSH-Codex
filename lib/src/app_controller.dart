@@ -122,6 +122,7 @@ final class AppController extends ChangeNotifier {
   final TaskHistoryLoadState _historyLoadState = TaskHistoryLoadState();
   final TaskMessageQueue<QueuedTaskMessage> _messageQueue = TaskMessageQueue();
   final TaskOperationLock _messageOperations = TaskOperationLock();
+  final Map<String, Set<String>> _inFlightQueuedMessageIds = {};
   final TaskRefreshLock<CodexRemoteApi> _refreshOperations = TaskRefreshLock();
 
   List<HostProfile> _profiles = const [];
@@ -222,6 +223,9 @@ final class AppController extends ChangeNotifier {
   List<QueuedTaskMessage> queuedMessagesForTask(String taskId) =>
       _messageQueue.values(taskId);
 
+  Set<String> inFlightQueuedMessageIdsForTask(String taskId) =>
+      Set.unmodifiable(_inFlightQueuedMessageIds[taskId] ?? const <String>{});
+
   Future<void> initialize() async {
     HostProfile? autoConnectProfile;
     try {
@@ -270,6 +274,7 @@ final class AppController extends ChangeNotifier {
     _reconnectAttempt = 0;
     _messageQueue.clear();
     _messageOperations.clear();
+    _inFlightQueuedMessageIds.clear();
     await _closeTransport();
     if (attempt != _connectionAttempt) return;
     _agentDeltaBatcher.clear();
@@ -1380,10 +1385,14 @@ final class AppController extends ChangeNotifier {
           QueuedPromptAction.wait) {
         return;
       }
-      await _startPendingPrompt(task, pending);
-      if (identical(_messageQueue.peek(threadId), pending)) {
-        _messageQueue.take(threadId);
-        notifyListeners();
+      _markQueuedMessageInFlight(threadId, pending.id);
+      try {
+        await _startPendingPrompt(task, pending);
+        if (identical(_messageQueue.peek(threadId), pending)) {
+          _messageQueue.take(threadId);
+        }
+      } finally {
+        _unmarkQueuedMessageInFlight(threadId, pending.id);
       }
     } catch (exception) {
       _error = _friendlyError(exception);
@@ -1397,6 +1406,18 @@ final class AppController extends ChangeNotifier {
     for (final threadId in _messageQueue.threadIds) {
       unawaited(_flushQueuedPrompt(threadId));
     }
+  }
+
+  void _markQueuedMessageInFlight(String threadId, String messageId) {
+    final ids = _inFlightQueuedMessageIds.putIfAbsent(threadId, () => {});
+    if (ids.add(messageId)) notifyListeners();
+  }
+
+  void _unmarkQueuedMessageInFlight(String threadId, String messageId) {
+    final ids = _inFlightQueuedMessageIds[threadId];
+    if (ids == null || !ids.remove(messageId)) return;
+    if (ids.isEmpty) _inFlightQueuedMessageIds.remove(threadId);
+    notifyListeners();
   }
 
   Future<void> removeQueuedMessage(String taskId, String messageId) async {
@@ -1441,6 +1462,7 @@ final class AppController extends ChangeNotifier {
       if (turnId == null) {
         throw StateError('This task does not have an active turn to steer.');
       }
+      _markQueuedMessageInFlight(taskId, pending.id);
       _setLocalUserMessageStatus(taskId, pending, 'sending', epoch: epoch);
       var steerRequested = false;
       try {
@@ -1501,6 +1523,7 @@ final class AppController extends ChangeNotifier {
         rethrow;
       }
     } finally {
+      _unmarkQueuedMessageInFlight(taskId, messageId);
       _messageOperations.release(taskId, operation);
     }
   }
@@ -1790,6 +1813,7 @@ final class AppController extends ChangeNotifier {
     _activeTurnIds.clear();
     _messageQueue.clear();
     _messageOperations.clear();
+    _inFlightQueuedMessageIds.clear();
     _loadedThreadIds = {};
     _subscribedThreadIds = {};
     _ownedThreadIds = {};

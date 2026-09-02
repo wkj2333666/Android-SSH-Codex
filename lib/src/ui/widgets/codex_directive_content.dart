@@ -43,28 +43,78 @@ final class ParsedCodexDirectiveContent {
 ParsedCodexDirectiveContent parseCodexDirectiveContent(String input) {
   final directives = <CodexGitDirective>[];
   final remaining = StringBuffer();
-  var cursor = 0;
-  for (final match in _directivePattern.allMatches(input)) {
-    remaining.write(input.substring(cursor, match.start));
-    final name = match.group(1)!;
-    if (_gitDirectiveNames.contains(name)) {
-      directives
-          .add(CodexGitDirective(name, _parseAttributes(match.group(2)!)));
-    } else {
-      remaining.write(match.group(0));
+  String? fenceMarker;
+  var fenceLength = 0;
+  for (final match in _linePattern.allMatches(input)) {
+    final rawLine = match.group(0)!;
+    if (rawLine.isEmpty) continue;
+    final line = _withoutLineEnding(rawLine);
+    final fence = _fencePattern.firstMatch(line);
+    if (fence != null) {
+      final marker = fence.group(1)!;
+      if (fenceMarker == null) {
+        fenceMarker = marker[0];
+        fenceLength = marker.length;
+      } else if (marker[0] == fenceMarker && marker.length >= fenceLength) {
+        fenceMarker = null;
+        fenceLength = 0;
+      }
+      remaining.write(rawLine);
+      continue;
     }
-    cursor = match.end;
+    if (fenceMarker != null) {
+      remaining.write(rawLine);
+      continue;
+    }
+    final lineDirectives = _parseDirectiveLine(line);
+    if (lineDirectives == null) {
+      remaining.write(rawLine);
+    } else {
+      directives.addAll(lineDirectives);
+    }
   }
-  remaining.write(input.substring(cursor));
-  final markdown = remaining
-      .toString()
-      .replaceAll(RegExp(r'[ \t]+\n'), '\n')
-      .replaceAll(RegExp(r'\n{3,}'), '\n\n')
-      .trim();
   return ParsedCodexDirectiveContent(
-    markdown: markdown,
+    markdown: remaining.toString(),
     directives: List.unmodifiable(directives),
   );
+}
+
+final _linePattern = RegExp(r'[^\r\n]*(?:\r\n|\r|\n|$)');
+final _fencePattern = RegExp(r'^[ ]{0,3}(`{3,}|~{3,})');
+
+String _withoutLineEnding(String line) {
+  if (line.endsWith('\r\n')) return line.substring(0, line.length - 2);
+  if (line.endsWith('\r') || line.endsWith('\n')) {
+    return line.substring(0, line.length - 1);
+  }
+  return line;
+}
+
+List<CodexGitDirective>? _parseDirectiveLine(String line) {
+  final trimmed = line.trim();
+  if (trimmed.isEmpty) return null;
+  final directives = <CodexGitDirective>[];
+  var cursor = 0;
+  while (cursor < trimmed.length) {
+    final match = _directivePattern.matchAsPrefix(trimmed, cursor);
+    if (match == null || !_gitDirectiveNames.contains(match.group(1))) {
+      return null;
+    }
+    directives.add(
+      CodexGitDirective(
+        match.group(1)!,
+        _parseAttributes(match.group(2)!),
+      ),
+    );
+    cursor = match.end;
+    if (cursor == trimmed.length) break;
+    if (!RegExp(r'\s').hasMatch(trimmed[cursor])) return null;
+    while (cursor < trimmed.length &&
+        RegExp(r'\s').hasMatch(trimmed[cursor])) {
+      cursor++;
+    }
+  }
+  return directives;
 }
 
 Map<String, String> _parseAttributes(String source) => Map.unmodifiable({
