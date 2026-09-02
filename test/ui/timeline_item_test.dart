@@ -179,6 +179,18 @@ void main() {
     expect(parsed.directives, isEmpty);
   });
 
+  test('fence-like code and indented code never become Git activity', () {
+    const text = '```text\n'
+        '```dart\n'
+        '::git-push{cwd="/repo" branch="example"}\n'
+        '```\n'
+        '    ::git-commit{cwd="/repo"}\n';
+    final parsed = parseCodexDirectiveContent(text);
+
+    expect(parsed.markdown, text);
+    expect(parsed.directives, isEmpty);
+  });
+
   test('unsafe PR directive links render without an action', () {
     final parsed = parseCodexDirectiveContent(
       '::git-create-pr{url="file:///tmp/private" isDraft=true}',
