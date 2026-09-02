@@ -141,7 +141,7 @@ void main() {
 
   test('recognized Git directives are extracted from agent text', () {
     final parsed = parseCodexDirectiveContent(
-      'Done. '
+      'Done.\n'
       '::git-create-branch{cwd="/repo" branch="codex/fix"} '
       '::git-commit{cwd="/repo"} '
       '::git-push{cwd="/repo" branch="codex/fix"} '
@@ -149,7 +149,7 @@ void main() {
       'url="https://github.com/example/repo/pull/7" isDraft=false}',
     );
 
-    expect(parsed.markdown, 'Done.');
+    expect(parsed.markdown, 'Done.\n');
     expect(
       parsed.directives.map((directive) => directive.name),
       [
@@ -166,13 +166,25 @@ void main() {
     );
   });
 
-  test('unknown directives remain literal and unsafe PR links are inert', () {
+  test('unknown and example directives remain literal', () {
+    const text = '::unknown{name="keep me"}\n'
+        '`::git-push{cwd="/repo" branch="example"}`\n'
+        '```text\n'
+        '::git-commit{cwd="/repo"}\n'
+        '```\n'
+        'Explanation: ::git-create-branch{cwd="/repo" branch="example"}';
+    final parsed = parseCodexDirectiveContent(text);
+
+    expect(parsed.markdown, text);
+    expect(parsed.directives, isEmpty);
+  });
+
+  test('unsafe PR directive links render without an action', () {
     final parsed = parseCodexDirectiveContent(
-      '::unknown{name="keep me"} '
       '::git-create-pr{url="file:///tmp/private" isDraft=true}',
     );
 
-    expect(parsed.markdown, '::unknown{name="keep me"}');
+    expect(parsed.markdown, isEmpty);
     expect(parsed.directives, hasLength(1));
     expect(parsed.directives.single.webUri, isNull);
   });
@@ -185,7 +197,7 @@ void main() {
           item: TaskItem(
             id: 'agent-git',
             kind: TaskItemKind.agent,
-            text: 'Published. '
+            text: 'Published.\n'
                 '::git-create-branch{cwd="/repo" branch="codex/fix"} '
                 '::git-push{cwd="/repo" branch="codex/fix"} '
                 '::git-create-pr{cwd="/repo" branch="codex/fix" '
