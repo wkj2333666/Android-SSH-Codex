@@ -245,6 +245,51 @@ void main() {
     expect(find.byKey(const Key('pending-user-progress')), findsOneWidget);
   });
 
+  testWidgets('user messages expose a copy action', (tester) async {
+    String? copied;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: TimelineItemView(
+          item: const TaskItem(
+            id: 'user-copy',
+            kind: TaskItemKind.user,
+            text: 'Copy **this** message',
+          ),
+          copyText: (text) async => copied = text,
+        ),
+      ),
+    ));
+
+    await tester.tap(find.byTooltip('Copy message'));
+    await tester.pump();
+
+    expect(copied, 'Copy **this** message');
+    expect(find.text('Message copied'), findsOneWidget);
+  });
+
+  testWidgets('agent copy excludes hidden Git directives', (tester) async {
+    String? copied;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: TimelineItemView(
+          item: const TaskItem(
+            id: 'agent-copy',
+            kind: TaskItemKind.agent,
+            text: '**Published**\n'
+                '::git-push{cwd="/repo" branch="codex/copy"}',
+          ),
+          copyText: (text) async => copied = text,
+        ),
+      ),
+    ));
+
+    await tester.tap(find.byTooltip('Copy message'));
+    await tester.pump();
+
+    expect(copied, '**Published**');
+    expect(find.text('Message copied'), findsOneWidget);
+  });
+
   testWidgets('reasoning is collapsed until explicitly expanded',
       (tester) async {
     await tester.pumpWidget(const MaterialApp(

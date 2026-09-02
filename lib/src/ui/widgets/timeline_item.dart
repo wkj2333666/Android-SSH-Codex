@@ -1,18 +1,33 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../tasks/task_reducer.dart';
 import 'codex_directive_content.dart';
 import 'markdown_content.dart';
 
+typedef MessageTextCopier = Future<void> Function(String text);
+
+Future<void> copyMessageText(String text) =>
+    Clipboard.setData(ClipboardData(text: text));
+
 class TimelineItemView extends StatelessWidget {
-  const TimelineItemView({required this.item, super.key});
+  const TimelineItemView({
+    required this.item,
+    this.copyText = copyMessageText,
+    super.key,
+  });
 
   final TaskItem item;
+  final MessageTextCopier copyText;
 
   @override
   Widget build(BuildContext context) {
     return switch (item.kind) {
-      TaskItemKind.user || TaskItemKind.agent => _Message(item: item),
+      TaskItemKind.user ||
+      TaskItemKind.agent =>
+        _Message(item: item, copyText: copyText),
       _ => _ActivityCard(item: item),
     };
   }
@@ -99,14 +114,17 @@ class _CompactActivityRow extends StatelessWidget {
 }
 
 class _Message extends StatelessWidget {
-  const _Message({required this.item});
+  const _Message({required this.item, required this.copyText});
 
   final TaskItem item;
+  final MessageTextCopier copyText;
 
   @override
   Widget build(BuildContext context) {
     final user = item.kind == TaskItemKind.user;
     final colors = Theme.of(context).colorScheme;
+    final copyableText = _copyableMessageText(item);
+    final sending = user && item.status == 'sending';
     return Align(
       alignment: user ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -126,18 +144,66 @@ class _Message extends StatelessWidget {
               MarkdownContent(text: item.text)
             else
               CodexDirectiveContent(text: item.text),
-            if (user && item.status == 'sending') ...[
-              const SizedBox(height: 6),
-              const SizedBox(
-                key: Key('pending-user-progress'),
-                width: 12,
-                height: 12,
-                child: CircularProgressIndicator(strokeWidth: 1.5),
+            if (sending || copyableText.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (sending)
+                    const SizedBox(
+                      key: Key('pending-user-progress'),
+                      width: 12,
+                      height: 12,
+                      child: CircularProgressIndicator(strokeWidth: 1.5),
+                    ),
+                  if (sending && copyableText.isNotEmpty)
+                    const SizedBox(width: 8),
+                  if (copyableText.isNotEmpty)
+                    SizedBox(
+                      width: 28,
+                      height: 24,
+                      child: IconButton(
+                        tooltip: 'Copy message',
+                        padding: EdgeInsets.zero,
+                        visualDensity: VisualDensity.compact,
+                        iconSize: 16,
+                        onPressed: () => unawaited(
+                          _copyMessage(context, copyableText, copyText),
+                        ),
+                        icon: const Icon(Icons.copy_all_outlined),
+                      ),
+                    ),
+                ],
               ),
             ],
           ],
         ),
       ),
+    );
+  }
+}
+
+String _copyableMessageText(TaskItem item) {
+  if (item.kind != TaskItemKind.agent) return item.text;
+  final parsed = parseCodexDirectiveContent(item.text);
+  return parsed.directives.isEmpty ? item.text : parsed.markdown.trimRight();
+}
+
+Future<void> _copyMessage(
+  BuildContext context,
+  String text,
+  MessageTextCopier copyText,
+) async {
+  try {
+    await copyText(text);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Message copied')),
+    );
+  } catch (_) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Could not copy message.')),
     );
   }
 }
