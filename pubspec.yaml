@@ -1,6 +1,6 @@
 name: android_ssh_codex
 description: A mobile Codex UI that controls a remote Codex app-server over SSH.
-version: 0.4.5+20
+version: 0.4.6+21
 publish_to: none
 
 environment:
@@ -16,6 +16,12 @@ dependencies:
   flutter_secure_storage: 9.2.4
   flutter_secure_storage_ohos: 1.0.0
   markdown: 7.3.1
+  url_launcher: 6.3.1
+  url_launcher_ohos:
+    git:
+      url: https://gitee.com/openharmony-sig/flutter_packages.git
+      ref: 4b972ef31532ae39adc07b342df4560da6867d67
+      path: packages/url_launcher/url_launcher_ohos
   web_socket_channel: 3.0.1
 
 dev_dependencies:

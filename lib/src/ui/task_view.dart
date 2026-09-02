@@ -47,6 +47,14 @@ String restoreComposerDraft({
 }) =>
     currentText.isEmpty ? submittedText : currentText;
 
+List<QueuedTaskMessage> visibleQueuedMessages(
+  List<QueuedTaskMessage> messages,
+  Set<String> inFlightMessageIds,
+) =>
+    messages
+        .where((message) => !inFlightMessageIds.contains(message.id))
+        .toList(growable: false);
+
 class TaskView extends StatefulWidget {
   const TaskView({required this.controller, required this.task, super.key});
 
@@ -107,7 +115,10 @@ class _TaskViewState extends State<TaskView> {
     final approvals = widget.controller.approvals
         .where((approval) => approval.threadId == task.id)
         .toList(growable: false);
-    final queuedMessages = widget.controller.queuedMessagesForTask(task.id);
+    final queuedMessages = visibleQueuedMessages(
+      widget.controller.queuedMessagesForTask(task.id),
+      widget.controller.inFlightQueuedMessageIdsForTask(task.id),
+    );
     final timelineState = TaskTimelineRenderState(
       items: task.items,
       owner: widget.controller,

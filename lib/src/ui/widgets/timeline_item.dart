@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../tasks/task_reducer.dart';
+import 'codex_directive_content.dart';
 import 'markdown_content.dart';
 
 class TimelineItemView extends StatelessWidget {
@@ -121,7 +122,10 @@ class _Message extends StatelessWidget {
           crossAxisAlignment:
               user ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
-            MarkdownContent(text: item.text),
+            if (user)
+              MarkdownContent(text: item.text)
+            else
+              CodexDirectiveContent(text: item.text),
             if (user && item.status == 'sending') ...[
               const SizedBox(height: 6),
               const SizedBox(

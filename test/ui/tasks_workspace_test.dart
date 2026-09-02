@@ -551,6 +551,25 @@ void main() {
     await tester.pump();
     expect(removedId, 'queued-1');
   });
+
+  test('queue panel hides an in-flight message after its local ID is replaced',
+      () {
+    const messages = [
+      QueuedTaskMessage(id: 'queued-1', text: 'Continue'),
+      QueuedTaskMessage(id: 'queued-2', text: 'Then verify'),
+    ];
+
+    expect(
+      visibleQueuedMessages(messages, const {'queued-1'})
+          .map((message) => message.id),
+      ['queued-2'],
+    );
+  });
+
+  test('queue panel restores a message after its optimistic bubble fails', () {
+    const messages = [QueuedTaskMessage(id: 'queued-1', text: 'Continue')];
+    expect(visibleQueuedMessages(messages, const {}), messages);
+  });
 }
 
 List<TaskItem> longTimelineItems() {

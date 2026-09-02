@@ -572,16 +572,20 @@ int _matchingPendingUserIndex(
   String text,
   Set<int> excludedIndices,
 ) {
+  final normalizedText = _normalizedUserMessageText(text);
   for (var index = 0; index < items.length; index++) {
     final item = items[index];
     if (!excludedIndices.contains(index) &&
         _isPendingUserItem(item) &&
-        item.text == text) {
+        _normalizedUserMessageText(item.text) == normalizedText) {
       return index;
     }
   }
   return -1;
 }
+
+String _normalizedUserMessageText(String text) =>
+    text.replaceAll('\r\n', '\n').replaceAll('\r', '\n').trim();
 
 bool _isPendingUserItem(TaskItem item) =>
     item.kind == TaskItemKind.user &&
