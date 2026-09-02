@@ -60,13 +60,16 @@ class _TaskList extends StatelessWidget {
         selectedProjectId: controller.selectedProjectId,
         selectedTaskId: controller.selectedTaskId,
         projectTasks: controller.projectTasks,
+        recentTasks: controller.recentTasks,
         unassignedTasks: controller.unassignedTasks,
         connected: controller.isConnected,
         connectionPhase: controller.connectionPhase,
         unassignedExpanded: controller.unassignedExpanded,
         hasMoreProjectTasks: controller.hasMoreProjectTasks,
+        hasMoreRecentTasks: controller.hasMoreRecentTasks,
         hasMoreUnassignedTasks: controller.hasMoreUnassignedTasks,
         loadingProjectPage: controller.isLoadingProjectPage,
+        loadingRecentTasks: controller.isLoadingRecentTasks,
         loadingUnassignedPage: controller.isLoadingUnassignedPage,
       ),
       onRefresh: controller.refreshTasks,
@@ -74,16 +77,19 @@ class _TaskList extends StatelessWidget {
       onEditProject: () => _editProject(context, controller.selectedProject),
       onDeleteProject: () => _deleteProject(context),
       onProjectSelected: controller.selectProject,
-      onNewTask: () => _newTask(context),
+      onNewTask: (mode) => _newTask(context, mode),
       onTaskSelected: controller.selectTask,
       onToggleUnassigned: controller.toggleUnassigned,
       onLoadMoreProjectTasks: controller.loadMoreProjectTasks,
+      onLoadMoreRecentTasks: controller.loadMoreRecentTasks,
       onLoadMoreUnassignedTasks: controller.loadMoreUnassignedTasks,
     );
   }
 
-  Future<void> _newTask(BuildContext context) async {
-    final project = controller.selectedProject;
+  Future<void> _newTask(BuildContext context, TaskListMode mode) async {
+    final project = mode == TaskListMode.projects
+        ? controller.selectedProject
+        : null;
     final cwd = TextEditingController(text: project?.cwd);
     final prompt = TextEditingController();
     var turnSettings = const TurnSettings();
@@ -246,6 +252,8 @@ class _TaskList extends StatelessWidget {
   }
 }
 
+enum TaskListMode { projects, tasks }
+
 final class TaskListPaneModel {
   const TaskListPaneModel({
     required this.projects,
@@ -253,12 +261,16 @@ final class TaskListPaneModel {
     required this.projectTasks,
     required this.unassignedTasks,
     required this.connected,
+    this.recentTasks = const [],
+    this.initialMode = TaskListMode.projects,
     this.selectedTaskId,
     this.connectionPhase = RemoteConnectionPhase.disconnected,
     this.unassignedExpanded = false,
     this.hasMoreProjectTasks = false,
+    this.hasMoreRecentTasks = false,
     this.hasMoreUnassignedTasks = false,
     this.loadingProjectPage = false,
+    this.loadingRecentTasks = false,
     this.loadingUnassignedPage = false,
   });
 
@@ -266,13 +278,17 @@ final class TaskListPaneModel {
   final String? selectedProjectId;
   final String? selectedTaskId;
   final List<TaskRecord> projectTasks;
+  final List<TaskRecord> recentTasks;
   final List<TaskRecord> unassignedTasks;
   final bool connected;
+  final TaskListMode initialMode;
   final RemoteConnectionPhase connectionPhase;
   final bool unassignedExpanded;
   final bool hasMoreProjectTasks;
+  final bool hasMoreRecentTasks;
   final bool hasMoreUnassignedTasks;
   final bool loadingProjectPage;
+  final bool loadingRecentTasks;
   final bool loadingUnassignedPage;
 
   RemoteProject? get selectedProject {
@@ -290,11 +306,13 @@ class TaskListPane extends StatefulWidget {
     this.onAddProject,
     this.onEditProject,
     this.onDeleteProject,
+    this.onModeChanged,
     this.onProjectSelected,
     this.onNewTask,
     this.onTaskSelected,
     this.onToggleUnassigned,
     this.onLoadMoreProjectTasks,
+    this.onLoadMoreRecentTasks,
     this.onLoadMoreUnassignedTasks,
     super.key,
   });
@@ -304,11 +322,13 @@ class TaskListPane extends StatefulWidget {
   final VoidCallback? onAddProject;
   final VoidCallback? onEditProject;
   final VoidCallback? onDeleteProject;
+  final ValueChanged<TaskListMode>? onModeChanged;
   final ValueChanged<String?>? onProjectSelected;
-  final VoidCallback? onNewTask;
+  final ValueChanged<TaskListMode>? onNewTask;
   final ValueChanged<String>? onTaskSelected;
   final VoidCallback? onToggleUnassigned;
   final VoidCallback? onLoadMoreProjectTasks;
+  final VoidCallback? onLoadMoreRecentTasks;
   final VoidCallback? onLoadMoreUnassignedTasks;
 
   @override
@@ -317,6 +337,13 @@ class TaskListPane extends StatefulWidget {
 
 class _TaskListPaneState extends State<TaskListPane> {
   final _search = TextEditingController();
+  late TaskListMode _mode;
+
+  @override
+  void initState() {
+    super.initState();
+    _mode = widget.model.initialMode;
+  }
 
   @override
   void dispose() {
@@ -329,6 +356,7 @@ class _TaskListPaneState extends State<TaskListPane> {
     final model = widget.model;
     final project = model.selectedProject;
     final projectTasks = _filtered(model.projectTasks);
+    final recentTasks = _filtered(model.recentTasks);
     final unassignedTasks = _filtered(model.unassignedTasks);
     final canShowTasks = model.connected ||
         model.connectionPhase == RemoteConnectionPhase.reconnecting;
@@ -343,7 +371,7 @@ class _TaskListPaneState extends State<TaskListPane> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Projects',
+                      'Workspace',
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                     const SizedBox(height: 3),
@@ -358,54 +386,89 @@ class _TaskListPaneState extends State<TaskListPane> {
               ),
               IconButton(
                 tooltip: 'Add project',
-                onPressed: model.connected ? widget.onAddProject : null,
+                onPressed: model.connected && _mode == TaskListMode.projects
+                    ? widget.onAddProject
+                    : null,
                 icon: const Icon(Icons.create_new_folder_outlined),
               ),
               IconButton.filled(
                 tooltip: 'New task',
-                onPressed: model.connected ? widget.onNewTask : null,
+                onPressed: model.connected
+                    ? () => widget.onNewTask?.call(_mode)
+                    : null,
                 icon: const Icon(Icons.add),
               ),
             ],
           ),
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(12, 0, 8, 10),
-          child: Row(
-            children: [
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  key: ValueKey(project?.id),
-                  initialValue: project?.id,
-                  decoration: const InputDecoration(
-                    labelText: 'Project',
-                    prefixIcon: Icon(Icons.folder_outlined),
-                  ),
-                  hint: const Text('No project selected'),
-                  items: [
-                    for (final item in model.projects)
-                      DropdownMenuItem(value: item.id, child: Text(item.name)),
-                  ],
-                  onChanged: model.connected ? widget.onProjectSelected : null,
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+          child: SizedBox(
+            width: double.infinity,
+            child: SegmentedButton<TaskListMode>(
+              key: const Key('task-list-mode'),
+              segments: const [
+                ButtonSegment(
+                  value: TaskListMode.projects,
+                  icon: Icon(Icons.folder_outlined),
+                  label: Text('Projects'),
                 ),
-              ),
-              IconButton(
-                tooltip: 'Edit project',
-                onPressed: model.connected && project != null
-                    ? widget.onEditProject
-                    : null,
-                icon: const Icon(Icons.edit_outlined),
-              ),
-              IconButton(
-                tooltip: 'Delete project',
-                onPressed: model.connected && project != null
-                    ? widget.onDeleteProject
-                    : null,
-                icon: const Icon(Icons.delete_outline),
-              ),
-            ],
+                ButtonSegment(
+                  value: TaskListMode.tasks,
+                  icon: Icon(Icons.history),
+                  label: Text('Tasks'),
+                ),
+              ],
+              selected: {_mode},
+              onSelectionChanged: model.connected
+                  ? (selection) {
+                      final mode = selection.single;
+                      setState(() => _mode = mode);
+                      widget.onModeChanged?.call(mode);
+                    }
+                  : null,
+            ),
           ),
         ),
+        if (_mode == TaskListMode.projects)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 8, 10),
+            child: Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    key: ValueKey(project?.id),
+                    initialValue: project?.id,
+                    decoration: const InputDecoration(
+                      labelText: 'Project',
+                      prefixIcon: Icon(Icons.folder_outlined),
+                    ),
+                    hint: const Text('No project selected'),
+                    items: [
+                      for (final item in model.projects)
+                        DropdownMenuItem(value: item.id, child: Text(item.name)),
+                    ],
+                    onChanged:
+                        model.connected ? widget.onProjectSelected : null,
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Edit project',
+                  onPressed: model.connected && project != null
+                      ? widget.onEditProject
+                      : null,
+                  icon: const Icon(Icons.edit_outlined),
+                ),
+                IconButton(
+                  tooltip: 'Delete project',
+                  onPressed: model.connected && project != null
+                      ? widget.onDeleteProject
+                      : null,
+                  icon: const Icon(Icons.delete_outline),
+                ),
+              ],
+            ),
+          ),
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
           child: TextField(
@@ -426,65 +489,99 @@ class _TaskListPaneState extends State<TaskListPane> {
                   child: ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
                     children: [
-                      if (project == null)
-                        const _NoProjectSelected()
-                      else ...[
-                        _SectionHeader(
-                          title: project.name,
-                          subtitle: project.cwd,
+                      if (_mode == TaskListMode.tasks) ...[
+                        const _SectionHeader(
+                          title: 'Recent tasks',
+                          subtitle: 'Newest activity first',
                         ),
-                        if (projectTasks.isEmpty)
-                          const _EmptySection(
-                            message: 'No tasks in this project',
-                          )
+                        if (recentTasks.isEmpty)
+                          const _EmptySection(message: 'No recent tasks')
                         else
-                          for (final task in projectTasks)
+                          for (final task in recentTasks)
                             _TaskRow(
                               task: task,
                               selected: model.selectedTaskId == task.id,
                               onTap: () => widget.onTaskSelected?.call(task.id),
                             ),
-                        if (model.hasMoreProjectTasks ||
-                            model.loadingProjectPage)
+                        if (model.hasMoreRecentTasks ||
+                            model.loadingRecentTasks)
                           _LoadMoreButton(
-                            key: const Key('load-more-project'),
-                            loading: model.loadingProjectPage,
-                            onPressed: widget.onLoadMoreProjectTasks,
+                            key: const Key('load-more-recent'),
+                            loading: model.loadingRecentTasks,
+                            onPressed: widget.onLoadMoreRecentTasks,
                           ),
-                      ],
-                      const Divider(height: 1),
-                      ExpansionTile(
-                        key: ValueKey(model.unassignedExpanded),
-                        initiallyExpanded: model.unassignedExpanded,
-                        leading: const Icon(Icons.inbox_outlined),
-                        title: const Text('Unassigned'),
-                        subtitle: Text(
-                          '${model.unassignedTasks.length} recent tasks',
-                        ),
-                        onExpansionChanged: (_) =>
-                            widget.onToggleUnassigned?.call(),
-                        children: [
-                          if (unassignedTasks.isEmpty)
+                      ] else ...[
+                        if (project == null)
+                          const _NoProjectSelected()
+                        else ...[
+                          _SectionHeader(
+                            title: project.name,
+                            subtitle: project.cwd,
+                          ),
+                          if (projectTasks.isEmpty && model.loadingProjectPage)
+                            const Padding(
+                              padding: EdgeInsets.all(24),
+                              child: Center(
+                                child: CircularProgressIndicator(
+                                  key: Key('project-head-progress'),
+                                ),
+                              ),
+                            )
+                          else if (projectTasks.isEmpty)
                             const _EmptySection(
-                              message: 'No unassigned tasks in recent history',
+                              message: 'No tasks in this project',
                             )
                           else
-                            for (final task in unassignedTasks)
+                            for (final task in projectTasks)
                               _TaskRow(
                                 task: task,
                                 selected: model.selectedTaskId == task.id,
-                                onTap: () =>
-                                    widget.onTaskSelected?.call(task.id),
+                                onTap: () => widget.onTaskSelected?.call(task.id),
                               ),
-                          if (model.hasMoreUnassignedTasks ||
-                              model.loadingUnassignedPage)
+                          if (projectTasks.isNotEmpty &&
+                              (model.hasMoreProjectTasks ||
+                                  model.loadingProjectPage))
                             _LoadMoreButton(
-                              key: const Key('load-more-unassigned'),
-                              loading: model.loadingUnassignedPage,
-                              onPressed: widget.onLoadMoreUnassignedTasks,
+                              key: const Key('load-more-project'),
+                              loading: model.loadingProjectPage,
+                              onPressed: widget.onLoadMoreProjectTasks,
                             ),
                         ],
-                      ),
+                        const Divider(height: 1),
+                        ExpansionTile(
+                          key: ValueKey(model.unassignedExpanded),
+                          initiallyExpanded: model.unassignedExpanded,
+                          leading: const Icon(Icons.inbox_outlined),
+                          title: const Text('Unassigned'),
+                          subtitle: Text(
+                            '${model.unassignedTasks.length} recent tasks',
+                          ),
+                          onExpansionChanged: (_) =>
+                              widget.onToggleUnassigned?.call(),
+                          children: [
+                            if (unassignedTasks.isEmpty)
+                              const _EmptySection(
+                                message:
+                                    'No unassigned tasks in recent history',
+                              )
+                            else
+                              for (final task in unassignedTasks)
+                                _TaskRow(
+                                  task: task,
+                                  selected: model.selectedTaskId == task.id,
+                                  onTap: () =>
+                                      widget.onTaskSelected?.call(task.id),
+                                ),
+                            if (model.hasMoreUnassignedTasks ||
+                                model.loadingUnassignedPage)
+                              _LoadMoreButton(
+                                key: const Key('load-more-unassigned'),
+                                loading: model.loadingUnassignedPage,
+                                onPressed: widget.onLoadMoreUnassignedTasks,
+                              ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 ),

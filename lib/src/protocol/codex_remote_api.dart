@@ -148,20 +148,29 @@ final class CodexRemoteApi {
   }
 
   Future<Set<String>> readAllTaskCwds() async {
-    final cwds = <String>{};
+    final activity = await readProjectActivity();
+    return Set.unmodifiable(activity.keys);
+  }
+
+  Future<Map<String, DateTime>> readProjectActivity() async {
+    final activity = <String, DateTime>{};
     final seenCursors = <String>{};
     String? cursor;
     do {
       final page = await readTaskPage(cursor: cursor);
       for (final task in page.tasks) {
         final cwd = task.cwd.trim();
-        if (cwd.isNotEmpty) cwds.add(cwd);
+        if (cwd.isEmpty) continue;
+        final current = activity[cwd];
+        if (current == null || task.updatedAt.isAfter(current)) {
+          activity[cwd] = task.updatedAt;
+        }
       }
       final nextCursor = page.nextCursor;
       cursor =
           nextCursor != null && seenCursors.add(nextCursor) ? nextCursor : null;
     } while (cursor != null);
-    return Set.unmodifiable(cwds);
+    return Map.unmodifiable(activity);
   }
 
   Future<Set<String>> readLoadedThreadIds() async {

@@ -133,6 +133,7 @@ final class AppController extends ChangeNotifier {
   String? _selectedProjectId;
   String? _selectedTaskId;
   final Map<String, String> _activeTurnIds = {};
+  final Map<String, DateTime> _projectActivityByCwd = {};
   String? _error;
   HostKeyChallenge? _hostKeyChallenge;
   Completer<bool>? _hostKeyCompleter;
@@ -153,7 +154,9 @@ final class AppController extends ChangeNotifier {
   var _connectionAttempt = 0;
   var _reconnectAttempt = 0;
   var _loadingProjectPage = false;
+  var _loadingRecentPage = false;
   var _loadingUnassignedPage = false;
+  var _projectPageGeneration = 0;
   var _nextQueuedMessageId = 0;
   Future<void> _autoConnectIntentWrite = Future.value();
 
@@ -171,8 +174,10 @@ final class AppController extends ChangeNotifier {
   TaskState get taskState => _taskReducer.state;
   bool get unassignedExpanded => _taskCatalog.unassignedExpanded;
   bool get hasMoreProjectTasks => _taskCatalog.projectNextCursor != null;
+  bool get hasMoreRecentTasks => _taskCatalog.recentNextCursor != null;
   bool get hasMoreUnassignedTasks => _taskCatalog.unassignedNextCursor != null;
   bool get isLoadingProjectPage => _loadingProjectPage;
+  bool get isLoadingRecentTasks => _loadingRecentPage;
   bool get isLoadingUnassignedPage => _loadingUnassignedPage;
   bool get hasOlderTaskContext =>
       _historyLoadState.taskId == _selectedTaskId && _historyLoadState.hasOlder;
@@ -195,6 +200,9 @@ final class AppController extends ChangeNotifier {
 
   List<TaskRecord> get projectTasks =>
       _tasksForIds(_taskCatalog.projectTaskIds);
+
+  List<TaskRecord> get recentTasks =>
+      _tasksForIds(_taskCatalog.recentTaskIds);
 
   List<TaskRecord> get unassignedTasks =>
       _tasksForIds(_taskCatalog.unassignedTaskIds);
@@ -298,6 +306,7 @@ final class AppController extends ChangeNotifier {
           reconnecting ? _projects : await _store.readProjects(profile.id);
       if (attempt != _connectionAttempt) return;
       if (!reconnecting) {
+        _projectActivityByCwd.clear();
         _projects = projects;
         _selectedProjectId = projects.firstOrNull?.id;
         _taskCatalog.clear();
@@ -559,6 +568,17 @@ final class AppController extends ChangeNotifier {
           );
         }
         if (shouldResetPages) {
+          _taskCatalog.replaceRecentPage(
+            unassignedPage.tasks,
+            nextCursor: unassignedPage.nextCursor,
+          );
+        } else {
+          _taskCatalog.mergeRecentHead(
+            unassignedPage.tasks,
+            nextCursor: unassignedPage.nextCursor,
+          );
+        }
+        if (shouldResetPages) {
           _taskCatalog.replaceUnassignedPage(
             unassignedPage.tasks,
             projects: _projects,
@@ -651,17 +671,57 @@ final class AppController extends ChangeNotifier {
   }
 
   Future<void> selectProject(String? projectId) async {
-    if (projectId != null &&
-        !_projects.any((project) => project.id == projectId)) {
-      return;
-    }
+    final project = projectId == null
+        ? null
+        : _projects.where((project) => project.id == projectId).firstOrNull;
+    if (projectId != null && project == null) return;
     if (_selectedProjectId == projectId) return;
     _selectedProjectId = projectId;
     _selectedTaskId = null;
     _historyLoadState.clear();
     _taskCatalog.clearProjectPage();
+    final api = _api;
+    final epoch = _epoch;
+    final generation = ++_projectPageGeneration;
+    if (project == null || api == null || !isConnected) {
+      _loadingProjectPage = false;
+      notifyListeners();
+      return;
+    }
+    _loadingProjectPage = true;
     notifyListeners();
-    await refreshTasks(resetPages: true);
+    try {
+      final page = await api.readTaskPage(cwd: project.cwd);
+      if (api != _api ||
+          epoch != _epoch ||
+          generation != _projectPageGeneration ||
+          project.id != _selectedProjectId) {
+        return;
+      }
+      _discoverProjects(page.tasks);
+      final token = _taskReducer.beginRefresh(epoch);
+      _taskReducer.applyRefresh(
+        token,
+        page.tasks,
+        _loadedThreadIds.intersection(_ownedThreadIds),
+        retainExisting: true,
+      );
+      _taskCatalog.replaceProjectPage(
+        page.tasks,
+        nextCursor: page.nextCursor,
+      );
+    } catch (exception) {
+      if (api == _api &&
+          epoch == _epoch &&
+          generation == _projectPageGeneration) {
+        _error = _friendlyError(exception);
+      }
+    } finally {
+      if (generation == _projectPageGeneration) {
+        _loadingProjectPage = false;
+        notifyListeners();
+      }
+    }
   }
 
   Future<void> saveProject({
@@ -694,6 +754,7 @@ final class AppController extends ChangeNotifier {
       hostId: hostId,
       existing: await _store.readProjects(hostId),
       discoveredCwds: _taskReducer.state.tasks.values.map((task) => task.cwd),
+      activityByCwd: _projectActivityByCwd,
     );
     _selectedProjectId = id;
     _selectedTaskId = null;
@@ -711,6 +772,7 @@ final class AppController extends ChangeNotifier {
       hostId: hostId,
       existing: await _store.readProjects(hostId),
       discoveredCwds: _taskReducer.state.tasks.values.map((task) => task.cwd),
+      activityByCwd: _projectActivityByCwd,
     );
     if (_selectedProjectId == projectId) {
       _selectedProjectId = _projects.firstOrNull?.id;
@@ -739,11 +801,15 @@ final class AppController extends ChangeNotifier {
         _loadingProjectPage) {
       return;
     }
+    final generation = ++_projectPageGeneration;
     _loadingProjectPage = true;
     notifyListeners();
     try {
       final page = await api.readTaskPage(cwd: project.cwd, cursor: cursor);
-      if (api != _api || epoch != _epoch || project.id != _selectedProjectId) {
+      if (api != _api ||
+          epoch != _epoch ||
+          generation != _projectPageGeneration ||
+          project.id != _selectedProjectId) {
         return;
       }
       final token = _taskReducer.beginRefresh(epoch);
@@ -758,10 +824,55 @@ final class AppController extends ChangeNotifier {
         nextCursor: page.nextCursor,
       );
     } catch (exception) {
-      _error = _friendlyError(exception);
+      if (api == _api &&
+          epoch == _epoch &&
+          generation == _projectPageGeneration) {
+        _error = _friendlyError(exception);
+      }
     } finally {
-      _loadingProjectPage = false;
-      notifyListeners();
+      if (generation == _projectPageGeneration) {
+        _loadingProjectPage = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> loadMoreRecentTasks() async {
+    final api = _api;
+    final cursor = _taskCatalog.recentNextCursor;
+    final epoch = _epoch;
+    if (api == null ||
+        !isConnected ||
+        cursor == null ||
+        _loadingRecentPage) {
+      return;
+    }
+    _loadingRecentPage = true;
+    notifyListeners();
+    try {
+      final page = await api.readTaskPage(cursor: cursor);
+      if (api != _api || epoch != _epoch) return;
+      _discoverProjects(page.tasks);
+      final token = _taskReducer.beginRefresh(epoch);
+      _taskReducer.applyRefresh(
+        token,
+        page.tasks,
+        _loadedThreadIds.intersection(_ownedThreadIds),
+        retainExisting: true,
+      );
+      _taskCatalog.appendRecentPage(
+        page.tasks,
+        nextCursor: page.nextCursor,
+      );
+    } catch (exception) {
+      if (api == _api && epoch == _epoch) {
+        _error = _friendlyError(exception);
+      }
+    } finally {
+      if (api == _api && epoch == _epoch) {
+        _loadingRecentPage = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -802,6 +913,14 @@ final class AppController extends ChangeNotifier {
   }
 
   void _discoverProjects(Iterable<TaskSnapshot> tasks) {
+    for (final task in tasks) {
+      final cwd = normalizeRemoteCwd(task.cwd);
+      if (cwd.isEmpty) continue;
+      final current = _projectActivityByCwd[cwd];
+      if (current == null || task.updatedAt.isAfter(current)) {
+        _projectActivityByCwd[cwd] = task.updatedAt;
+      }
+    }
     _discoverProjectCwds(tasks.map((task) => task.cwd));
   }
 
@@ -812,6 +931,7 @@ final class AppController extends ChangeNotifier {
       hostId: hostId,
       existing: _projects,
       discoveredCwds: cwds,
+      activityByCwd: _projectActivityByCwd,
     );
     if (listEquals(projects, _projects)) return false;
     _projects = projects;
@@ -846,9 +966,16 @@ final class AppController extends ChangeNotifier {
     required String profileId,
   }) async {
     try {
-      final cwds = await api.readAllTaskCwds();
+      final activity = await api.readProjectActivity();
       if (!_isCurrentSession(api, attempt, epoch, profileId)) return;
-      if (!_discoverProjectCwds(cwds)) return;
+      for (final entry in activity.entries) {
+        final cwd = normalizeRemoteCwd(entry.key);
+        final current = _projectActivityByCwd[cwd];
+        if (current == null || entry.value.isAfter(current)) {
+          _projectActivityByCwd[cwd] = entry.value;
+        }
+      }
+      if (!_discoverProjectCwds(activity.keys)) return;
       notifyListeners();
       await refreshTasks(resetPages: true);
     } catch (exception) {
@@ -1642,7 +1769,12 @@ final class AppController extends ChangeNotifier {
     _selectedTaskId = null;
     _selectedProjectId = null;
     _projects = const [];
+    _projectActivityByCwd.clear();
     _models = const [];
+    _loadingProjectPage = false;
+    _loadingRecentPage = false;
+    _loadingUnassignedPage = false;
+    _projectPageGeneration++;
     _taskCatalog.clear();
     _historyLoadState.clear();
     _activeTurnIds.clear();
@@ -1694,6 +1826,10 @@ final class AppController extends ChangeNotifier {
     _models = const [];
     _projectDiscoveryApi = null;
     _subscribedThreadIds = {};
+    _loadingProjectPage = false;
+    _loadingRecentPage = false;
+    _loadingUnassignedPage = false;
+    _projectPageGeneration++;
     final notificationSubscription = _notificationSubscription;
     final requestSubscription = _requestSubscription;
     final rpc = _rpc;

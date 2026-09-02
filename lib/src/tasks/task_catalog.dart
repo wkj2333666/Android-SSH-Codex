@@ -3,14 +3,19 @@ import 'task_reducer.dart';
 
 final class TaskCatalog {
   List<String> _projectTaskIds = const [];
+  List<String> _recentTaskIds = const [];
   List<String> _unassignedTaskIds = const [];
   String? _projectNextCursor;
+  String? _recentNextCursor;
   String? _unassignedNextCursor;
+  final Map<String, DateTime> _recentUpdatedAt = {};
   bool _unassignedExpanded = false;
 
   List<String> get projectTaskIds => _projectTaskIds;
+  List<String> get recentTaskIds => _recentTaskIds;
   List<String> get unassignedTaskIds => _unassignedTaskIds;
   String? get projectNextCursor => _projectNextCursor;
+  String? get recentNextCursor => _recentNextCursor;
   String? get unassignedNextCursor => _unassignedNextCursor;
   bool get unassignedExpanded => _unassignedExpanded;
 
@@ -37,6 +42,52 @@ final class TaskCatalog {
     final previousCursor = _projectNextCursor;
     _projectTaskIds = _mergeHead(_projectTaskIds, tasks);
     _projectNextCursor = previousCursor ?? nextCursor;
+  }
+
+  void replaceRecentPage(
+    List<TaskSnapshot> tasks, {
+    required String? nextCursor,
+  }) {
+    _recentTaskIds = const [];
+    _recentUpdatedAt.clear();
+    _mergeRecentTasks(tasks);
+    _recentNextCursor = nextCursor;
+  }
+
+  void appendRecentPage(
+    List<TaskSnapshot> tasks, {
+    required String? nextCursor,
+  }) {
+    _mergeRecentTasks(tasks);
+    _recentNextCursor = nextCursor;
+  }
+
+  void mergeRecentHead(
+    List<TaskSnapshot> tasks, {
+    required String? nextCursor,
+  }) {
+    final previousCursor = _recentNextCursor;
+    _mergeRecentTasks(tasks);
+    _recentNextCursor = previousCursor ?? nextCursor;
+  }
+
+  void _mergeRecentTasks(Iterable<TaskSnapshot> tasks) {
+    final ids = {..._recentTaskIds};
+    for (final task in tasks) {
+      ids.add(task.id);
+      final current = _recentUpdatedAt[task.id];
+      if (current == null || task.updatedAt.isAfter(current)) {
+        _recentUpdatedAt[task.id] = task.updatedAt;
+      }
+    }
+    final sorted = ids.toList(growable: false)
+      ..sort((first, second) {
+        final firstUpdatedAt = _recentUpdatedAt[first]!;
+        final secondUpdatedAt = _recentUpdatedAt[second]!;
+        final byUpdate = secondUpdatedAt.compareTo(firstUpdatedAt);
+        return byUpdate == 0 ? first.compareTo(second) : byUpdate;
+      });
+    _recentTaskIds = List.unmodifiable(sorted);
   }
 
   void replaceUnassignedPage(
@@ -84,6 +135,9 @@ final class TaskCatalog {
 
   void clear() {
     clearProjectPage();
+    _recentTaskIds = const [];
+    _recentNextCursor = null;
+    _recentUpdatedAt.clear();
     _unassignedTaskIds = const [];
     _unassignedNextCursor = null;
     _unassignedExpanded = false;
