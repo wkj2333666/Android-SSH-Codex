@@ -79,7 +79,8 @@ void main() {
     expect(reducer.state.tasks['one']?.status, TaskStatus.running);
   });
 
-  test('a captured page merge preserves events received during its request', () {
+  test('a captured page merge preserves events received during its request',
+      () {
     final epoch = reducer.beginConnection();
     final initial = reducer.beginRefresh(epoch);
     reducer.applyRefresh(
