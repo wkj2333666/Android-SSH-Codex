@@ -48,7 +48,8 @@ ParsedCodexDirectiveContent parseCodexDirectiveContent(String input) {
     remaining.write(input.substring(cursor, match.start));
     final name = match.group(1)!;
     if (_gitDirectiveNames.contains(name)) {
-      directives.add(CodexGitDirective(name, _parseAttributes(match.group(2)!)));
+      directives
+          .add(CodexGitDirective(name, _parseAttributes(match.group(2)!)));
     } else {
       remaining.write(match.group(0));
     }
