@@ -109,8 +109,7 @@ List<CodexGitDirective>? _parseDirectiveLine(String line) {
     cursor = match.end;
     if (cursor == trimmed.length) break;
     if (!RegExp(r'\s').hasMatch(trimmed[cursor])) return null;
-    while (cursor < trimmed.length &&
-        RegExp(r'\s').hasMatch(trimmed[cursor])) {
+    while (cursor < trimmed.length && RegExp(r'\s').hasMatch(trimmed[cursor])) {
       cursor++;
     }
   }

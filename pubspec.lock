@@ -480,9 +480,9 @@ packages:
   url_launcher_ohos:
     dependency: "direct main"
     description:
-      path: packages/url_launcher/url_launcher_ohos
-      ref: 4b972ef31532ae39adc07b342df4560da6867d67
-      resolved-ref: 4b972ef31532ae39adc07b342df4560da6867d67
+      path: "packages/url_launcher/url_launcher_ohos"
+      ref: "4b972ef31532ae39adc07b342df4560da6867d67"
+      resolved-ref: "4b972ef31532ae39adc07b342df4560da6867d67"
       url: "https://gitee.com/openharmony-sig/flutter_packages.git"
     source: git
     version: "6.3.0"
