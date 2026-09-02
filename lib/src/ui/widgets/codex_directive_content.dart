@@ -49,20 +49,20 @@ ParsedCodexDirectiveContent parseCodexDirectiveContent(String input) {
     final rawLine = match.group(0)!;
     if (rawLine.isEmpty) continue;
     final line = _withoutLineEnding(rawLine);
-    final fence = _fencePattern.firstMatch(line);
-    if (fence != null) {
-      final marker = fence.group(1)!;
-      if (fenceMarker == null) {
+    if (fenceMarker == null) {
+      final fence = _openingFencePattern.firstMatch(line);
+      if (fence != null) {
+        final marker = fence.group(1)!;
         fenceMarker = marker[0];
         fenceLength = marker.length;
-      } else if (marker[0] == fenceMarker && marker.length >= fenceLength) {
+        remaining.write(rawLine);
+        continue;
+      }
+    } else {
+      if (_isClosingFence(line, fenceMarker, fenceLength)) {
         fenceMarker = null;
         fenceLength = 0;
       }
-      remaining.write(rawLine);
-      continue;
-    }
-    if (fenceMarker != null) {
       remaining.write(rawLine);
       continue;
     }
@@ -80,7 +80,11 @@ ParsedCodexDirectiveContent parseCodexDirectiveContent(String input) {
 }
 
 final _linePattern = RegExp(r'[^\r\n]*(?:\r\n|\r|\n|$)');
-final _fencePattern = RegExp(r'^[ ]{0,3}(`{3,}|~{3,})');
+final _openingFencePattern = RegExp(r'^[ ]{0,3}(`{3,}|~{3,})');
+
+bool _isClosingFence(String line, String marker, int minimumLength) => RegExp(
+      '^[ ]{0,3}${RegExp.escape(marker)}{$minimumLength,}[ \\t]*\$',
+    ).hasMatch(line);
 
 String _withoutLineEnding(String line) {
   if (line.endsWith('\r\n')) return line.substring(0, line.length - 2);
@@ -91,6 +95,7 @@ String _withoutLineEnding(String line) {
 }
 
 List<CodexGitDirective>? _parseDirectiveLine(String line) {
+  if (line.startsWith('    ') || line.startsWith('\t')) return null;
   final trimmed = line.trim();
   if (trimmed.isEmpty) return null;
   final directives = <CodexGitDirective>[];
