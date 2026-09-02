@@ -201,8 +201,7 @@ final class AppController extends ChangeNotifier {
   List<TaskRecord> get projectTasks =>
       _tasksForIds(_taskCatalog.projectTaskIds);
 
-  List<TaskRecord> get recentTasks =>
-      _tasksForIds(_taskCatalog.recentTaskIds);
+  List<TaskRecord> get recentTasks => _tasksForIds(_taskCatalog.recentTaskIds);
 
   List<TaskRecord> get unassignedTasks =>
       _tasksForIds(_taskCatalog.unassignedTaskIds);
@@ -841,10 +840,7 @@ final class AppController extends ChangeNotifier {
     final api = _api;
     final cursor = _taskCatalog.recentNextCursor;
     final epoch = _epoch;
-    if (api == null ||
-        !isConnected ||
-        cursor == null ||
-        _loadingRecentPage) {
+    if (api == null || !isConnected || cursor == null || _loadingRecentPage) {
       return;
     }
     _loadingRecentPage = true;

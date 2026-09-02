@@ -87,9 +87,8 @@ class _TaskList extends StatelessWidget {
   }
 
   Future<void> _newTask(BuildContext context, TaskListMode mode) async {
-    final project = mode == TaskListMode.projects
-        ? controller.selectedProject
-        : null;
+    final project =
+        mode == TaskListMode.projects ? controller.selectedProject : null;
     final cwd = TextEditingController(text: project?.cwd);
     final prompt = TextEditingController();
     var turnSettings = const TurnSettings();
@@ -446,7 +445,8 @@ class _TaskListPaneState extends State<TaskListPane> {
                     hint: const Text('No project selected'),
                     items: [
                       for (final item in model.projects)
-                        DropdownMenuItem(value: item.id, child: Text(item.name)),
+                        DropdownMenuItem(
+                            value: item.id, child: Text(item.name)),
                     ],
                     onChanged:
                         model.connected ? widget.onProjectSelected : null,
@@ -536,7 +536,8 @@ class _TaskListPaneState extends State<TaskListPane> {
                               _TaskRow(
                                 task: task,
                                 selected: model.selectedTaskId == task.id,
-                                onTap: () => widget.onTaskSelected?.call(task.id),
+                                onTap: () =>
+                                    widget.onTaskSelected?.call(task.id),
                               ),
                           if (projectTasks.isNotEmpty &&
                               (model.hasMoreProjectTasks ||

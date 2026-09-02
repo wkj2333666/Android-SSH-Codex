@@ -88,8 +88,7 @@ List<RemoteProject> mergeRemoteProjects({
   final projects = projectsByCwd.values.toList(growable: false)
     ..sort((first, second) {
       final firstActivity = normalizedActivity[normalizeRemoteCwd(first.cwd)];
-      final secondActivity =
-          normalizedActivity[normalizeRemoteCwd(second.cwd)];
+      final secondActivity = normalizedActivity[normalizeRemoteCwd(second.cwd)];
       if (firstActivity != null || secondActivity != null) {
         if (firstActivity == null) return 1;
         if (secondActivity == null) return -1;
