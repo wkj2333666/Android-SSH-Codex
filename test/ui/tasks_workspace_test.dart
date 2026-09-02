@@ -84,8 +84,8 @@ void main() {
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
         body: TaskListPane(
-          model: const TaskListPaneModel(
-            projects: [project],
+          model: TaskListPaneModel(
+            projects: const [project],
             selectedProjectId: project.id,
             projectTasks: [],
             unassignedTasks: [],
