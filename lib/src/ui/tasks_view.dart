@@ -7,13 +7,21 @@ import 'task_view.dart';
 import 'turn_settings_picker.dart';
 import 'widgets/connection_badge.dart';
 
-class TasksWorkspace extends StatelessWidget {
+class TasksWorkspace extends StatefulWidget {
   const TasksWorkspace({required this.controller, super.key});
 
   final AppController controller;
 
   @override
+  State<TasksWorkspace> createState() => _TasksWorkspaceState();
+}
+
+class _TasksWorkspaceState extends State<TasksWorkspace> {
+  TaskListMode _mode = TaskListMode.projects;
+
+  @override
   Widget build(BuildContext context) {
+    final controller = widget.controller;
     final wide = MediaQuery.sizeOf(context).width >= 800;
     final selected = controller.selectedTask;
     if (!wide && selected != null) {
@@ -25,7 +33,11 @@ class TasksWorkspace extends StatelessWidget {
         ),
       );
     }
-    final list = _TaskList(controller: controller);
+    final list = _TaskList(
+      controller: controller,
+      initialMode: _mode,
+      onModeChanged: (mode) => setState(() => _mode = mode),
+    );
     if (!wide) return SafeArea(child: list);
     return SafeArea(
       child: Row(
@@ -48,9 +60,15 @@ class TasksWorkspace extends StatelessWidget {
 }
 
 class _TaskList extends StatelessWidget {
-  const _TaskList({required this.controller});
+  const _TaskList({
+    required this.controller,
+    required this.initialMode,
+    required this.onModeChanged,
+  });
 
   final AppController controller;
+  final TaskListMode initialMode;
+  final ValueChanged<TaskListMode> onModeChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -63,6 +81,7 @@ class _TaskList extends StatelessWidget {
         recentTasks: controller.recentTasks,
         unassignedTasks: controller.unassignedTasks,
         connected: controller.isConnected,
+        initialMode: initialMode,
         connectionPhase: controller.connectionPhase,
         unassignedExpanded: controller.unassignedExpanded,
         hasMoreProjectTasks: controller.hasMoreProjectTasks,
@@ -77,6 +96,7 @@ class _TaskList extends StatelessWidget {
       onEditProject: () => _editProject(context, controller.selectedProject),
       onDeleteProject: () => _deleteProject(context),
       onProjectSelected: controller.selectProject,
+      onModeChanged: onModeChanged,
       onNewTask: (mode) => _newTask(context, mode),
       onTaskSelected: controller.selectTask,
       onToggleUnassigned: controller.toggleUnassigned,

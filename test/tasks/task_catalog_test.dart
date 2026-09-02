@@ -22,7 +22,9 @@ void main() {
         [snapshot('one', '/repo'), snapshot('two', '/repo')],
         nextCursor: 'page-2',
       );
+      final continuation = catalog.projectContinuation!;
       catalog.appendProjectPage(
+        continuation,
         [snapshot('two', '/repo'), snapshot('three', '/repo')],
         nextCursor: null,
       );
@@ -103,7 +105,11 @@ void main() {
     );
 
     catalog.replaceRecentPage([older, newest], nextCursor: 'page-2');
-    catalog.appendRecentPage([middle], nextCursor: null);
+    catalog.appendRecentPage(
+      catalog.recentContinuation!,
+      [middle],
+      nextCursor: null,
+    );
 
     expect(catalog.recentTaskIds, ['newest', 'middle', 'older']);
     expect(catalog.recentNextCursor, isNull);

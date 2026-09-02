@@ -681,6 +681,8 @@ final class AppController extends ChangeNotifier {
     _taskCatalog.clearProjectPage();
     final api = _api;
     final epoch = _epoch;
+    final pageToken = _taskReducer.capturePageMerge(epoch);
+    final catalogGeneration = _taskCatalog.projectGeneration;
     final generation = ++_projectPageGeneration;
     if (project == null || api == null || !isConnected) {
       _loadingProjectPage = false;
@@ -697,14 +699,14 @@ final class AppController extends ChangeNotifier {
           project.id != _selectedProjectId) {
         return;
       }
+      if (!_taskCatalog.isCurrentProjectGeneration(catalogGeneration)) return;
       _discoverProjects(page.tasks);
-      final token = _taskReducer.beginRefresh(epoch);
-      _taskReducer.applyRefresh(
-        token,
+      final applied = _taskReducer.applyPageMerge(
+        pageToken,
         page.tasks,
         _loadedThreadIds.intersection(_ownedThreadIds),
-        retainExisting: true,
       );
+      if (!applied) return;
       _taskCatalog.replaceProjectPage(
         page.tasks,
         nextCursor: page.nextCursor,
@@ -791,34 +793,39 @@ final class AppController extends ChangeNotifier {
   Future<void> loadMoreProjectTasks() async {
     final api = _api;
     final project = selectedProject;
-    final cursor = _taskCatalog.projectNextCursor;
+    final continuation = _taskCatalog.projectContinuation;
     final epoch = _epoch;
     if (api == null ||
         !isConnected ||
         project == null ||
-        cursor == null ||
+        continuation == null ||
         _loadingProjectPage) {
       return;
     }
+    final pageToken = _taskReducer.capturePageMerge(epoch);
     final generation = ++_projectPageGeneration;
     _loadingProjectPage = true;
     notifyListeners();
     try {
-      final page = await api.readTaskPage(cwd: project.cwd, cursor: cursor);
+      final page = await api.readTaskPage(
+        cwd: project.cwd,
+        cursor: continuation.cursor,
+      );
       if (api != _api ||
           epoch != _epoch ||
           generation != _projectPageGeneration ||
           project.id != _selectedProjectId) {
         return;
       }
-      final token = _taskReducer.beginRefresh(epoch);
-      _taskReducer.applyRefresh(
-        token,
+      if (!_taskCatalog.isCurrentProjectContinuation(continuation)) return;
+      final applied = _taskReducer.applyPageMerge(
+        pageToken,
         page.tasks,
         _loadedThreadIds.intersection(_ownedThreadIds),
-        retainExisting: true,
       );
+      if (!applied) return;
       _taskCatalog.appendProjectPage(
+        continuation,
         page.tasks,
         nextCursor: page.nextCursor,
       );
@@ -838,25 +845,30 @@ final class AppController extends ChangeNotifier {
 
   Future<void> loadMoreRecentTasks() async {
     final api = _api;
-    final cursor = _taskCatalog.recentNextCursor;
+    final continuation = _taskCatalog.recentContinuation;
     final epoch = _epoch;
-    if (api == null || !isConnected || cursor == null || _loadingRecentPage) {
+    if (api == null ||
+        !isConnected ||
+        continuation == null ||
+        _loadingRecentPage) {
       return;
     }
+    final pageToken = _taskReducer.capturePageMerge(epoch);
     _loadingRecentPage = true;
     notifyListeners();
     try {
-      final page = await api.readTaskPage(cursor: cursor);
+      final page = await api.readTaskPage(cursor: continuation.cursor);
       if (api != _api || epoch != _epoch) return;
+      if (!_taskCatalog.isCurrentRecentContinuation(continuation)) return;
       _discoverProjects(page.tasks);
-      final token = _taskReducer.beginRefresh(epoch);
-      _taskReducer.applyRefresh(
-        token,
+      final applied = _taskReducer.applyPageMerge(
+        pageToken,
         page.tasks,
         _loadedThreadIds.intersection(_ownedThreadIds),
-        retainExisting: true,
       );
+      if (!applied) return;
       _taskCatalog.appendRecentPage(
+        continuation,
         page.tasks,
         nextCursor: page.nextCursor,
       );
@@ -874,28 +886,30 @@ final class AppController extends ChangeNotifier {
 
   Future<void> loadMoreUnassignedTasks() async {
     final api = _api;
-    final cursor = _taskCatalog.unassignedNextCursor;
+    final continuation = _taskCatalog.unassignedContinuation;
     final epoch = _epoch;
     if (api == null ||
         !isConnected ||
-        cursor == null ||
+        continuation == null ||
         _loadingUnassignedPage) {
       return;
     }
+    final pageToken = _taskReducer.capturePageMerge(epoch);
     _loadingUnassignedPage = true;
     notifyListeners();
     try {
-      final page = await api.readTaskPage(cursor: cursor);
+      final page = await api.readTaskPage(cursor: continuation.cursor);
       if (api != _api || epoch != _epoch) return;
+      if (!_taskCatalog.isCurrentUnassignedContinuation(continuation)) return;
       _discoverProjects(page.tasks);
-      final token = _taskReducer.beginRefresh(epoch);
-      _taskReducer.applyRefresh(
-        token,
+      final applied = _taskReducer.applyPageMerge(
+        pageToken,
         page.tasks,
         _loadedThreadIds.intersection(_ownedThreadIds),
-        retainExisting: true,
       );
+      if (!applied) return;
       _taskCatalog.appendUnassignedPage(
+        continuation,
         page.tasks,
         projects: _projects,
         nextCursor: page.nextCursor,
