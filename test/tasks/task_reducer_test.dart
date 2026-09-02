@@ -79,6 +79,46 @@ void main() {
     expect(reducer.state.tasks['one']?.status, TaskStatus.running);
   });
 
+  test('a captured page merge preserves events received during its request',
+      () {
+    final epoch = reducer.beginConnection();
+    final initial = reducer.beginRefresh(epoch);
+    reducer.applyRefresh(
+      initial,
+      [snapshot('one', status: TaskStatus.completed)],
+      const {},
+    );
+    final page = reducer.capturePageMerge(epoch);
+
+    reducer.applyEvent(
+      epoch,
+      const TaskEvent.statusChanged('one', TaskStatus.running),
+    );
+    final applied = reducer.applyPageMerge(
+      page,
+      [snapshot('one', status: TaskStatus.completed)],
+      const {'one'},
+    );
+
+    expect(applied, isTrue);
+    expect(reducer.state.tasks['one']?.status, TaskStatus.running);
+  });
+
+  test('a captured page merge expires on a new connection', () {
+    final epoch = reducer.beginConnection();
+    final page = reducer.capturePageMerge(epoch);
+
+    reducer.beginConnection();
+    final applied = reducer.applyPageMerge(
+      page,
+      [snapshot('stale-page')],
+      const {},
+    );
+
+    expect(applied, isFalse);
+    expect(reducer.state.tasks, isEmpty);
+  });
+
   test('list snapshots with empty turns preserve cached task detail', () {
     final epoch = reducer.beginConnection();
     final detail = reducer.beginRefresh(epoch);

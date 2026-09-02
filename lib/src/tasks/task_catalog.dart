@@ -1,33 +1,87 @@
 import '../projects/remote_project.dart';
 import 'task_reducer.dart';
 
+final class TaskPageContinuation {
+  const TaskPageContinuation({required this.cursor, required this.generation});
+
+  final String cursor;
+  final int generation;
+}
+
 final class TaskCatalog {
   List<String> _projectTaskIds = const [];
+  List<String> _recentTaskIds = const [];
   List<String> _unassignedTaskIds = const [];
   String? _projectNextCursor;
+  String? _recentNextCursor;
   String? _unassignedNextCursor;
+  final Map<String, DateTime> _recentUpdatedAt = {};
+  var _projectGeneration = 0;
+  var _recentGeneration = 0;
+  var _unassignedGeneration = 0;
   bool _unassignedExpanded = false;
 
   List<String> get projectTaskIds => _projectTaskIds;
+  List<String> get recentTaskIds => _recentTaskIds;
   List<String> get unassignedTaskIds => _unassignedTaskIds;
   String? get projectNextCursor => _projectNextCursor;
+  String? get recentNextCursor => _recentNextCursor;
   String? get unassignedNextCursor => _unassignedNextCursor;
   bool get unassignedExpanded => _unassignedExpanded;
+  TaskPageContinuation? get projectContinuation => _projectNextCursor == null
+      ? null
+      : TaskPageContinuation(
+          cursor: _projectNextCursor!,
+          generation: _projectGeneration,
+        );
+  TaskPageContinuation? get recentContinuation => _recentNextCursor == null
+      ? null
+      : TaskPageContinuation(
+          cursor: _recentNextCursor!,
+          generation: _recentGeneration,
+        );
+  TaskPageContinuation? get unassignedContinuation =>
+      _unassignedNextCursor == null
+          ? null
+          : TaskPageContinuation(
+              cursor: _unassignedNextCursor!,
+              generation: _unassignedGeneration,
+            );
+  int get projectGeneration => _projectGeneration;
+
+  bool isCurrentProjectGeneration(int generation) =>
+      generation == _projectGeneration;
+
+  bool isCurrentProjectContinuation(TaskPageContinuation continuation) =>
+      continuation.generation == _projectGeneration &&
+      continuation.cursor == _projectNextCursor;
+
+  bool isCurrentRecentContinuation(TaskPageContinuation continuation) =>
+      continuation.generation == _recentGeneration &&
+      continuation.cursor == _recentNextCursor;
+
+  bool isCurrentUnassignedContinuation(TaskPageContinuation continuation) =>
+      continuation.generation == _unassignedGeneration &&
+      continuation.cursor == _unassignedNextCursor;
 
   void replaceProjectPage(
     List<TaskSnapshot> tasks, {
     required String? nextCursor,
   }) {
+    _projectGeneration++;
     _projectTaskIds = _uniqueIds(tasks);
     _projectNextCursor = nextCursor;
   }
 
-  void appendProjectPage(
+  bool appendProjectPage(
+    TaskPageContinuation continuation,
     List<TaskSnapshot> tasks, {
     required String? nextCursor,
   }) {
+    if (!isCurrentProjectContinuation(continuation)) return false;
     _projectTaskIds = _appendUnique(_projectTaskIds, tasks);
     _projectNextCursor = nextCursor;
+    return true;
   }
 
   void mergeProjectHead(
@@ -39,25 +93,79 @@ final class TaskCatalog {
     _projectNextCursor = previousCursor ?? nextCursor;
   }
 
+  void replaceRecentPage(
+    List<TaskSnapshot> tasks, {
+    required String? nextCursor,
+  }) {
+    _recentGeneration++;
+    _recentTaskIds = const [];
+    _recentUpdatedAt.clear();
+    _mergeRecentTasks(tasks);
+    _recentNextCursor = nextCursor;
+  }
+
+  bool appendRecentPage(
+    TaskPageContinuation continuation,
+    List<TaskSnapshot> tasks, {
+    required String? nextCursor,
+  }) {
+    if (!isCurrentRecentContinuation(continuation)) return false;
+    _mergeRecentTasks(tasks);
+    _recentNextCursor = nextCursor;
+    return true;
+  }
+
+  void mergeRecentHead(
+    List<TaskSnapshot> tasks, {
+    required String? nextCursor,
+  }) {
+    final previousCursor = _recentNextCursor;
+    _mergeRecentTasks(tasks);
+    _recentNextCursor = previousCursor ?? nextCursor;
+  }
+
+  void _mergeRecentTasks(Iterable<TaskSnapshot> tasks) {
+    final ids = {..._recentTaskIds};
+    for (final task in tasks) {
+      ids.add(task.id);
+      final current = _recentUpdatedAt[task.id];
+      if (current == null || task.updatedAt.isAfter(current)) {
+        _recentUpdatedAt[task.id] = task.updatedAt;
+      }
+    }
+    final sorted = ids.toList(growable: false)
+      ..sort((first, second) {
+        final firstUpdatedAt = _recentUpdatedAt[first]!;
+        final secondUpdatedAt = _recentUpdatedAt[second]!;
+        final byUpdate = secondUpdatedAt.compareTo(firstUpdatedAt);
+        return byUpdate == 0 ? first.compareTo(second) : byUpdate;
+      });
+    _recentTaskIds = List.unmodifiable(sorted);
+  }
+
   void replaceUnassignedPage(
     List<TaskSnapshot> tasks, {
     required List<RemoteProject> projects,
     required String? nextCursor,
   }) {
+    _unassignedGeneration++;
     _unassignedTaskIds = _uniqueIds(_unassigned(tasks, projects));
     _unassignedNextCursor = nextCursor;
   }
 
-  void appendUnassignedPage(
+  bool appendUnassignedPage(
+    TaskPageContinuation continuation,
     List<TaskSnapshot> tasks, {
     required List<RemoteProject> projects,
     required String? nextCursor,
   }) {
+    if (!isCurrentUnassignedContinuation(continuation)) return false;
     _unassignedTaskIds = _appendUnique(
       _unassignedTaskIds,
       _unassigned(tasks, projects),
     );
     _unassignedNextCursor = nextCursor;
+    return true;
   }
 
   void mergeUnassignedHead(
@@ -78,12 +186,18 @@ final class TaskCatalog {
   }
 
   void clearProjectPage() {
+    _projectGeneration++;
     _projectTaskIds = const [];
     _projectNextCursor = null;
   }
 
   void clear() {
     clearProjectPage();
+    _recentGeneration++;
+    _recentTaskIds = const [];
+    _recentNextCursor = null;
+    _recentUpdatedAt.clear();
+    _unassignedGeneration++;
     _unassignedTaskIds = const [];
     _unassignedNextCursor = null;
     _unassignedExpanded = false;

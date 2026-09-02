@@ -22,7 +22,9 @@ void main() {
         [snapshot('one', '/repo'), snapshot('two', '/repo')],
         nextCursor: 'page-2',
       );
+      final continuation = catalog.projectContinuation!;
       catalog.appendProjectPage(
+        continuation,
         [snapshot('two', '/repo'), snapshot('three', '/repo')],
         nextCursor: null,
       );
@@ -80,6 +82,83 @@ void main() {
 
     expect(catalog.projectTaskIds, ['new', 'one', 'two']);
     expect(catalog.projectNextCursor, 'page-2');
+  });
+
+  test('recent tasks stay ordered by latest update across pages', () {
+    final catalog = TaskCatalog();
+    final older = snapshot('older', '/repo');
+    final newest = TaskSnapshot(
+      id: 'newest',
+      title: 'Newest',
+      status: TaskStatus.completed,
+      cwd: '/repo',
+      updatedAt: DateTime.utc(2026, 9, 2),
+      items: const [],
+    );
+    final middle = TaskSnapshot(
+      id: 'middle',
+      title: 'Middle',
+      status: TaskStatus.completed,
+      cwd: '/repo',
+      updatedAt: DateTime.utc(2026, 8, 15),
+      items: const [],
+    );
+
+    catalog.replaceRecentPage([older, newest], nextCursor: 'page-2');
+    catalog.appendRecentPage(
+      catalog.recentContinuation!,
+      [middle],
+      nextCursor: null,
+    );
+
+    expect(catalog.recentTaskIds, ['newest', 'middle', 'older']);
+    expect(catalog.recentNextCursor, isNull);
+  });
+
+  test('a project head replacement rejects an older continuation', () {
+    final catalog = TaskCatalog();
+    catalog.replaceProjectPage(
+      [snapshot('old-head', '/repo')],
+      nextCursor: 'old-page-2',
+    );
+    final continuation = catalog.projectContinuation!;
+
+    catalog.replaceProjectPage(
+      [snapshot('new-head', '/repo')],
+      nextCursor: 'new-page-2',
+    );
+    final applied = catalog.appendProjectPage(
+      continuation,
+      [snapshot('stale-page', '/repo')],
+      nextCursor: null,
+    );
+
+    expect(applied, isFalse);
+    expect(catalog.projectTaskIds, ['new-head']);
+    expect(catalog.projectNextCursor, 'new-page-2');
+  });
+
+  test('a recent head replacement rejects an older continuation', () {
+    final catalog = TaskCatalog();
+    catalog.replaceRecentPage(
+      [snapshot('old-head', '/repo')],
+      nextCursor: 'old-page-2',
+    );
+    final continuation = catalog.recentContinuation!;
+
+    catalog.replaceRecentPage(
+      [snapshot('new-head', '/repo')],
+      nextCursor: 'new-page-2',
+    );
+    final applied = catalog.appendRecentPage(
+      continuation,
+      [snapshot('stale-page', '/repo')],
+      nextCursor: null,
+    );
+
+    expect(applied, isFalse);
+    expect(catalog.recentTaskIds, ['new-head']);
+    expect(catalog.recentNextCursor, 'new-page-2');
   });
 
   test('a stale detail completion cannot clear a newer selection', () {

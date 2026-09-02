@@ -139,6 +139,13 @@ final class RefreshToken {
   final int eventRevision;
 }
 
+final class PageMergeToken {
+  const PageMergeToken(this.epoch, this.eventRevision);
+
+  final int epoch;
+  final int eventRevision;
+}
+
 enum _TaskEventType { status, agentDelta, item }
 
 final class TaskEvent {
@@ -208,7 +215,10 @@ final class TaskReducer {
     );
   }
 
-  void applyRefresh(
+  PageMergeToken capturePageMerge(int epoch) =>
+      PageMergeToken(epoch, _state.eventRevision);
+
+  bool applyRefresh(
     RefreshToken token,
     List<TaskSnapshot> snapshots,
     Set<String> loadedByUs, {
@@ -216,16 +226,46 @@ final class TaskReducer {
   }) {
     if (token.epoch != _state.epoch ||
         token.generation != _state.refreshGeneration) {
-      return;
+      return false;
     }
 
+    _applySnapshots(
+      eventRevision: token.eventRevision,
+      snapshots: snapshots,
+      loadedByUs: loadedByUs,
+      retainExisting: retainExisting,
+    );
+    return true;
+  }
+
+  bool applyPageMerge(
+    PageMergeToken token,
+    List<TaskSnapshot> snapshots,
+    Set<String> loadedByUs,
+  ) {
+    if (token.epoch != _state.epoch) return false;
+    _applySnapshots(
+      eventRevision: token.eventRevision,
+      snapshots: snapshots,
+      loadedByUs: loadedByUs,
+      retainExisting: true,
+    );
+    return true;
+  }
+
+  void _applySnapshots({
+    required int eventRevision,
+    required List<TaskSnapshot> snapshots,
+    required Set<String> loadedByUs,
+    required bool retainExisting,
+  }) {
     final next = retainExisting
         ? Map<String, TaskRecord>.of(_state.tasks)
         : <String, TaskRecord>{};
     for (final snapshot in snapshots) {
       final current = _state.tasks[snapshot.id];
       final changedDuringRefresh =
-          current != null && current.revision > token.eventRevision;
+          current != null && current.revision > eventRevision;
       final effectiveStatus =
           changedDuringRefresh ? current.status : snapshot.status;
       final preserveItems = changedDuringRefresh ||
@@ -240,13 +280,13 @@ final class TaskReducer {
             changedDuringRefresh ? current.updatedAt : snapshot.updatedAt,
         items: preserveItems ? current!.items : snapshot.items,
         ownership: ownership,
-        revision: current?.revision ?? token.eventRevision,
+        revision: current?.revision ?? eventRevision,
       );
     }
 
     for (final entry in _state.tasks.entries) {
       if (!next.containsKey(entry.key) &&
-          entry.value.revision > token.eventRevision) {
+          entry.value.revision > eventRevision) {
         next[entry.key] = entry.value;
       }
     }

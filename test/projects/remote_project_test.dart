@@ -74,4 +74,22 @@ void main() {
     expect(projects.single.name, 'PC Bench');
     expect(projects.single.cwd, '/home/wkj/projects/cscg');
   });
+
+  test('projects follow latest task activity instead of alphabetic order', () {
+    final projects = mergeRemoteProjects(
+      hostId: 'pi',
+      existing: const [],
+      discoveredCwds: const ['/srv/alpha', '/srv/zeta', '/srv/idle'],
+      activityByCwd: {
+        '/srv/alpha': DateTime.utc(2026, 8, 1),
+        '/srv/zeta': DateTime.utc(2026, 9, 1),
+      },
+    );
+
+    expect(projects.map((project) => project.name), [
+      'zeta',
+      'alpha',
+      'idle',
+    ]);
+  });
 }
