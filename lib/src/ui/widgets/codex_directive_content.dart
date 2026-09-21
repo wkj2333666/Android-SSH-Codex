@@ -133,11 +133,13 @@ class CodexDirectiveContent extends StatelessWidget {
   const CodexDirectiveContent({
     required this.text,
     this.openExternalLink = launchExternalLink,
+    this.copyText = copyMarkdownText,
     super.key,
   });
 
   final String text;
   final ExternalLinkOpener openExternalLink;
+  final MarkdownTextCopier copyText;
 
   @override
   Widget build(BuildContext context) {
@@ -150,6 +152,7 @@ class CodexDirectiveContent extends StatelessWidget {
           MarkdownContent(
             text: parsed.markdown,
             openExternalLink: openExternalLink,
+            copyText: copyText,
           ),
         if (parsed.markdown.isNotEmpty && parsed.directives.isNotEmpty)
           const SizedBox(height: 8),

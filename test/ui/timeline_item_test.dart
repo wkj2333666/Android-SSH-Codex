@@ -111,6 +111,26 @@ void main() {
     expect(find.textContaining('Result', findRichText: true), findsOneWidget);
   });
 
+  testWidgets('fenced code blocks expose a copy action', (tester) async {
+    String? copied;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: MarkdownContent(
+          text: '```dart\nfinal answer = 42;\n```',
+          copyText: (text) async => copied = text,
+        ),
+      ),
+    ));
+
+    expect(find.byTooltip('Copy code'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Copy code'));
+    await tester.pump();
+
+    expect(copied, 'final answer = 42;\n');
+    expect(find.text('Code copied'), findsOneWidget);
+  });
+
   testWidgets('Markdown links open only safe web URLs', (tester) async {
     final opened = <Uri>[];
     await tester.pumpWidget(MaterialApp(

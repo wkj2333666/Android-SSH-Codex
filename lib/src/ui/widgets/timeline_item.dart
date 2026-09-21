@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../tasks/task_reducer.dart';
 import 'codex_directive_content.dart';
@@ -9,8 +8,7 @@ import 'markdown_content.dart';
 
 typedef MessageTextCopier = Future<void> Function(String text);
 
-Future<void> copyMessageText(String text) =>
-    Clipboard.setData(ClipboardData(text: text));
+Future<void> copyMessageText(String text) => copyMarkdownText(text);
 
 class TimelineItemView extends StatelessWidget {
   const TimelineItemView({
@@ -141,9 +139,9 @@ class _Message extends StatelessWidget {
               user ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
             if (user)
-              MarkdownContent(text: item.text)
+              MarkdownContent(text: item.text, copyText: copyText)
             else
-              CodexDirectiveContent(text: item.text),
+              CodexDirectiveContent(text: item.text, copyText: copyText),
             if (sending || copyableText.isNotEmpty) ...[
               const SizedBox(height: 4),
               Row(

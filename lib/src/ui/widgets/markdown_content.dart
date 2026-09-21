@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:markdown/markdown.dart' as md;
 import 'package:url_launcher/url_launcher.dart';
@@ -8,9 +9,13 @@ import 'package:url_launcher/url_launcher.dart';
 import 'formula_markdown.dart';
 
 typedef ExternalLinkOpener = Future<bool> Function(Uri uri);
+typedef MarkdownTextCopier = Future<void> Function(String text);
 
 Future<bool> launchExternalLink(Uri uri) =>
     launchUrl(uri, mode: LaunchMode.externalApplication);
+
+Future<void> copyMarkdownText(String text) =>
+    Clipboard.setData(ClipboardData(text: text));
 
 Uri? safeWebUri(String? value) {
   if (value == null) return null;
@@ -49,11 +54,13 @@ class MarkdownContent extends StatelessWidget {
   const MarkdownContent({
     required this.text,
     this.openExternalLink = launchExternalLink,
+    this.copyText = copyMarkdownText,
     super.key,
   });
 
   final String text;
   final ExternalLinkOpener openExternalLink;
+  final MarkdownTextCopier copyText;
 
   @override
   Widget build(BuildContext context) {
@@ -73,6 +80,7 @@ class MarkdownContent extends StatelessWidget {
       ),
       builders: {
         'latex': FormulaElementBuilder(textStyle: theme.textTheme.bodyMedium),
+        'pre': CodeBlockElementBuilder(copyText: copyText),
       },
       onTapLink: (_, href, __) {
         unawaited(openWebLink(context, href, openExternalLink));
@@ -88,6 +96,94 @@ class MarkdownContent extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
         ),
       ),
+    );
+  }
+}
+
+class CodeBlockElementBuilder extends MarkdownElementBuilder {
+  CodeBlockElementBuilder({required this.copyText});
+
+  final MarkdownTextCopier copyText;
+
+  @override
+  bool isBlockElement() => true;
+
+  @override
+  Widget? visitText(md.Text text, TextStyle? preferredStyle) {
+    return _CopyableCodeBlock(
+      text: text.text,
+      style: preferredStyle,
+      copyText: copyText,
+    );
+  }
+}
+
+class _CopyableCodeBlock extends StatelessWidget {
+  const _CopyableCodeBlock({
+    required this.text,
+    required this.style,
+    required this.copyText,
+  });
+
+  final String text;
+  final TextStyle? style;
+  final MarkdownTextCopier copyText;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      padding: const EdgeInsets.fromLTRB(12, 30, 12, 10),
+      child: Stack(
+        children: [
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SelectableText(text, style: style),
+          ),
+          Positioned(
+            top: -8,
+            right: -8,
+            child: SizedBox(
+              width: 32,
+              height: 32,
+              child: IconButton(
+                tooltip: 'Copy code',
+                padding: EdgeInsets.zero,
+                visualDensity: VisualDensity.compact,
+                iconSize: 16,
+                onPressed: () => unawaited(
+                  _copyCode(context, text, copyText),
+                ),
+                icon: const Icon(Icons.copy_all_outlined),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+Future<void> _copyCode(
+  BuildContext context,
+  String text,
+  MarkdownTextCopier copyText,
+) async {
+  try {
+    await copyText(text);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Code copied')),
+    );
+  } catch (_) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Could not copy code.')),
     );
   }
 }
