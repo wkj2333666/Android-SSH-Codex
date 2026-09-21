@@ -65,6 +65,9 @@ class MarkdownContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final codeTextStyle = theme.textTheme.bodyMedium?.copyWith(
+      fontFamily: 'monospace',
+    );
     return MarkdownBody(
       data: text,
       selectable: true,
@@ -80,15 +83,17 @@ class MarkdownContent extends StatelessWidget {
       ),
       builders: {
         'latex': FormulaElementBuilder(textStyle: theme.textTheme.bodyMedium),
-        'pre': CodeBlockElementBuilder(copyText: copyText),
+        'pre': CodeBlockElementBuilder(
+          copyText: copyText,
+          textStyle: codeTextStyle,
+        ),
       },
       onTapLink: (_, href, __) {
         unawaited(openWebLink(context, href, openExternalLink));
       },
       imageBuilder: (uri, title, alt) => _BlockedImage(alt: alt),
       styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
-        code: theme.textTheme.bodyMedium?.copyWith(
-          fontFamily: 'monospace',
+        code: codeTextStyle?.copyWith(
           backgroundColor: theme.colorScheme.surfaceContainerHighest,
         ),
         codeblockDecoration: BoxDecoration(
@@ -101,18 +106,19 @@ class MarkdownContent extends StatelessWidget {
 }
 
 class CodeBlockElementBuilder extends MarkdownElementBuilder {
-  CodeBlockElementBuilder({required this.copyText});
+  CodeBlockElementBuilder({required this.copyText, required this.textStyle});
 
   final MarkdownTextCopier copyText;
+  final TextStyle? textStyle;
 
   @override
   bool isBlockElement() => true;
 
   @override
-  Widget? visitText(md.Text text, TextStyle? preferredStyle) {
+  Widget? visitText(md.Text text, TextStyle? _) {
     return _CopyableCodeBlock(
       text: text.text,
-      style: preferredStyle,
+      style: textStyle,
       copyText: copyText,
     );
   }
@@ -133,21 +139,18 @@ class _CopyableCodeBlock extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return Container(
+      key: const Key('markdown-code-block'),
       width: double.infinity,
       decoration: BoxDecoration(
         color: colors.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(8),
       ),
-      padding: const EdgeInsets.fromLTRB(12, 30, 12, 10),
-      child: Stack(
+      padding: const EdgeInsets.fromLTRB(12, 4, 8, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: SelectableText(text, style: style),
-          ),
-          Positioned(
-            top: -8,
-            right: -8,
+          Align(
+            alignment: Alignment.centerRight,
             child: SizedBox(
               width: 32,
               height: 32,
@@ -162,6 +165,10 @@ class _CopyableCodeBlock extends StatelessWidget {
                 icon: const Icon(Icons.copy_all_outlined),
               ),
             ),
+          ),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SelectableText(text, style: style),
           ),
         ],
       ),

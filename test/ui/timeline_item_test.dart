@@ -124,6 +124,18 @@ void main() {
 
     expect(find.byTooltip('Copy code'), findsOneWidget);
 
+    final codeBlock = find.byKey(const Key('markdown-code-block'));
+    final codeText = find.descendant(
+      of: codeBlock,
+      matching: find.byType(SelectableText),
+    );
+    final selectableText = tester.widget<SelectableText>(codeText);
+    expect(selectableText.style?.fontFamily, 'monospace');
+
+    final buttonRect = tester.getRect(find.byTooltip('Copy code'));
+    final textRect = tester.getRect(codeText);
+    expect(buttonRect.bottom, lessThanOrEqualTo(textRect.top));
+
     await tester.tap(find.byTooltip('Copy code'));
     await tester.pump();
 
