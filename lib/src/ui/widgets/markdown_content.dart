@@ -115,7 +115,7 @@ class CodeBlockElementBuilder extends MarkdownElementBuilder {
   bool isBlockElement() => true;
 
   @override
-  Widget? visitText(md.Text text, TextStyle? _) {
+  Widget? visitText(md.Text text, TextStyle? preferredStyle) {
     return _CopyableCodeBlock(
       text: text.text,
       style: textStyle,
