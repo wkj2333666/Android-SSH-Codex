@@ -48,6 +48,23 @@ void main() {
     expect(calls, ['start', 'stop']);
   });
 
+  test('switching back to a connection after stop leaves protection active',
+      () async {
+    final calls = <String>[];
+    messenger.setMockMethodCallHandler(ConnectionKeepAlive.channel, (call) async {
+      calls.add(call.method);
+      return true;
+    });
+    final service = ConnectionKeepAlive();
+    await Future.wait([
+      service.setEnabled(true),
+      service.setEnabled(false),
+      service.setEnabled(true),
+    ]);
+    expect(calls, ['start', 'stop', 'start']);
+    expect(service.isEnabled, isTrue);
+  });
+
   test('failed native start may be retried', () async {
     var calls = 0;
     messenger.setMockMethodCallHandler(ConnectionKeepAlive.channel, (_) async {

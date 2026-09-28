@@ -424,6 +424,7 @@ final class AppController extends ChangeNotifier {
       debugPrintStack(stackTrace: stackTrace);
       _error = describeConnectionFailure(stage, exception, profile);
       if (published) await _closeTransport();
+      if (attempt != _connectionAttempt) return;
       if (reconnecting) {
         _connectionPhase = RemoteConnectionPhase.reconnecting;
         _scheduleReconnect(profile, attempt);
@@ -1797,6 +1798,7 @@ final class AppController extends ChangeNotifier {
   Future<void> disconnect() async {
     _expediteReconnect = false;
     _connectionAttempt++;
+    final stoppingKeepAlive = _setKeepAlive(false);
     _cancelHostKeyPrompt();
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
@@ -1827,7 +1829,7 @@ final class AppController extends ChangeNotifier {
     } catch (exception) {
       _error = 'Disconnected, but could not clear auto-connect: $exception';
     }
-    await _setKeepAlive(false);
+    await stoppingKeepAlive;
     notifyListeners();
   }
 
