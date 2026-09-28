@@ -797,7 +797,9 @@ class _TaskTimelineState extends State<TaskTimeline>
   }
 
   void _checkOlderContext() {
-    if (!_scrollController.hasClients || _requestingOlder || widget.loadingOlder) {
+    if (!_scrollController.hasClients ||
+        _requestingOlder ||
+        widget.loadingOlder) {
       return;
     }
     if (_automaticPagesSinceGesture >= 10) return;

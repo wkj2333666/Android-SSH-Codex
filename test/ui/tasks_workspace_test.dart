@@ -322,7 +322,8 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       var items = <TaskItem>[
         if (!initiallyEmpty)
-          const TaskItem(id: 'latest', kind: TaskItemKind.agent, text: 'Latest'),
+          const TaskItem(
+              id: 'latest', kind: TaskItemKind.agent, text: 'Latest'),
       ];
       var requests = 0;
       await tester.pumpWidget(MaterialApp(
