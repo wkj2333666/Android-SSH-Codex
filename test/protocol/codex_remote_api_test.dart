@@ -217,7 +217,7 @@ void main() {
     }
   });
 
-  test('reads the newest turn page and returns items chronologically',
+  test('reads at most twenty items and returns them chronologically',
       () async {
     final transport = _RecordingTransport();
     final rpc = JsonRpcClient(transport)..start();
@@ -226,13 +226,12 @@ void main() {
       final request = jsonDecode(transport.sent.single) as Map<String, dynamic>;
 
       expect(request, {
-        'method': 'thread/turns/list',
+        'method': 'thread/items/list',
         'id': 1,
         'params': {
           'threadId': 'thr_1',
-          'limit': 10,
+          'limit': 20,
           'sortDirection': 'desc',
-          'itemsView': 'full',
         },
       });
       transport.incoming.add(jsonEncode({
@@ -240,16 +239,12 @@ void main() {
         'result': {
           'data': [
             {
-              'id': 'turn-new',
-              'items': [
-                {'id': 'new', 'type': 'agentMessage', 'text': 'Newest'},
-              ],
+              'turnId': 'same-large-turn',
+              'item': {'id': 'new', 'type': 'agentMessage', 'text': 'Newest'},
             },
             {
-              'id': 'turn-old',
-              'items': [
-                {'id': 'old', 'type': 'userMessage', 'text': 'Older'},
-              ],
+              'turnId': 'same-large-turn',
+              'item': {'id': 'old', 'type': 'userMessage', 'text': 'Older'},
             },
           ],
           'nextCursor': 'opaque-older-cursor',
@@ -276,9 +271,8 @@ void main() {
 
       expect(request['params'], {
         'threadId': 'thr_1',
-        'limit': 10,
+        'limit': 20,
         'sortDirection': 'desc',
-        'itemsView': 'full',
         'cursor': 'opaque-older-cursor',
       });
       transport.incoming.add(jsonEncode({

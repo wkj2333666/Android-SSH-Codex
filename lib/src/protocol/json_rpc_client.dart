@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
+
 import 'rpc_transport.dart';
 
 final class RpcNotification {
@@ -72,7 +74,7 @@ final class JsonRpcClient {
       StreamController.broadcast();
   final StreamController<RpcServerRequest> _serverRequests =
       StreamController.broadcast();
-  StreamSubscription<String>? _subscription;
+  StreamSubscription<dynamic>? _subscription;
   final Completer<void> _done = Completer<void>();
   Future<void>? _cleanupFuture;
   var _nextId = 1;
@@ -84,7 +86,12 @@ final class JsonRpcClient {
 
   void start() {
     if (_subscription != null || _closed) return;
-    _subscription = _transport.messages.listen(
+    _subscription = _transport.messages.asyncMap((encoded) async {
+      // Preserve wire order while decoding large responses off the UI isolate.
+      return encoded.length > 65536
+          ? await compute(jsonDecode, encoded)
+          : jsonDecode(encoded);
+    }).listen(
       _handleMessage,
       onError: (Object error, StackTrace stackTrace) => _disconnect(error),
       onDone: _disconnect,
@@ -94,13 +101,19 @@ final class JsonRpcClient {
   Future<dynamic> request(
     String method, [
     Map<String, dynamic>? params,
-  ]) {
+  ]) => requestWithTimeout(method, params, requestTimeout);
+
+  Future<dynamic> requestWithTimeout(
+    String method,
+    Map<String, dynamic>? params,
+    Duration timeout,
+  ) {
     if (_closed) return Future.error(const RpcDisconnectedException());
     final id = _nextId++;
     final completer = Completer<dynamic>();
     final timer = Timer(
-      requestTimeout,
-      () => _handleRequestTimeout(id, method),
+      timeout,
+      () => _handleRequestTimeout(id, method, timeout),
     );
     final pending = _PendingRpcRequest(completer, timer);
     _pending[id] = pending;
@@ -143,8 +156,7 @@ final class JsonRpcClient {
     _transport.send(jsonEncode(message));
   }
 
-  void _handleMessage(String encoded) {
-    final decoded = jsonDecode(encoded);
+  void _handleMessage(dynamic decoded) {
     if (decoded is! Map<String, dynamic>) return;
     final id = decoded['id'];
     final method = decoded['method'];
@@ -175,11 +187,11 @@ final class JsonRpcClient {
     }
   }
 
-  void _handleRequestTimeout(int id, String method) {
+  void _handleRequestTimeout(int id, String method, Duration timeout) {
     final pending = _pending.remove(id);
     if (pending == null) return;
     pending.cancel();
-    final error = RpcTimeoutException(method, id, requestTimeout);
+    final error = RpcTimeoutException(method, id, timeout);
     pending.completer.completeError(error);
   }
 

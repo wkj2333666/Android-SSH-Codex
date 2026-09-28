@@ -140,6 +140,7 @@ final class AppController extends ChangeNotifier {
   Completer<bool>? _hostKeyCompleter;
   List<PendingApproval> _approvals = const [];
   Set<String> _ownedThreadIds = {};
+  final Set<String> _interactiveThreadIds = {};
   Set<String> _loadedThreadIds = {};
   Set<String> _subscribedThreadIds = {};
   SshConnection? _ssh;
@@ -550,7 +551,7 @@ final class AppController extends ChangeNotifier {
           if (projectPage != null)
             for (final task in projectPage.tasks) task.id: task,
         };
-        final loadedByUs = loadedThreadIds.intersection(_ownedThreadIds);
+        final loadedByUs = _interactiveThreadIds;
         _loadedThreadIds = loadedThreadIds;
         _taskReducer.applyRefresh(
           token,
@@ -709,7 +710,7 @@ final class AppController extends ChangeNotifier {
       final applied = _taskReducer.applyPageMerge(
         pageToken,
         page.tasks,
-        _loadedThreadIds.intersection(_ownedThreadIds),
+        _interactiveThreadIds,
       );
       if (!applied) return;
       _taskCatalog.replaceProjectPage(
@@ -826,7 +827,7 @@ final class AppController extends ChangeNotifier {
       final applied = _taskReducer.applyPageMerge(
         pageToken,
         page.tasks,
-        _loadedThreadIds.intersection(_ownedThreadIds),
+        _interactiveThreadIds,
       );
       if (!applied) return;
       _taskCatalog.appendProjectPage(
@@ -869,7 +870,7 @@ final class AppController extends ChangeNotifier {
       final applied = _taskReducer.applyPageMerge(
         pageToken,
         page.tasks,
-        _loadedThreadIds.intersection(_ownedThreadIds),
+        _interactiveThreadIds,
       );
       if (!applied) return;
       _taskCatalog.appendRecentPage(
@@ -910,7 +911,7 @@ final class AppController extends ChangeNotifier {
       final applied = _taskReducer.applyPageMerge(
         pageToken,
         page.tasks,
-        _loadedThreadIds.intersection(_ownedThreadIds),
+        _interactiveThreadIds,
       );
       if (!applied) return;
       _taskCatalog.appendUnassignedPage(
@@ -1278,6 +1279,8 @@ final class AppController extends ChangeNotifier {
   }) {
     if (!_isCurrentSession(api, attempt, epoch, profileId)) return;
     _setLocalUserMessageStatus(threadId, pending, 'sent', epoch: epoch);
+    _interactiveThreadIds.add(threadId);
+    _taskReducer.markLocalParticipation(epoch, threadId);
     _taskReducer.applyEvent(
       epoch,
       TaskEvent.statusChanged(threadId, TaskStatus.running),
@@ -1757,6 +1760,7 @@ final class AppController extends ChangeNotifier {
         _activeTurnIds[threadId] = turnId;
       }
     } else if (notification.method == 'turn/completed' && threadId != null) {
+      _interactiveThreadIds.remove(threadId);
       activeTurnChanged = _activeTurnIds.remove(threadId) != null;
       unawaited(refreshTasks());
       unawaited(_flushQueuedPrompt(threadId));
@@ -1817,6 +1821,7 @@ final class AppController extends ChangeNotifier {
     _loadedThreadIds = {};
     _subscribedThreadIds = {};
     _ownedThreadIds = {};
+    _interactiveThreadIds.clear();
     _agentDeltaBatcher.clear();
     _epoch = _taskReducer.beginConnection();
     _approvals = const [];

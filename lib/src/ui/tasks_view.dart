@@ -711,14 +711,14 @@ class _TaskRow extends StatelessWidget {
               Text(task.cwd, maxLines: 1, overflow: TextOverflow.ellipsis),
             if (task.ownership == TaskOwnership.external)
               Text(
-                'Running in another client',
+                'Active turn',
                 style:
                     TextStyle(color: Theme.of(context).colorScheme.secondary),
               ),
           ],
         ),
         trailing: task.ownership == TaskOwnership.external
-            ? const Icon(Icons.lock_outline, size: 18)
+            ? const Icon(Icons.sync, size: 18)
             : const Icon(Icons.chevron_right),
         onTap: onTap,
       );

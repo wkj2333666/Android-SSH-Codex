@@ -60,6 +60,23 @@ void main() {
     );
   });
 
+  test('large response decoding preserves following notification order', () async {
+    final response = client.request('thread/items/list');
+    final text = List.filled(70000, 'x').join();
+    final order = <String>[];
+    final completed = response.then((value) {
+      order.add('response');
+      expect(value['text'], text);
+    });
+    final notification = client.notifications.first.then((_) {
+      order.add('notification');
+    });
+    transport.incoming.add(jsonEncode({'id': 1, 'result': {'text': text}}));
+    transport.incoming.add(jsonEncode({'method': 'turn/completed'}));
+    await Future.wait([completed, notification]);
+    expect(order, ['response', 'notification']);
+  });
+
   test('emits notifications that have no id', () async {
     final notification = client.notifications.first;
     transport.incoming.add(jsonEncode({
