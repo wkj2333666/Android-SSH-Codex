@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:android_ssh_codex/src/protocol/json_rpc_client.dart';
+import 'package:android_ssh_codex/src/protocol/foreground_probe.dart';
 import 'package:android_ssh_codex/src/protocol/rpc_transport.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -33,6 +34,56 @@ void main() {
   });
 
   tearDown(() => client.close());
+
+  test('foreground probe timeout preserves RPC and subsequent messages',
+      () async {
+    var disconnected = false;
+    unawaited(client.done.then((_) => disconnected = true));
+    expect(
+      await foregroundTransportDisconnected(
+        client,
+        timeout: const Duration(milliseconds: 10),
+      ),
+      isFalse,
+    );
+    expect(transport.closeCalls, 0);
+    expect(disconnected, isFalse);
+    final next = client.request('thread/list', {'limit': 20});
+    final request = jsonDecode(transport.sent.last) as Map<String, dynamic>;
+    // A late probe response must not consume the following request's reply.
+    transport.incoming.add(jsonEncode({
+      'id': 1,
+      'result': {'data': []},
+    }));
+    transport.incoming.add(jsonEncode({
+      'id': request['id'],
+      'result': {
+        'data': ['still connected']
+      },
+    }));
+    expect(await next, {
+      'data': ['still connected']
+    });
+    expect(transport.closeCalls, 0);
+  });
+
+  test('rejected foreground probe does not reconnect a healthy transport',
+      () async {
+    final probe = foregroundTransportDisconnected(client);
+    transport.incoming.add(jsonEncode({
+      'id': 1,
+      'error': {'code': -32601, 'message': 'method unavailable'},
+    }));
+    expect(await probe, isFalse);
+    expect(transport.closeCalls, 0);
+  });
+
+  test('foreground probe reports an actual transport disconnect', () async {
+    final probe = foregroundTransportDisconnected(client);
+    await transport.incoming.close();
+    expect(await probe, isTrue);
+    await client.done;
+  });
 
   test('correlates a response with its request id', () async {
     final response = client.request('thread/list', {'limit': 20});
