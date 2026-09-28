@@ -217,8 +217,7 @@ void main() {
     }
   });
 
-  test('reads at most twenty items and returns them chronologically',
-      () async {
+  test('reads at most twenty items and returns them chronologically', () async {
     final transport = _RecordingTransport();
     final rpc = JsonRpcClient(transport)..start();
     try {

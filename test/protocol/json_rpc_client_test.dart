@@ -72,7 +72,10 @@ void main() {
     final notification = client.notifications.first.then((_) {
       order.add('notification');
     });
-    transport.incoming.add(jsonEncode({'id': 1, 'result': {'text': text}}));
+    transport.incoming.add(jsonEncode({
+      'id': 1,
+      'result': {'text': text}
+    }));
     transport.incoming.add(jsonEncode({'method': 'turn/completed'}));
     await Future.wait([completed, notification]);
     expect(order, ['response', 'notification']);
