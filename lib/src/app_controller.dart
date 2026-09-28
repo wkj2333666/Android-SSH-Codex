@@ -499,9 +499,8 @@ final class AppController extends ChangeNotifier {
   Future<void> restoreForegroundConnection() async {
     _inBackground = false;
     _expediteReconnect = true;
-    final profile = _profiles
-        .where((profile) => profile.id == _selectedHostId)
-        .firstOrNull;
+    final profile =
+        _profiles.where((profile) => profile.id == _selectedHostId).firstOrNull;
     // Respect explicit disconnect, and never overlap an in-flight connection.
     if (profile == null || _openingAttempt != null) return;
     if (_connectionPhase == RemoteConnectionPhase.reconnecting) {
@@ -512,7 +511,10 @@ final class AppController extends ChangeNotifier {
     }
     final api = _api;
     final rpc = _rpc;
-    if (!isConnected || api == null || rpc == null || _foregroundProbeApi == api) {
+    if (!isConnected ||
+        api == null ||
+        rpc == null ||
+        _foregroundProbeApi == api) {
       return;
     }
     _foregroundProbeApi = api;
@@ -525,7 +527,8 @@ final class AppController extends ChangeNotifier {
         {'limit': 1, 'includeHidden': false},
         const Duration(seconds: 2),
       );
-      if (!_isCurrentSession(api, attempt, epoch, profile.id) || _inBackground) {
+      if (!_isCurrentSession(api, attempt, epoch, profile.id) ||
+          _inBackground) {
         return;
       }
       _expediteReconnect = false;
@@ -536,7 +539,8 @@ final class AppController extends ChangeNotifier {
         epoch: epoch,
         profileId: profile.id,
       ));
-      if (_isCurrentSession(api, attempt, epoch, profile.id) && !_inBackground) {
+      if (_isCurrentSession(api, attempt, epoch, profile.id) &&
+          !_inBackground) {
         unawaited(refreshTasks());
       }
     } catch (exception) {

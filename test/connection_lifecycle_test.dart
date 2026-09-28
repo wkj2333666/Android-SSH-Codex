@@ -36,7 +36,8 @@ void main() {
     expect(calls, 0);
   });
 
-  test('foregrounding respects an explicitly disconnected controller', () async {
+  test('foregrounding respects an explicitly disconnected controller',
+      () async {
     final controller = AppController.memory();
     await controller.disconnect();
     controller.enterBackground();
