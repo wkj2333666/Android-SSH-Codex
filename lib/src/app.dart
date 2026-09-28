@@ -1,13 +1,37 @@
 import 'package:flutter/material.dart';
 
 import 'app_controller.dart';
+import 'connection_lifecycle.dart';
 import 'ui/hosts_view.dart';
 import 'ui/tasks_view.dart';
 
-class AndroidSshCodexApp extends StatelessWidget {
+class AndroidSshCodexApp extends StatefulWidget {
   const AndroidSshCodexApp({required this.controller, super.key});
 
   final AppController controller;
+
+  @override
+  State<AndroidSshCodexApp> createState() => _AndroidSshCodexAppState();
+}
+
+class _AndroidSshCodexAppState extends State<AndroidSshCodexApp> {
+  late final ConnectionLifecycle _lifecycle;
+
+  @override
+  void initState() {
+    super.initState();
+    _lifecycle = ConnectionLifecycle(
+      onBackground: () => widget.controller.enterBackground(),
+      onForeground: () => widget.controller.restoreForegroundConnection(),
+    );
+    WidgetsBinding.instance.addObserver(_lifecycle);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(_lifecycle);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) => MaterialApp(
@@ -16,7 +40,7 @@ class AndroidSshCodexApp extends StatelessWidget {
         theme: _theme(Brightness.light),
         darkTheme: _theme(Brightness.dark),
         themeMode: ThemeMode.system,
-        home: _Workspace(controller: controller),
+        home: _Workspace(controller: widget.controller),
       );
 }
 

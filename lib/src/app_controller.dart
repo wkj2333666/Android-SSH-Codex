@@ -146,6 +146,10 @@ final class AppController extends ChangeNotifier {
   StreamSubscription<RpcServerRequest>? _requestSubscription;
   Timer? _refreshTimer;
   Timer? _reconnectTimer;
+  bool _inBackground = false;
+  bool _expediteReconnect = false;
+  int? _openingAttempt;
+  CodexRemoteApi? _foregroundProbeApi;
   var _epoch = 0;
   var _connectionAttempt = 0;
   var _reconnectAttempt = 0;
@@ -282,6 +286,7 @@ final class AppController extends ChangeNotifier {
     required int attempt,
     required bool reconnecting,
   }) async {
+    _openingAttempt = attempt;
     _selectedHostId = profile.id;
     if (!reconnecting) _selectedTaskId = null;
     _connectionPhase = reconnecting
@@ -385,6 +390,7 @@ final class AppController extends ChangeNotifier {
       if (attempt != _connectionAttempt) return;
       _connectionPhase = RemoteConnectionPhase.connected;
       _reconnectAttempt = 0;
+      _expediteReconnect = false;
       if (reconnecting) {
         await _recoverSelectedTaskAfterReconnect(
           api,
@@ -403,10 +409,7 @@ final class AppController extends ChangeNotifier {
       );
       await _rememberAutoConnectHost(profile.id);
       if (attempt != _connectionAttempt) return;
-      _refreshTimer = Timer.periodic(
-        const Duration(seconds: 10),
-        (_) => unawaited(refreshTasks()),
-      );
+      _startRefreshTimer();
     } catch (exception, stackTrace) {
       if (attempt != _connectionAttempt) return;
       debugPrint(
@@ -423,6 +426,7 @@ final class AppController extends ChangeNotifier {
         _connectionPhase = RemoteConnectionPhase.disconnected;
       }
     } finally {
+      if (_openingAttempt == attempt) _openingAttempt = null;
       if (!published) {
         await notifications?.cancel();
         await requests?.cancel();
@@ -446,13 +450,17 @@ final class AppController extends ChangeNotifier {
     if (attempt == _connectionAttempt) _scheduleReconnect(profile, attempt);
   }
 
-  void _scheduleReconnect(HostProfile profile, int attempt) {
-    if (attempt != _connectionAttempt || _reconnectTimer != null) return;
+  void _scheduleReconnect(HostProfile profile, int attempt,
+      {bool immediate = false}) {
+    if (_inBackground ||
+        attempt != _connectionAttempt ||
+        _reconnectTimer != null) return;
     const delays = [1, 2, 4, 8, 15];
     final delayIndex = _reconnectAttempt < delays.length
         ? _reconnectAttempt
         : delays.length - 1;
-    final seconds = delays[delayIndex];
+    final seconds = immediate || _expediteReconnect ? 0 : delays[delayIndex];
+    _expediteReconnect = false;
     _reconnectAttempt++;
     _reconnectTimer = Timer(Duration(seconds: seconds), () {
       _reconnectTimer = null;
@@ -466,6 +474,79 @@ final class AppController extends ChangeNotifier {
         reconnecting: true,
       ));
     });
+  }
+
+  void _startRefreshTimer() {
+    _refreshTimer?.cancel();
+    _refreshTimer = null;
+    if (_inBackground || !isConnected) return;
+    _refreshTimer = Timer.periodic(
+      const Duration(seconds: 10),
+      (_) => unawaited(refreshTasks()),
+    );
+  }
+
+  void enterBackground() {
+    _inBackground = true;
+    _expediteReconnect = false;
+    _refreshTimer?.cancel();
+    _refreshTimer = null;
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+    // Keep the transport; backgrounding is not an explicit disconnect.
+  }
+
+  Future<void> restoreForegroundConnection() async {
+    _inBackground = false;
+    _expediteReconnect = true;
+    final profile = _profiles
+        .where((profile) => profile.id == _selectedHostId)
+        .firstOrNull;
+    // Respect explicit disconnect, and never overlap an in-flight connection.
+    if (profile == null || _openingAttempt != null) return;
+    if (_connectionPhase == RemoteConnectionPhase.reconnecting) {
+      _reconnectTimer?.cancel();
+      _reconnectTimer = null;
+      _scheduleReconnect(profile, _connectionAttempt, immediate: true);
+      return;
+    }
+    final api = _api;
+    final rpc = _rpc;
+    if (!isConnected || api == null || rpc == null || _foregroundProbeApi == api) {
+      return;
+    }
+    _foregroundProbeApi = api;
+    final attempt = _connectionAttempt;
+    final epoch = _epoch;
+    try {
+      // Small end-to-end request tests SSH, tunnel and RPC, not just the socket.
+      await rpc.requestWithTimeout(
+        'model/list',
+        {'limit': 1, 'includeHidden': false},
+        const Duration(seconds: 2),
+      );
+      if (!_isCurrentSession(api, attempt, epoch, profile.id) || _inBackground) {
+        return;
+      }
+      _expediteReconnect = false;
+      _startRefreshTimer();
+      unawaited(_recoverSelectedTaskAfterReconnect(
+        api,
+        attempt: attempt,
+        epoch: epoch,
+        profileId: profile.id,
+      ));
+      if (_isCurrentSession(api, attempt, epoch, profile.id) && !_inBackground) {
+        unawaited(refreshTasks());
+      }
+    } catch (exception) {
+      if (_isCurrentSession(api, attempt, epoch, profile.id)) {
+        debugPrint('Foreground connection check failed: $exception');
+        await _handleTransportLoss(attempt, profile);
+      }
+    } finally {
+      if (_foregroundProbeApi == api) _foregroundProbeApi = null;
+    }
   }
 
   Future<bool> _promptForHostKey(HostKeyChallenge challenge) async {
@@ -1680,6 +1761,7 @@ final class AppController extends ChangeNotifier {
   }
 
   Future<void> disconnect() async {
+    _expediteReconnect = false;
     _connectionAttempt++;
     _cancelHostKeyPrompt();
     _reconnectTimer?.cancel();
