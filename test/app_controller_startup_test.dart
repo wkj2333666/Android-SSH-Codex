@@ -37,21 +37,9 @@ void main() {
     );
   });
 
-  test('an owned thread still resumes when this RPC is not subscribed', () {
-    expect(
-      requiresThreadResumeForSend(
-        owned: true,
-        subscribed: false,
-      ),
-      isTrue,
-    );
-    expect(
-      requiresThreadResumeForSend(
-        owned: true,
-        subscribed: true,
-      ),
-      isFalse,
-    );
+  test('resume depends only on this RPC subscription', () {
+    expect(requiresThreadResumeForSend(subscribed: false), isTrue);
+    expect(requiresThreadResumeForSend(subscribed: true), isFalse);
   });
 
   test('an active turn resumes before steering when RPC is unsubscribed', () {

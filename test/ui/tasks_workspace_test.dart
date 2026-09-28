@@ -197,6 +197,64 @@ void main() {
     expect(find.byKey(const Key('jump-to-latest')), findsNothing);
   });
 
+  testWidgets('streaming cannot pull a short upward drag back to latest',
+      (tester) async {
+    tester.view.physicalSize = const Size(360, 520);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    var items = List.generate(
+      40,
+      (index) => TaskItem(
+        id: 'stream-$index',
+        kind: TaskItemKind.agent,
+        text: 'Response $index',
+      ),
+    );
+    late StateSetter update;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: StatefulBuilder(
+          builder: (context, setState) {
+            update = setState;
+            return TaskTimeline(items: items);
+          },
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    final list = find.byType(ListView);
+    final controller = tester.widget<ListView>(list).controller!;
+    final gesture = await tester.startGesture(tester.getCenter(list));
+    await gesture.moveBy(const Offset(0, 40));
+    await tester.pump();
+    await gesture.moveBy(const Offset(0, 20));
+    await tester.pump();
+    final offset = controller.offset;
+    expect(offset, greaterThan(0));
+    expect(offset, lessThan(96));
+    for (var tick = 0; tick < 4; tick++) {
+      update(() {
+        items = [
+          ...items.take(items.length - 1),
+          TaskItem(
+            id: 'stream-39',
+            kind: TaskItemKind.agent,
+            text: 'Response 39 streaming $tick',
+          ),
+        ];
+      });
+      await tester.pump(const Duration(milliseconds: 80));
+      expect(controller.offset, greaterThanOrEqualTo(offset - 1));
+    }
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('jump-to-latest')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('jump-to-latest')));
+    await tester.pumpAndSettle();
+    expect(controller.offset, closeTo(0, 1));
+  });
+
   testWidgets('loaded long timeline opens at the latest item', (tester) async {
     tester.view.physicalSize = const Size(360, 520);
     tester.view.devicePixelRatio = 1;

@@ -97,11 +97,7 @@ bool hasRemoteNotificationVisibleChange({
 }) =>
     event != null || activeTurnChanged;
 
-bool requiresThreadResumeForSend({
-  required bool owned,
-  required bool subscribed,
-}) =>
-    !owned || !subscribed;
+bool requiresThreadResumeForSend({required bool subscribed}) => !subscribed;
 
 bool requiresThreadResumeForSteer({required bool subscribed}) => !subscribed;
 
@@ -139,7 +135,6 @@ final class AppController extends ChangeNotifier {
   HostKeyChallenge? _hostKeyChallenge;
   Completer<bool>? _hostKeyCompleter;
   List<PendingApproval> _approvals = const [];
-  Set<String> _ownedThreadIds = {};
   final Set<String> _interactiveThreadIds = {};
   Set<String> _subscribedThreadIds = {};
   SshConnection? _ssh;
@@ -305,7 +300,6 @@ final class AppController extends ChangeNotifier {
     var stage = ConnectionStage.profile;
     try {
       final secret = await _store.readSecret(profile.id);
-      final ownedThreadIds = await _store.readOwnedThreads(profile.id);
       final projects =
           reconnecting ? _projects : await _store.readProjects(profile.id);
       if (attempt != _connectionAttempt) return;
@@ -383,7 +377,6 @@ final class AppController extends ChangeNotifier {
       _api = api;
       _notificationSubscription = notifications;
       _requestSubscription = requests;
-      _ownedThreadIds = ownedThreadIds;
       _subscribedThreadIds = {};
       published = true;
       unawaited(rpc.done.then((_) => _handleTransportLoss(attempt, profile)));
@@ -1008,15 +1001,6 @@ final class AppController extends ChangeNotifier {
     final profileId = _selectedHostId!;
     final threadId = await api.startThread(cwd: cwd);
     if (!_isCurrentSession(api, attempt, epoch, profileId)) return;
-    if (!await _claimThread(
-      threadId,
-      api: api,
-      attempt: attempt,
-      epoch: epoch,
-      profileId: profileId,
-    )) {
-      return;
-    }
     _subscribedThreadIds = {..._subscribedThreadIds, threadId};
     _selectedTaskId = threadId;
     _taskReducer.applyEvent(
@@ -1183,7 +1167,6 @@ final class AppController extends ChangeNotifier {
     var turnRequested = false;
     try {
       if (requiresThreadResumeForSend(
-        owned: _ownedThreadIds.contains(task.id),
         subscribed: _subscribedThreadIds.contains(task.id),
       )) {
         await _ensureThreadSubscribed(
@@ -1193,17 +1176,6 @@ final class AppController extends ChangeNotifier {
           epoch: epoch,
           profileId: profileId,
         );
-      }
-      if (!_ownedThreadIds.contains(task.id)) {
-        if (!await _claimThread(
-          task.id,
-          api: api,
-          attempt: attempt,
-          epoch: epoch,
-          profileId: profileId,
-        )) {
-          throw StateError('Connection changed before the task was claimed.');
-        }
       }
       turnRequested = true;
       await api.startTurn(
@@ -1297,18 +1269,16 @@ final class AppController extends ChangeNotifier {
   }) async {
     final threadId = _selectedTaskId;
     if (threadId == null) return;
-    if (_ownedThreadIds.contains(threadId)) {
-      try {
-        await _ensureThreadSubscribed(
-          threadId,
-          api: api,
-          attempt: attempt,
-          epoch: epoch,
-          profileId: profileId,
-        );
-      } catch (exception) {
-        debugPrint('Could not restore selected task subscription: $exception');
-      }
+    try {
+      await _ensureThreadSubscribed(
+        threadId,
+        api: api,
+        attempt: attempt,
+        epoch: epoch,
+        profileId: profileId,
+      );
+    } catch (exception) {
+      debugPrint('Could not restore selected task subscription: $exception');
     }
     await _catchUpTaskContext(
       threadId,
@@ -1570,97 +1540,31 @@ final class AppController extends ChangeNotifier {
   Future<void> compactSelectedTask() {
     final task = selectedTask;
     if (task == null) throw StateError('Select a task first.');
-    if (!task.canWrite) {
-      throw StateError('This running task is owned by another Codex client.');
-    }
     return _requireApi().compactThread(task.id);
   }
 
   Future<void> interruptSelectedTask() async {
     final task = selectedTask;
-    final turnId = task == null ? null : _activeTurnIds[task.id];
-    if (task == null || !task.canWrite || turnId == null) return;
-    await _requireApi().interruptTurn(task.id, turnId);
-  }
-
-  Future<void> guideExternalTask(String guidance) async {
-    final task = selectedTask;
-    if (task == null || task.ownership != TaskOwnership.external) {
-      throw StateError('Select a task running in another client first.');
-    }
-    final normalized = guidance.trim();
-    if (normalized.isEmpty) throw ArgumentError('Guidance is required.');
+    if (task == null) return;
     final api = _requireApi();
     final attempt = _connectionAttempt;
     final epoch = _epoch;
     final profileId = _selectedHostId!;
-    await _ensureThreadSubscribed(
-      task.id,
-      api: api,
-      attempt: attempt,
-      epoch: epoch,
-      profileId: profileId,
-    );
+    // Resolve the actual active turn even if it was started by another client.
     final turnId = await api.readActiveTurnId(task.id);
     _ensureCurrentSession(api, attempt, epoch, profileId);
     if (turnId == null) {
-      throw StateError('The other client no longer has an active turn.');
-    }
-    var steerRequested = false;
-    try {
-      steerRequested = true;
-      await api.steerTurn(task.id, turnId, normalized);
-      _ensureCurrentSession(api, attempt, epoch, profileId);
-    } catch (exception) {
-      if (!(steerRequested && _isUncertainSubmissionFailure(exception))) {
-        rethrow;
-      }
-    }
-    unawaited(_catchUpTaskContext(
-      task.id,
-      api: api,
-      attempt: attempt,
-      epoch: epoch,
-      profileId: profileId,
-    ));
-  }
-
-  Future<void> takeOverExternalTask() async {
-    final task = selectedTask;
-    final profileId = _selectedHostId;
-    if (task == null ||
-        profileId == null ||
-        task.ownership != TaskOwnership.external) {
-      throw StateError('Select a task running in another client first.');
-    }
-    final api = _requireApi();
-    final attempt = _connectionAttempt;
-    final epoch = _epoch;
-    final turnId = await api.readActiveTurnId(task.id);
-    if (turnId != null) await api.interruptTurn(task.id, turnId);
-    if (!_isCurrentSession(api, attempt, epoch, profileId)) return;
-    await _ensureThreadSubscribed(
-      task.id,
-      api: api,
-      attempt: attempt,
-      epoch: epoch,
-      profileId: profileId,
-    );
-    if (!await _claimThread(
-      task.id,
-      api: api,
-      attempt: attempt,
-      epoch: epoch,
-      profileId: profileId,
-    )) {
+      _activeTurnIds.remove(task.id);
+      await refreshTasks();
       return;
     }
-    _activeTurnIds.remove(task.id);
-    _taskReducer.applyEvent(
-      epoch,
-      TaskEvent.statusChanged(task.id, TaskStatus.interrupted),
-    );
-    notifyListeners();
+    try {
+      await api.interruptTurn(task.id, turnId);
+    } finally {
+      if (_isCurrentSession(api, attempt, epoch, profileId)) {
+        unawaited(refreshTasks());
+      }
+    }
   }
 
   void answerApproval(PendingApproval approval, String decision) {
@@ -1673,21 +1577,6 @@ final class AppController extends ChangeNotifier {
         .where((item) => item.requestId != approval.requestId)
         .toList(growable: false);
     notifyListeners();
-  }
-
-  Future<bool> _claimThread(
-    String threadId, {
-    required CodexRemoteApi api,
-    required int attempt,
-    required int epoch,
-    required String profileId,
-  }) async {
-    if (!_isCurrentSession(api, attempt, epoch, profileId)) return false;
-    final owned = {..._ownedThreadIds, threadId};
-    await _store.writeOwnedThreads(profileId, owned);
-    if (!_isCurrentSession(api, attempt, epoch, profileId)) return false;
-    _ownedThreadIds = owned;
-    return true;
   }
 
   Future<void> _ensureThreadSubscribed(
@@ -1812,7 +1701,6 @@ final class AppController extends ChangeNotifier {
     _messageOperations.clear();
     _inFlightQueuedMessageIds.clear();
     _subscribedThreadIds = {};
-    _ownedThreadIds = {};
     _interactiveThreadIds.clear();
     _agentDeltaBatcher.clear();
     _epoch = _taskReducer.beginConnection();

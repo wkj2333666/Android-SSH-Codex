@@ -709,7 +709,8 @@ class _TaskRow extends StatelessWidget {
           children: [
             if (task.cwd.isNotEmpty)
               Text(task.cwd, maxLines: 1, overflow: TextOverflow.ellipsis),
-            if (task.ownership == TaskOwnership.external)
+            if (task.status == TaskStatus.running ||
+                task.status == TaskStatus.queued)
               Text(
                 'Active turn',
                 style:
@@ -717,9 +718,7 @@ class _TaskRow extends StatelessWidget {
               ),
           ],
         ),
-        trailing: task.ownership == TaskOwnership.external
-            ? const Icon(Icons.sync, size: 18)
-            : const Icon(Icons.chevron_right),
+        trailing: const Icon(Icons.chevron_right),
         onTap: onTap,
       );
 }
