@@ -454,7 +454,9 @@ final class AppController extends ChangeNotifier {
       {bool immediate = false}) {
     if (_inBackground ||
         attempt != _connectionAttempt ||
-        _reconnectTimer != null) return;
+        _reconnectTimer != null) {
+      return;
+    }
     const delays = [1, 2, 4, 8, 15];
     final delayIndex = _reconnectAttempt < delays.length
         ? _reconnectAttempt
