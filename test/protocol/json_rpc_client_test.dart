@@ -57,9 +57,13 @@ void main() {
     }));
     transport.incoming.add(jsonEncode({
       'id': request['id'],
-      'result': {'data': ['still connected']},
+      'result': {
+        'data': ['still connected']
+      },
     }));
-    expect(await next, {'data': ['still connected']});
+    expect(await next, {
+      'data': ['still connected']
+    });
     expect(transport.closeCalls, 0);
   });
 
