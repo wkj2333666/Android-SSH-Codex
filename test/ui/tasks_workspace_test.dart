@@ -228,6 +228,8 @@ void main() {
     final gesture = await tester.startGesture(tester.getCenter(list));
     await gesture.moveBy(const Offset(0, 40));
     await tester.pump();
+    await gesture.moveBy(const Offset(0, 20));
+    await tester.pump();
     final offset = controller.offset;
     expect(offset, greaterThan(0));
     expect(offset, lessThan(96));
