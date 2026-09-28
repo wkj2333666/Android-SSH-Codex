@@ -60,7 +60,8 @@ void main() {
     );
   });
 
-  test('large response decoding preserves following notification order', () async {
+  test('large response decoding preserves following notification order',
+      () async {
     final response = client.request('thread/items/list');
     final text = List.filled(70000, 'x').join();
     final order = <String>[];

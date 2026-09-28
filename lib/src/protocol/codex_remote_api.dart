@@ -199,12 +199,16 @@ final class CodexRemoteApi {
     String threadId, {
     String? cursor,
   }) async {
-    final result = _map(await _rpc.requestWithTimeout('thread/items/list', {
-      'threadId': threadId,
-      'limit': 20,
-      'sortDirection': 'desc',
-      if (cursor != null) 'cursor': cursor,
-    }, const Duration(minutes: 2)));
+    final result = _map(await _rpc.requestWithTimeout(
+      'thread/items/list',
+      {
+        'threadId': threadId,
+        'limit': 20,
+        'sortDirection': 'desc',
+        if (cursor != null) 'cursor': cursor,
+      },
+      const Duration(minutes: 2),
+    ));
     final entries = result['data'] as List<dynamic>? ?? const [];
     final items = <TaskItem>[];
     for (final entry in entries.reversed) {

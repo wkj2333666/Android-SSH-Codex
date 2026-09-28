@@ -141,7 +141,6 @@ final class AppController extends ChangeNotifier {
   List<PendingApproval> _approvals = const [];
   Set<String> _ownedThreadIds = {};
   final Set<String> _interactiveThreadIds = {};
-  Set<String> _loadedThreadIds = {};
   Set<String> _subscribedThreadIds = {};
   SshConnection? _ssh;
   SshUnixTunnel? _tunnel;
@@ -385,7 +384,6 @@ final class AppController extends ChangeNotifier {
       _notificationSubscription = notifications;
       _requestSubscription = requests;
       _ownedThreadIds = ownedThreadIds;
-      _loadedThreadIds = {};
       _subscribedThreadIds = {};
       published = true;
       unawaited(rpc.done.then((_) => _handleTransportLoss(attempt, profile)));
@@ -525,12 +523,10 @@ final class AppController extends ChangeNotifier {
         resetNext = false;
         final initialProject = selectedProject;
         final token = _taskReducer.beginRefresh(epoch);
-        final loadedFuture = api.readLoadedThreadIds();
         final unassignedFuture = api.readTaskPage();
         final initialProjectFuture = initialProject == null
             ? Future<RemoteTaskPage?>.value()
             : api.readTaskPage(cwd: initialProject.cwd);
-        final loadedThreadIds = await loadedFuture;
         final unassignedPage = await unassignedFuture;
         if (api != _api || epoch != _epoch) return;
         _discoverProjects(unassignedPage.tasks);
@@ -552,7 +548,6 @@ final class AppController extends ChangeNotifier {
             for (final task in projectPage.tasks) task.id: task,
         };
         final loadedByUs = _interactiveThreadIds;
-        _loadedThreadIds = loadedThreadIds;
         _taskReducer.applyRefresh(
           token,
           snapshots.values.toList(growable: false),
@@ -1022,7 +1017,6 @@ final class AppController extends ChangeNotifier {
     )) {
       return;
     }
-    _loadedThreadIds = {..._loadedThreadIds, threadId};
     _subscribedThreadIds = {..._subscribedThreadIds, threadId};
     _selectedTaskId = threadId;
     _taskReducer.applyEvent(
@@ -1706,7 +1700,6 @@ final class AppController extends ChangeNotifier {
     if (_subscribedThreadIds.contains(threadId)) return;
     await api.resumeThread(threadId);
     _ensureCurrentSession(api, attempt, epoch, profileId);
-    _loadedThreadIds = {..._loadedThreadIds, threadId};
     _subscribedThreadIds = {..._subscribedThreadIds, threadId};
   }
 
@@ -1818,7 +1811,6 @@ final class AppController extends ChangeNotifier {
     _messageQueue.clear();
     _messageOperations.clear();
     _inFlightQueuedMessageIds.clear();
-    _loadedThreadIds = {};
     _subscribedThreadIds = {};
     _ownedThreadIds = {};
     _interactiveThreadIds.clear();

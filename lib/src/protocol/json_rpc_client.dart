@@ -101,7 +101,8 @@ final class JsonRpcClient {
   Future<dynamic> request(
     String method, [
     Map<String, dynamic>? params,
-  ]) => requestWithTimeout(method, params, requestTimeout);
+  ]) =>
+      requestWithTimeout(method, params, requestTimeout);
 
   Future<dynamic> requestWithTimeout(
     String method,
