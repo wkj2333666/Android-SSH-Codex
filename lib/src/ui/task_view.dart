@@ -734,6 +734,8 @@ class _TaskTimelineState extends State<TaskTimeline>
   var _requestingOlder = false;
   var _olderLoadArmed = true;
   var _olderCheckScheduled = false;
+  // A long run of collapsed tool events may never fill the viewport.
+  var _automaticPagesSinceGesture = 0;
   double? _pendingOlderAnchorOffset;
 
   @override
@@ -798,6 +800,7 @@ class _TaskTimelineState extends State<TaskTimeline>
     if (!_scrollController.hasClients || _requestingOlder || widget.loadingOlder) {
       return;
     }
+    if (_automaticPagesSinceGesture >= 10) return;
     final distanceFromOldest = _scrollController.position.maxScrollExtent -
         _scrollController.position.pixels;
     if (distanceFromOldest > _olderLoadThreshold) {
@@ -816,6 +819,8 @@ class _TaskTimelineState extends State<TaskTimeline>
         (notification is UserScrollNotification &&
             notification.direction != ScrollDirection.idle)) {
       // Pause at gesture start, before a streaming update can animate us back.
+      _automaticPagesSinceGesture = 0;
+      _olderLoadArmed = true;
       setState(() => _followLatest = false);
       return false;
     }
@@ -857,6 +862,8 @@ class _TaskTimelineState extends State<TaskTimeline>
       return;
     }
     _pendingOlderAnchorOffset = _scrollController.position.pixels;
+    if (retry) _automaticPagesSinceGesture = 0;
+    _automaticPagesSinceGesture++;
     setState(() => _requestingOlder = true);
     try {
       await load();
@@ -1028,7 +1035,11 @@ class _OlderContextControl extends StatelessWidget {
                           'Start of task',
                           style: Theme.of(context).textTheme.bodySmall,
                         )
-                      : const SizedBox.shrink(),
+                      : TextButton(
+                          key: const Key('load-older-context'),
+                          onPressed: onRetry,
+                          child: const Text('Load earlier context'),
+                        ),
         ),
       );
 }

@@ -314,7 +314,7 @@ void main() {
   });
 
   for (final initiallyEmpty in [false, true]) {
-    testWidgets('short history fills viewport progressively (empty=$initiallyEmpty)',
+    testWidgets('short history fills viewport (empty=$initiallyEmpty)',
         (tester) async {
       tester.view.physicalSize = const Size(360, 520);
       tester.view.devicePixelRatio = 1;
@@ -351,7 +351,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(requests, greaterThan(1));
       expect(requests, lessThan(30));
-      final controller = tester.widget<ListView>(find.byType(ListView)).controller!;
+      final controller =
+          tester.widget<ListView>(find.byType(ListView)).controller!;
       expect(controller.position.maxScrollExtent, greaterThan(200));
       expect(controller.offset, closeTo(0, 1));
       final loaded = requests;
@@ -359,6 +360,31 @@ void main() {
       expect(requests, loaded);
     });
   }
+
+  testWidgets('empty history pages are bounded and can continue manually',
+      (tester) async {
+    var items = <TaskItem>[];
+    var requests = 0;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: StatefulBuilder(
+          builder: (context, update) => TaskTimeline(
+            items: items,
+            hasOlder: true,
+            onLoadOlder: () async {
+              requests++;
+              update(() => items = <TaskItem>[]);
+            },
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(requests, 10);
+    await tester.tap(find.byKey(const Key('load-older-context')));
+    await tester.pumpAndSettle();
+    expect(requests, 20);
+  });
 
   testWidgets('scrolling to the top requests one older context page',
       (tester) async {
