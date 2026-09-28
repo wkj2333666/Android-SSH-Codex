@@ -726,13 +726,14 @@ class TaskTimeline extends StatefulWidget {
 class _TaskTimelineState extends State<TaskTimeline>
     with WidgetsBindingObserver {
   static const _followThreshold = 1.0;
-  static const _olderLoadThreshold = 80.0;
+  static const _olderLoadThreshold = 200.0;
 
   final _scrollController = ScrollController();
   var _followLatest = true;
   var _showJumpToLatest = false;
   var _requestingOlder = false;
   var _olderLoadArmed = true;
+  var _olderCheckScheduled = false;
   double? _pendingOlderAnchorOffset;
 
   @override
@@ -741,16 +742,24 @@ class _TaskTimelineState extends State<TaskTimeline>
     WidgetsBinding.instance.addObserver(this);
     _scrollController.addListener(_handleScroll);
     _scheduleLatest(animated: false);
+    _scheduleOlderCheck();
   }
 
   @override
   void didChangeMetrics() {
     if (_followLatest) _scheduleLatest(animated: false);
+    _scheduleOlderCheck();
   }
 
   @override
   void didUpdateWidget(covariant TaskTimeline oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.items != widget.items ||
+        (oldWidget.loadingOlder && !widget.loadingOlder) ||
+        oldWidget.hasOlder != widget.hasOlder) {
+      _olderLoadArmed = true;
+    }
+    _scheduleOlderCheck();
     if (oldWidget.items != widget.items ||
         oldWidget.loading != widget.loading ||
         oldWidget.error != widget.error) {
@@ -769,6 +778,26 @@ class _TaskTimelineState extends State<TaskTimeline>
 
   void _handleScroll() {
     if (!_scrollController.hasClients) return;
+    _checkOlderContext();
+    final awayFromLatest = _distanceFromLatest > _followThreshold;
+    final showJump = awayFromLatest && !_followLatest;
+    if (showJump == _showJumpToLatest) return;
+    setState(() => _showJumpToLatest = showJump);
+  }
+
+  void _scheduleOlderCheck() {
+    if (_olderCheckScheduled) return;
+    _olderCheckScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _olderCheckScheduled = false;
+      if (mounted) _checkOlderContext();
+    });
+  }
+
+  void _checkOlderContext() {
+    if (!_scrollController.hasClients || _requestingOlder || widget.loadingOlder) {
+      return;
+    }
     final distanceFromOldest = _scrollController.position.maxScrollExtent -
         _scrollController.position.pixels;
     if (distanceFromOldest > _olderLoadThreshold) {
@@ -777,10 +806,6 @@ class _TaskTimelineState extends State<TaskTimeline>
       _olderLoadArmed = false;
       _loadOlder();
     }
-    final awayFromLatest = _distanceFromLatest > _followThreshold;
-    final showJump = awayFromLatest && !_followLatest;
-    if (showJump == _showJumpToLatest) return;
-    setState(() => _showJumpToLatest = showJump);
   }
 
   bool _handleScrollNotification(ScrollNotification notification) {
@@ -842,6 +867,7 @@ class _TaskTimelineState extends State<TaskTimeline>
     } finally {
       _pendingOlderAnchorOffset = null;
       if (mounted) setState(() => _requestingOlder = false);
+      if (mounted) _scheduleOlderCheck();
     }
   }
 
@@ -912,7 +938,7 @@ class _TaskTimelineState extends State<TaskTimeline>
         ),
       );
     }
-    if (widget.items.isEmpty) {
+    if (widget.items.isEmpty && !widget.hasOlder) {
       return const Center(child: Text('No task events yet'));
     }
     final entries = buildTimelineEntries(widget.items);
@@ -920,28 +946,34 @@ class _TaskTimelineState extends State<TaskTimeline>
       children: [
         NotificationListener<ScrollNotification>(
           onNotification: _handleScrollNotification,
-          child: SelectionArea(
-            child: ListView.builder(
-              controller: _scrollController,
-              reverse: true,
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 72),
-              itemCount: entries.length + 1,
-              itemBuilder: (_, index) {
-                if (index == entries.length) {
-                  return _OlderContextControl(
-                    loading: widget.loadingOlder || _requestingOlder,
-                    error: widget.olderError,
-                    hasOlder: widget.hasOlder,
-                    onRetry: () => _loadOlder(retry: true),
-                  );
-                }
-                return switch (entries[entries.length - index - 1]) {
-                  TimelineMessageEntry(:final item) =>
-                    TimelineItemView(item: item),
-                  TimelineActivityEntry(:final items) =>
-                    TimelineActivityGroup(items: items),
-                };
-              },
+          child: NotificationListener<ScrollMetricsNotification>(
+            onNotification: (notification) {
+              if (notification.depth == 0) _scheduleOlderCheck();
+              return false;
+            },
+            child: SelectionArea(
+              child: ListView.builder(
+                controller: _scrollController,
+                reverse: true,
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 72),
+                itemCount: entries.length + 1,
+                itemBuilder: (_, index) {
+                  if (index == entries.length) {
+                    return _OlderContextControl(
+                      loading: widget.loadingOlder || _requestingOlder,
+                      error: widget.olderError,
+                      hasOlder: widget.hasOlder,
+                      onRetry: () => _loadOlder(retry: true),
+                    );
+                  }
+                  return switch (entries[entries.length - index - 1]) {
+                    TimelineMessageEntry(:final item) =>
+                      TimelineItemView(item: item),
+                    TimelineActivityEntry(:final items) =>
+                      TimelineActivityGroup(items: items),
+                  };
+                },
+              ),
             ),
           ),
         ),
