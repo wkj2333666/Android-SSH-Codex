@@ -38,7 +38,8 @@ void main() {
   test('notification denial warns but still stops the running service',
       () async {
     final calls = <String>[];
-    messenger.setMockMethodCallHandler(ConnectionKeepAlive.channel, (call) async {
+    messenger.setMockMethodCallHandler(ConnectionKeepAlive.channel,
+        (call) async {
       calls.add(call.method);
       return false;
     });
@@ -51,7 +52,8 @@ void main() {
   test('switching back to a connection after stop leaves protection active',
       () async {
     final calls = <String>[];
-    messenger.setMockMethodCallHandler(ConnectionKeepAlive.channel, (call) async {
+    messenger.setMockMethodCallHandler(ConnectionKeepAlive.channel,
+        (call) async {
       calls.add(call.method);
       return true;
     });
@@ -72,7 +74,8 @@ void main() {
       return true;
     });
     final service = ConnectionKeepAlive();
-    await expectLater(service.setEnabled(true), throwsA(isA<PlatformException>()));
+    await expectLater(
+        service.setEnabled(true), throwsA(isA<PlatformException>()));
     await service.setEnabled(true);
     expect(calls, 2);
   });
