@@ -7,6 +7,7 @@ import 'profiles/host_profile.dart';
 import 'profiles/profile_store.dart';
 import 'projects/remote_project.dart';
 import 'protocol/codex_remote_api.dart';
+import 'protocol/foreground_probe.dart';
 import 'protocol/json_rpc_client.dart';
 import 'protocol/websocket_rpc_transport.dart';
 import 'tasks/task_catalog.dart';
@@ -552,14 +553,13 @@ final class AppController extends ChangeNotifier {
     final attempt = _connectionAttempt;
     final epoch = _epoch;
     try {
-      // Small end-to-end request tests SSH, tunnel and RPC, not just the socket.
-      await rpc.requestWithTimeout(
-        'model/list',
-        {'limit': 1, 'includeHidden': false},
-        const Duration(seconds: 2),
-      );
+      final disconnected = await foregroundTransportDisconnected(rpc);
       if (!_isCurrentSession(api, attempt, epoch, profile.id) ||
           _inBackground) {
+        return;
+      }
+      if (disconnected) {
+        await _handleTransportLoss(attempt, profile);
         return;
       }
       _expediteReconnect = false;
@@ -577,7 +577,10 @@ final class AppController extends ChangeNotifier {
     } catch (exception) {
       if (_isCurrentSession(api, attempt, epoch, profile.id)) {
         debugPrint('Foreground connection check failed: $exception');
-        await _handleTransportLoss(attempt, profile);
+        // Resume polling even if catch-up preparation failed. Only a confirmed
+        // transport disconnect (above or rpc.done) may tear down this session.
+        _expediteReconnect = false;
+        _startRefreshTimer();
       }
     } finally {
       if (_foregroundProbeApi == api) _foregroundProbeApi = null;
