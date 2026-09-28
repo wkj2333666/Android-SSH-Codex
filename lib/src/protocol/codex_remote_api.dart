@@ -199,21 +199,21 @@ final class CodexRemoteApi {
     String threadId, {
     String? cursor,
   }) async {
-    final result = _map(await _rpc.request('thread/turns/list', {
-      'threadId': threadId,
-      'limit': 10,
-      'sortDirection': 'desc',
-      'itemsView': 'full',
-      if (cursor != null) 'cursor': cursor,
-    }));
-    final turns = result['data'] as List<dynamic>? ?? const [];
+    final result = _map(await _rpc.requestWithTimeout(
+      'thread/items/list',
+      {
+        'threadId': threadId,
+        'limit': 20,
+        'sortDirection': 'desc',
+        if (cursor != null) 'cursor': cursor,
+      },
+      const Duration(minutes: 2),
+    ));
+    final entries = result['data'] as List<dynamic>? ?? const [];
     final items = <TaskItem>[];
-    for (final rawTurn in turns.reversed) {
-      final turn = _map(rawTurn);
-      for (final rawItem in turn['items'] as List<dynamic>? ?? const []) {
-        final item = _parseItem(_map(rawItem));
-        if (item != null) items.add(item);
-      }
+    for (final entry in entries.reversed) {
+      final item = _parseItem(_map(_map(entry)['item']));
+      if (item != null) items.add(item);
     }
     return RemoteTurnPage(
       items: List.unmodifiable(items),

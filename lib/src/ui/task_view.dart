@@ -1241,8 +1241,8 @@ class _ExternalTaskBanner extends StatelessWidget {
   Widget build(BuildContext context) => MaterialBanner(
         leading: const Icon(Icons.devices_outlined),
         content: const Text(
-          'This turn is active in another Codex client. You can guide it '
-          'without changing ownership, or stop it and take control here.',
+          'This task has an active turn. You can send guidance or queue a '
+          'message, or stop the turn to start a new one.',
         ),
         actions: [
           TextButton(

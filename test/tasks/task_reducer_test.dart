@@ -183,6 +183,29 @@ void main() {
     expect(task.canWrite, isFalse);
   });
 
+  test('local participation clears external state immediately', () {
+    final epoch = reducer.beginConnection();
+    reducer.applyRefresh(
+      reducer.beginRefresh(epoch),
+      [snapshot('one', status: TaskStatus.running)],
+      const {},
+    );
+    reducer.markLocalParticipation(epoch, 'one');
+    expect(reducer.state.tasks['one']?.ownership, TaskOwnership.local);
+    reducer.applyRefresh(
+      reducer.beginRefresh(epoch),
+      [snapshot('one', status: TaskStatus.running)],
+      const {'one'},
+    );
+    expect(reducer.state.tasks['one']?.ownership, TaskOwnership.local);
+    reducer.markLocalParticipation(epoch - 1, 'one');
+    reducer.applyEvent(
+      epoch,
+      const TaskEvent.statusChanged('one', TaskStatus.completed),
+    );
+    expect(reducer.state.tasks['one']?.ownership, TaskOwnership.available);
+  });
+
   test('a completed external turn becomes writable without waiting for refresh',
       () {
     final epoch = reducer.beginConnection();

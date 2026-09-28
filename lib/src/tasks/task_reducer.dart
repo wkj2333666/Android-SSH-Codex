@@ -187,6 +187,25 @@ final class TaskReducer {
 
   TaskState get state => _state;
 
+  void markLocalParticipation(int epoch, String taskId) {
+    if (epoch != _state.epoch) return;
+    final current = _state.tasks[taskId];
+    if (current == null) return;
+    final revision = _state.eventRevision + 1;
+    _state = TaskState(
+      epoch: epoch,
+      refreshGeneration: _state.refreshGeneration,
+      eventRevision: revision,
+      tasks: Map.unmodifiable({
+        ..._state.tasks,
+        taskId: current.copyWith(
+          ownership: TaskOwnership.local,
+          revision: revision,
+        ),
+      }),
+    );
+  }
+
   int beginConnection({bool clearTasks = true}) {
     _seenEvents.clear();
     _state = TaskState(

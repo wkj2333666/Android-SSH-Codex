@@ -140,7 +140,7 @@ final class AppController extends ChangeNotifier {
   Completer<bool>? _hostKeyCompleter;
   List<PendingApproval> _approvals = const [];
   Set<String> _ownedThreadIds = {};
-  Set<String> _loadedThreadIds = {};
+  final Set<String> _interactiveThreadIds = {};
   Set<String> _subscribedThreadIds = {};
   SshConnection? _ssh;
   SshUnixTunnel? _tunnel;
@@ -384,7 +384,6 @@ final class AppController extends ChangeNotifier {
       _notificationSubscription = notifications;
       _requestSubscription = requests;
       _ownedThreadIds = ownedThreadIds;
-      _loadedThreadIds = {};
       _subscribedThreadIds = {};
       published = true;
       unawaited(rpc.done.then((_) => _handleTransportLoss(attempt, profile)));
@@ -524,12 +523,10 @@ final class AppController extends ChangeNotifier {
         resetNext = false;
         final initialProject = selectedProject;
         final token = _taskReducer.beginRefresh(epoch);
-        final loadedFuture = api.readLoadedThreadIds();
         final unassignedFuture = api.readTaskPage();
         final initialProjectFuture = initialProject == null
             ? Future<RemoteTaskPage?>.value()
             : api.readTaskPage(cwd: initialProject.cwd);
-        final loadedThreadIds = await loadedFuture;
         final unassignedPage = await unassignedFuture;
         if (api != _api || epoch != _epoch) return;
         _discoverProjects(unassignedPage.tasks);
@@ -550,8 +547,7 @@ final class AppController extends ChangeNotifier {
           if (projectPage != null)
             for (final task in projectPage.tasks) task.id: task,
         };
-        final loadedByUs = loadedThreadIds.intersection(_ownedThreadIds);
-        _loadedThreadIds = loadedThreadIds;
+        final loadedByUs = _interactiveThreadIds;
         _taskReducer.applyRefresh(
           token,
           snapshots.values.toList(growable: false),
@@ -709,7 +705,7 @@ final class AppController extends ChangeNotifier {
       final applied = _taskReducer.applyPageMerge(
         pageToken,
         page.tasks,
-        _loadedThreadIds.intersection(_ownedThreadIds),
+        _interactiveThreadIds,
       );
       if (!applied) return;
       _taskCatalog.replaceProjectPage(
@@ -826,7 +822,7 @@ final class AppController extends ChangeNotifier {
       final applied = _taskReducer.applyPageMerge(
         pageToken,
         page.tasks,
-        _loadedThreadIds.intersection(_ownedThreadIds),
+        _interactiveThreadIds,
       );
       if (!applied) return;
       _taskCatalog.appendProjectPage(
@@ -869,7 +865,7 @@ final class AppController extends ChangeNotifier {
       final applied = _taskReducer.applyPageMerge(
         pageToken,
         page.tasks,
-        _loadedThreadIds.intersection(_ownedThreadIds),
+        _interactiveThreadIds,
       );
       if (!applied) return;
       _taskCatalog.appendRecentPage(
@@ -910,7 +906,7 @@ final class AppController extends ChangeNotifier {
       final applied = _taskReducer.applyPageMerge(
         pageToken,
         page.tasks,
-        _loadedThreadIds.intersection(_ownedThreadIds),
+        _interactiveThreadIds,
       );
       if (!applied) return;
       _taskCatalog.appendUnassignedPage(
@@ -1021,7 +1017,6 @@ final class AppController extends ChangeNotifier {
     )) {
       return;
     }
-    _loadedThreadIds = {..._loadedThreadIds, threadId};
     _subscribedThreadIds = {..._subscribedThreadIds, threadId};
     _selectedTaskId = threadId;
     _taskReducer.applyEvent(
@@ -1278,6 +1273,8 @@ final class AppController extends ChangeNotifier {
   }) {
     if (!_isCurrentSession(api, attempt, epoch, profileId)) return;
     _setLocalUserMessageStatus(threadId, pending, 'sent', epoch: epoch);
+    _interactiveThreadIds.add(threadId);
+    _taskReducer.markLocalParticipation(epoch, threadId);
     _taskReducer.applyEvent(
       epoch,
       TaskEvent.statusChanged(threadId, TaskStatus.running),
@@ -1703,7 +1700,6 @@ final class AppController extends ChangeNotifier {
     if (_subscribedThreadIds.contains(threadId)) return;
     await api.resumeThread(threadId);
     _ensureCurrentSession(api, attempt, epoch, profileId);
-    _loadedThreadIds = {..._loadedThreadIds, threadId};
     _subscribedThreadIds = {..._subscribedThreadIds, threadId};
   }
 
@@ -1757,6 +1753,7 @@ final class AppController extends ChangeNotifier {
         _activeTurnIds[threadId] = turnId;
       }
     } else if (notification.method == 'turn/completed' && threadId != null) {
+      _interactiveThreadIds.remove(threadId);
       activeTurnChanged = _activeTurnIds.remove(threadId) != null;
       unawaited(refreshTasks());
       unawaited(_flushQueuedPrompt(threadId));
@@ -1814,9 +1811,9 @@ final class AppController extends ChangeNotifier {
     _messageQueue.clear();
     _messageOperations.clear();
     _inFlightQueuedMessageIds.clear();
-    _loadedThreadIds = {};
     _subscribedThreadIds = {};
     _ownedThreadIds = {};
+    _interactiveThreadIds.clear();
     _agentDeltaBatcher.clear();
     _epoch = _taskReducer.beginConnection();
     _approvals = const [];
