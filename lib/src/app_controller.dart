@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import 'connection_keep_alive.dart';
 import 'profiles/host_profile.dart';
 import 'profiles/profile_store.dart';
 import 'projects/remote_project.dart';
@@ -110,6 +111,8 @@ final class AppController extends ChangeNotifier {
 
   final ProfileStore _store;
   final SshConnector _connector;
+  final ConnectionKeepAlive _keepAlive = ConnectionKeepAlive();
+  String? _keepAliveWarning;
   final TaskReducer _taskReducer = TaskReducer();
   late final TaskEventBatcher _agentDeltaBatcher = TaskEventBatcher(
     onFlush: _applyAgentDeltaBatch,
@@ -168,7 +171,7 @@ final class AppController extends ChangeNotifier {
   String? get selectedHostId => _selectedHostId;
   String? get selectedProjectId => _selectedProjectId;
   String? get selectedTaskId => _selectedTaskId;
-  String? get error => _error;
+  String? get error => _error ?? _keepAliveWarning;
   HostKeyChallenge? get hostKeyChallenge => _hostKeyChallenge;
   List<PendingApproval> get approvals => _approvals;
   TaskState get taskState => _taskReducer.state;
@@ -304,6 +307,8 @@ final class AppController extends ChangeNotifier {
     var published = false;
     var stage = ConnectionStage.profile;
     try {
+      if (!_inBackground) await _setKeepAlive(true);
+      if (attempt != _connectionAttempt) return;
       final secret = await _store.readSecret(profile.id);
       final projects =
           reconnecting ? _projects : await _store.readProjects(profile.id);
@@ -419,11 +424,13 @@ final class AppController extends ChangeNotifier {
       debugPrintStack(stackTrace: stackTrace);
       _error = describeConnectionFailure(stage, exception, profile);
       if (published) await _closeTransport();
+      if (attempt != _connectionAttempt) return;
       if (reconnecting) {
         _connectionPhase = RemoteConnectionPhase.reconnecting;
         _scheduleReconnect(profile, attempt);
       } else {
         _connectionPhase = RemoteConnectionPhase.disconnected;
+        await _setKeepAlive(false);
       }
     } finally {
       if (_openingAttempt == attempt) _openingAttempt = null;
@@ -452,7 +459,7 @@ final class AppController extends ChangeNotifier {
 
   void _scheduleReconnect(HostProfile profile, int attempt,
       {bool immediate = false}) {
-    if (_inBackground ||
+    if ((_inBackground && !_keepAlive.isEnabled) ||
         attempt != _connectionAttempt ||
         _reconnectTimer != null) {
       return;
@@ -493,9 +500,23 @@ final class AppController extends ChangeNotifier {
     _expediteReconnect = false;
     _refreshTimer?.cancel();
     _refreshTimer = null;
-    _reconnectTimer?.cancel();
-    _reconnectTimer = null;
+    if (!_keepAlive.isEnabled) {
+      _reconnectTimer?.cancel();
+      _reconnectTimer = null;
+    }
     // Keep the transport; backgrounding is not an explicit disconnect.
+  }
+
+  Future<void> _setKeepAlive(bool enabled) async {
+    final attempt = _connectionAttempt;
+    try {
+      await _keepAlive.setEnabled(enabled);
+      if (attempt == _connectionAttempt) _keepAliveWarning = null;
+    } catch (exception) {
+      if (attempt != _connectionAttempt) return;
+      _keepAliveWarning = 'Background connection protection: $exception';
+      debugPrint(_keepAliveWarning);
+    }
   }
 
   Future<void> restoreForegroundConnection() async {
@@ -505,6 +526,14 @@ final class AppController extends ChangeNotifier {
         _profiles.where((profile) => profile.id == _selectedHostId).firstOrNull;
     // Respect explicit disconnect, and never overlap an in-flight connection.
     if (profile == null || _openingAttempt != null) return;
+    if (_connectionPhase != RemoteConnectionPhase.disconnected) {
+      final attempt = _connectionAttempt;
+      await _setKeepAlive(true);
+      if (attempt != _connectionAttempt ||
+          _connectionPhase == RemoteConnectionPhase.disconnected) {
+        return;
+      }
+    }
     if (_connectionPhase == RemoteConnectionPhase.reconnecting) {
       _reconnectTimer?.cancel();
       _reconnectTimer = null;
@@ -1769,6 +1798,7 @@ final class AppController extends ChangeNotifier {
   Future<void> disconnect() async {
     _expediteReconnect = false;
     _connectionAttempt++;
+    final stoppingKeepAlive = _setKeepAlive(false);
     _cancelHostKeyPrompt();
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
@@ -1799,6 +1829,7 @@ final class AppController extends ChangeNotifier {
     } catch (exception) {
       _error = 'Disconnected, but could not clear auto-connect: $exception';
     }
+    await stoppingKeepAlive;
     notifyListeners();
   }
 
@@ -1857,6 +1888,7 @@ final class AppController extends ChangeNotifier {
 
   void clearError() {
     _error = null;
+    _keepAliveWarning = null;
     notifyListeners();
   }
 
@@ -1868,6 +1900,7 @@ final class AppController extends ChangeNotifier {
     _refreshTimer?.cancel();
     _agentDeltaBatcher.dispose();
     unawaited(_closeTransport());
+    unawaited(_setKeepAlive(false));
     super.dispose();
   }
 }

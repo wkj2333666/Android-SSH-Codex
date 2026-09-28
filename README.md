@@ -12,6 +12,25 @@ computer you control. It connects directly over SSH—there is no hosted relay,
 no Codex runtime on the phone, and no need to copy your OpenAI credentials into
 the app.
 
+### Background connections on Android
+
+While connecting or connected, Android shows an ongoing **Codex connection active**
+notification. A foreground service and CPU wake lock help keep the SSH connection
+alive when switching apps or turning off the screen. Allow notification permission
+when prompted. Tap the notification to return to the app; use **Disconnect** to
+stop the service and release its wake lock. Removing the app from recent tasks
+also stops protection. It does not restart itself after force-stop or reboot.
+
+This uses additional battery. Network changes, Android power-saving modes and
+manufacturer restrictions can still interrupt the connection; automatic recovery
+remains available. If Android denies service startup or notification permission,
+the app displays a warning. OpenHarmony behavior is unchanged.
+
+The Android service declares the `specialUse` type for interactive SSH sessions,
+not media playback or periodic data sync. Google Play distribution requires the
+corresponding foreground-service declaration and review; GitHub APK releases do
+not imply Play approval.
+
 > [!NOTE]
 > This is an independent community project. It is not affiliated with or
 > endorsed by OpenAI.

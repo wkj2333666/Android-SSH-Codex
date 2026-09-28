@@ -31,3 +31,4 @@ if [[ ! -f "$gradle_file" ]]; then
   exit 1
 fi
 bash tool/configure_android_signing.sh "$gradle_file"
+bash tool/configure_android_connection_service.sh
