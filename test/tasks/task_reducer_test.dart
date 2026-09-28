@@ -168,7 +168,7 @@ void main() {
     },
   );
 
-  test('marks an active task loaded elsewhere as read-only', () {
+  test('records external participation as informational state', () {
     final epoch = reducer.beginConnection();
     final token = reducer.beginRefresh(epoch);
 
@@ -180,7 +180,6 @@ void main() {
 
     final task = reducer.state.tasks['external']!;
     expect(task.ownership, TaskOwnership.external);
-    expect(task.canWrite, isFalse);
   });
 
   test('local participation clears external state immediately', () {
@@ -222,7 +221,6 @@ void main() {
     );
 
     expect(reducer.state.tasks['external']?.ownership, TaskOwnership.available);
-    expect(reducer.state.tasks['external']?.canWrite, isTrue);
   });
 
   test('marks an active task loaded by this app-server as interactive', () {
@@ -236,7 +234,6 @@ void main() {
     );
 
     expect(reducer.state.tasks['mine']?.ownership, TaskOwnership.local);
-    expect(reducer.state.tasks['mine']?.canWrite, isTrue);
   });
 
   test('deduplicates streamed deltas by event id', () {

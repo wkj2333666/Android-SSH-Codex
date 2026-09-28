@@ -87,8 +87,6 @@ final class TaskRecord {
   final TaskOwnership ownership;
   final int revision;
 
-  bool get canWrite => ownership != TaskOwnership.external;
-
   TaskRecord copyWith({
     String? title,
     TaskStatus? status,

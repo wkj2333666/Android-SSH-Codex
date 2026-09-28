@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 import '../app_controller.dart';
 import '../protocol/codex_remote_api.dart';
@@ -10,18 +11,11 @@ import 'timeline_entries.dart';
 import 'turn_settings_picker.dart';
 import 'widgets/timeline_item.dart';
 
-bool _taskAcceptsMessages(TaskRecord task) => switch (task.ownership) {
-      TaskOwnership.available ||
-      TaskOwnership.local ||
-      TaskOwnership.external =>
-        true,
-    };
-
 bool isTaskComposerInputEnabled({
   required TaskRecord task,
   required bool connected,
 }) =>
-    _taskAcceptsMessages(task) && connected;
+    connected;
 
 bool isTaskComposerSendEnabled({
   required TaskRecord task,
@@ -150,12 +144,6 @@ class _TaskViewState extends State<TaskView> {
           onCommand: _handleCommand,
         ),
         const Divider(height: 1),
-        if (task.ownership == TaskOwnership.external)
-          _ExternalTaskBanner(
-            busy: _commandBusy,
-            onGuide: _guideExternalTask,
-            onTakeOver: _takeOverExternalTask,
-          ),
         Expanded(child: timeline),
         for (final approval in approvals)
           _ApprovalBar(
@@ -534,66 +522,6 @@ class _TaskViewState extends State<TaskView> {
     }
   }
 
-  Future<void> _guideExternalTask() async {
-    final guidance = TextEditingController();
-    final submitted = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Guide active turn'),
-        content: TextField(
-          controller: guidance,
-          autofocus: true,
-          minLines: 2,
-          maxLines: 5,
-          decoration: const InputDecoration(
-            hintText: 'Add direction without stopping the other client',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Send guidance'),
-          ),
-        ],
-      ),
-    );
-    final text = guidance.text;
-    guidance.dispose();
-    if (submitted == true && text.trim().isNotEmpty && mounted) {
-      await _runCommand(() => widget.controller.guideExternalTask(text));
-    }
-  }
-
-  Future<void> _takeOverExternalTask() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Stop and take over?'),
-        content: const Text(
-          'This interrupts the active turn in the other client, then unlocks '
-          'this task here.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Stop & take over'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed == true && mounted) {
-      await _runCommand(widget.controller.takeOverExternalTask);
-    }
-  }
-
   Future<T?> _runCommand<T>(Future<T> Function() operation) async {
     if (_commandBusy) return null;
     setState(() {
@@ -797,7 +725,7 @@ class TaskTimeline extends StatefulWidget {
 
 class _TaskTimelineState extends State<TaskTimeline>
     with WidgetsBindingObserver {
-  static const _followThreshold = 96.0;
+  static const _followThreshold = 1.0;
   static const _olderLoadThreshold = 80.0;
 
   final _scrollController = ScrollController();
@@ -856,6 +784,24 @@ class _TaskTimelineState extends State<TaskTimeline>
   }
 
   bool _handleScrollNotification(ScrollNotification notification) {
+    // Nested horizontal code-block scrolling must not affect timeline follow.
+    if (notification.depth != 0) return false;
+    if ((notification is ScrollStartNotification &&
+            notification.dragDetails != null) ||
+        (notification is UserScrollNotification &&
+            notification.direction != ScrollDirection.idle)) {
+      // Pause at gesture start, before a streaming update can animate us back.
+      setState(() => _followLatest = false);
+      return false;
+    }
+    if (notification is ScrollEndNotification) {
+      final atLatest = _distanceFromLatest <= _followThreshold;
+      setState(() {
+        _followLatest = atLatest;
+        _showJumpToLatest = !atLatest;
+      });
+      return false;
+    }
     final userDriven = notification is ScrollUpdateNotification &&
         notification.dragDetails != null;
     final userOverscroll = notification is OverscrollNotification &&
@@ -864,7 +810,7 @@ class _TaskTimelineState extends State<TaskTimeline>
     if (_requestingOlder) {
       _pendingOlderAnchorOffset = _scrollController.position.pixels;
     }
-    final followLatest = _distanceFromLatest <= _followThreshold;
+    const followLatest = false;
     if (followLatest == _followLatest && _showJumpToLatest == !followLatest) {
       return false;
     }
@@ -1099,14 +1045,17 @@ class _TaskHeader extends StatelessWidget {
                 ],
               ),
             ),
-            if (task.status == TaskStatus.running && task.canWrite)
+            if (task.status == TaskStatus.running ||
+                task.status == TaskStatus.queued)
               IconButton(
                 tooltip: 'Interrupt turn',
-                onPressed: controller.interruptSelectedTask,
+                onPressed: controller.isConnected && !commandBusy
+                    ? () => onCommand(TaskCommand.interrupt)
+                    : null,
                 icon: const Icon(Icons.stop_circle_outlined),
               ),
             TaskCommandMenu(
-              enabled: controller.isConnected && task.canWrite && !commandBusy,
+              enabled: controller.isConnected && !commandBusy,
               onSelected: onCommand,
             ),
           ],
@@ -1223,37 +1172,6 @@ class _CompletionPicker extends StatelessWidget {
                   },
                 ),
         ),
-      );
-}
-
-class _ExternalTaskBanner extends StatelessWidget {
-  const _ExternalTaskBanner({
-    required this.busy,
-    required this.onGuide,
-    required this.onTakeOver,
-  });
-
-  final bool busy;
-  final VoidCallback onGuide;
-  final VoidCallback onTakeOver;
-
-  @override
-  Widget build(BuildContext context) => MaterialBanner(
-        leading: const Icon(Icons.devices_outlined),
-        content: const Text(
-          'This task has an active turn. You can send guidance or queue a '
-          'message, or stop the turn to start a new one.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: busy ? null : onGuide,
-            child: const Text('Guide'),
-          ),
-          FilledButton.tonal(
-            onPressed: busy ? null : onTakeOver,
-            child: const Text('Stop & take over'),
-          ),
-        ],
       );
 }
 
