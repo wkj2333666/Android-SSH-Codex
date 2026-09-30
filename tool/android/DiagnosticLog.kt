@@ -27,8 +27,8 @@ object DiagnosticLog {
             .put("elapsedMs", SystemClock.elapsedRealtime()).put("pid", Process.myPid())
         submit {
             try {
-                val current = File(app.filesDir, "connection-diagnostics.jsonl")
-                val previous = File(app.filesDir, "connection-diagnostics.previous.jsonl")
+                val current = File(app.noBackupFilesDir, "connection-diagnostics.jsonl")
+                val previous = File(app.noBackupFilesDir, "connection-diagnostics.previous.jsonl")
                 if (current.length() >= LIMIT) {
                     if (previous.exists() && !previous.delete()) return@submit
                     if (!current.renameTo(previous)) return@submit
@@ -42,7 +42,7 @@ object DiagnosticLog {
     // Call on worker, after earlier log writes, to freeze export before opening picker.
     fun snapshot(context: Context): String = buildString {
         for (name in listOf("connection-diagnostics.previous.jsonl", "connection-diagnostics.jsonl")) {
-            val file = File(context.filesDir, name)
+            val file = File(context.noBackupFilesDir, name)
             if (file.exists()) append(file.readText())
         }
     }

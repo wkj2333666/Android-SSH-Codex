@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:android_ssh_codex/src/diagnostics.dart';
+import 'package:android_ssh_codex/src/protocol/json_rpc_client.dart';
+import 'package:android_ssh_codex/src/protocol/rpc_transport.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -77,4 +79,42 @@ void main() {
     Diagnostics.record('test');
     await Future<void>.delayed(Duration.zero);
   });
+
+  test('RPC records the first stream error even without pending requests',
+      () async {
+    final events = <Map<dynamic, dynamic>>[];
+    messenger.setMockMethodCallHandler(Diagnostics.channel, (call) async {
+      events.add(call.arguments as Map<dynamic, dynamic>);
+      return null;
+    });
+    final transport = _Transport();
+    final rpc = JsonRpcClient(transport)..start();
+    transport.input.addError(const SocketException(
+      'private host',
+      osError: OSError('private OS description', 104),
+    ));
+    await rpc.done;
+    await rpc.close();
+    await transport.input.close();
+    await Future<void>.delayed(Duration.zero);
+    final failures = events.where((event) => event['event'] == 'rpc.disconnected');
+    expect(failures.length, 1);
+    expect(failures.single['cause'], 'streamError');
+    expect(failures.single['osCode'], 104);
+    expect(failures.single['pendingRequests'], 0);
+    expect(events.toString(), isNot(contains('private')));
+  });
+}
+
+class _Transport implements RpcTransport {
+  final input = StreamController<String>();
+
+  @override
+  Stream<String> get messages => input.stream;
+
+  @override
+  void send(String message) {}
+
+  @override
+  Future<void> close() async {}
 }
