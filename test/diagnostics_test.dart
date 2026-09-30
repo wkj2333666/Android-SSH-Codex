@@ -7,6 +7,8 @@ import 'package:android_ssh_codex/src/protocol/rpc_transport.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:dartssh2/dartssh2.dart';
+import 'package:android_ssh_codex/src/transport/ssh_unix_tunnel.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -47,9 +49,32 @@ void main() {
       'secret address and payload',
       osError: OSError('sensitive system message', 104),
     ));
-    expect(fields, {'errorType': 'SocketException', 'osCode': 104});
-    expect(Diagnostics.errorFields(const FormatException('secret', 'payload')),
-        {'errorType': 'FormatException'});
+    expect(fields['errorType'], 'SocketException');
+    expect(fields['osCode'], 104);
+    expect(fields.toString(), isNot(contains('secret')));
+    expect(fields.toString(), isNot(contains('sensitive')));
+    expect(Diagnostics.errorFields(const FormatException('secret', 'payload'))['reason'], 'unknown');
+  });
+
+  test('unwraps SSH socket and authentication errors without leaking text', () {
+    final fields = Diagnostics.errorFields(SSHAuthAbortError('private user',
+      SSHSocketError(const SocketException('private host',
+        osError: OSError('private OS message', 103)))));
+    expect(fields['errorChain'], ['SSHAuthAbortError', 'SSHSocketError', 'SocketException']);
+    expect(fields['osCode'], 103);
+    expect(fields['reason'], 'connection_aborted');
+    expect(fields.toString(), isNot(contains('private')));
+    expect(Diagnostics.errorFields(SSHSocketError('private unknown cause'))['reason'], 'unknown');
+    expect(Diagnostics.errorFields(TimeoutException('private'))['reason'], 'timeout');
+  });
+
+  test('proxy diagnostics retain categories but never raw stderr', () {
+    final fields = proxyDiagnosticFields('private-host: downstream closed before WebSocket upgrade');
+    expect(fields['reason'], 'downstream_closed_before_upgrade');
+    expect(fields.toString(), isNot(contains('private-host')));
+    expect(proxyDiagnosticFields('unknown sensitive output')['reason'], 'proxy_exit_unknown');
+    expect(safeExitSignal('TERM'), 'TERM');
+    expect(safeExitSignal('secret value'), 'other');
   });
 
   test('slow native logger has bounded outstanding requests', () async {

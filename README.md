@@ -250,6 +250,17 @@ automatically. Review exported files before sharing. Clearing app storage remove
 the private logs (and other app data); exported copies remain where you saved them.
 Logging is best-effort: abrupt process termination can lose the latest events.
 
+Disconnect records include nested SSH/socket error types, Android errno categories,
+the connection attempt and SSH hop, explicit local-close reasons, and proxy exit
+codes/signals with allowlisted stderr categories. Native network callbacks record
+default-network loss/replacement, validation and blocked status; power/data-saver
+changes and a network/power snapshot accompany transport failures. These records
+do not include IP addresses, Wi-Fi names or raw stderr. A TCP reset does not prove
+who caused it, and power saver being enabled does not prove it caused a disconnect.
+When no cause is available (for example EOF without an error), the log says so
+instead of inventing a diagnosis. Android versions before 10 do not provide the
+network blocked-status callback.
+
 For additional Android system logs (these may contain sensitive information):
 
 Reproduce the problem, then run:

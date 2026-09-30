@@ -336,6 +336,7 @@ final class AppController extends ChangeNotifier {
         profile,
         secret,
         prompt: _promptForHostKey,
+        diagnosticAttempt: attempt,
       );
       stage = ConnectionStage.remoteAppServer;
       final client = ssh.client;
@@ -440,7 +441,7 @@ final class AppController extends ChangeNotifier {
       );
       debugPrintStack(stackTrace: stackTrace);
       _error = describeConnectionFailure(stage, exception, profile);
-      if (published) await _closeTransport();
+      if (published) await _closeTransport(reason: 'connection_setup_failed');
       if (attempt != _connectionAttempt) return;
       if (reconnecting) {
         _connectionPhase = RemoteConnectionPhase.reconnecting;
@@ -456,7 +457,7 @@ final class AppController extends ChangeNotifier {
         await requests?.cancel();
         await rpc?.close();
         await tunnel?.close();
-        await ssh?.close();
+        await ssh?.close(reason: 'unpublished_connection_cleanup');
       }
     }
     notifyListeners();
@@ -476,7 +477,7 @@ final class AppController extends ChangeNotifier {
     _connectionPhase = RemoteConnectionPhase.reconnecting;
     _error = 'Remote connection lost. Reconnecting...';
     notifyListeners();
-    await _closeTransport();
+    await _closeTransport(reason: 'transport_loss_cleanup');
     if (attempt == _connectionAttempt) _scheduleReconnect(profile, attempt);
   }
 
@@ -1899,7 +1900,7 @@ final class AppController extends ChangeNotifier {
     _agentDeltaBatcher.clear();
     _epoch = _taskReducer.beginConnection();
     _approvals = const [];
-    await _closeTransport();
+    await _closeTransport(reason: 'user_disconnect');
     try {
       await _writeAutoConnectIntent(null);
     } catch (exception) {
@@ -1932,7 +1933,8 @@ final class AppController extends ChangeNotifier {
       .whereType<TaskRecord>()
       .toList(growable: false);
 
-  Future<void> _closeTransport() async {
+  Future<void> _closeTransport({String reason = 'connection_replaced_or_closed'}) async {
+    Diagnostics.record('connection.closeRequested', {'closeReason': reason});
     _refreshTimer?.cancel();
     _refreshTimer = null;
     _agentDeltaBatcher.clear();
@@ -1959,7 +1961,7 @@ final class AppController extends ChangeNotifier {
     await requestSubscription?.cancel();
     await rpc?.close();
     await tunnel?.close();
-    await ssh?.close();
+    await ssh?.close(reason: reason);
   }
 
   void clearError() {
@@ -1975,7 +1977,7 @@ final class AppController extends ChangeNotifier {
     _reconnectTimer?.cancel();
     _refreshTimer?.cancel();
     _agentDeltaBatcher.dispose();
-    unawaited(_closeTransport());
+    unawaited(_closeTransport(reason: 'controller_disposed'));
     unawaited(_setKeepAlive(false));
     super.dispose();
   }

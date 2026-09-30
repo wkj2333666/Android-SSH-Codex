@@ -10,6 +10,7 @@ final class WebSocketRpcTransport implements RpcTransport {
   WebSocketRpcTransport._(this._channel);
 
   final WebSocketChannel _channel;
+  bool _localClose = false;
 
   static Future<WebSocketRpcTransport> connect(Uri uri) async {
     final channel = WebSocketChannel.connect(uri);
@@ -23,6 +24,13 @@ final class WebSocketRpcTransport implements RpcTransport {
           handleDone: (sink) {
             Diagnostics.record('websocket.done', {
               'closeCode': _channel.closeCode,
+              'localCloseRequested': _localClose,
+              'closeReasonPresent': _channel.closeReason?.isNotEmpty == true,
+              'reason': _localClose
+                  ? 'local_close'
+                  : _channel.closeCode == 1006
+                      ? 'abnormal_close_without_frame'
+                      : 'websocket_close_code',
             });
             sink.close();
           },
@@ -37,5 +45,8 @@ final class WebSocketRpcTransport implements RpcTransport {
   void send(String message) => _channel.sink.add(message);
 
   @override
-  Future<void> close() => _channel.sink.close();
+  Future<void> close() {
+    _localClose = true;
+    return _channel.sink.close();
+  }
 }

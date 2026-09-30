@@ -166,6 +166,7 @@ final class SshUnixTunnel {
             Diagnostics.record('tunnel.channelDone', {
               'tunnel': _diagnosticId,
               'exitCode': channel?.exitCode,
+              'exitSignal': safeExitSignal(channel?.exitSignal),
             });
             if (!remoteDone.isCompleted) remoteDone.complete();
           },
@@ -184,6 +185,13 @@ final class SshUnixTunnel {
       if (endedRemotely) {
         await channel.done;
         await stderrDone.future;
+        Diagnostics.record('tunnel.remoteExit', {
+          'tunnel': _diagnosticId,
+          'closing': _closed,
+          'exitCode': channel.exitCode,
+          'exitSignal': safeExitSignal(channel.exitSignal),
+          ...proxyDiagnosticFields(utf8.decode(stderr, allowMalformed: true)),
+        });
         throw _proxyClosedException(channel, stderr);
       }
     } catch (error, stackTrace) {
@@ -229,6 +237,24 @@ final class SshUnixTunnel {
     _channels.clear();
   }
 }
+
+String? safeExitSignal(String? signal) => signal == null
+    ? null
+    : RegExp(r'^[A-Z0-9]{1,16}$').hasMatch(signal)
+        ? signal
+        : 'other';
+
+Map<String, Object?> proxyDiagnosticFields(String stderr) => {
+      'stderrPresent': stderr.isNotEmpty,
+      'reason': stderr.contains('downstream closed before WebSocket upgrade')
+          ? 'downstream_closed_before_upgrade'
+          : stderr.contains('Connection refused')
+              ? 'proxy_connection_refused'
+              : stderr.contains('No such file or directory')
+                  ? 'proxy_socket_or_file_missing'
+                  : 'proxy_exit_unknown',
+      'reasonEvidence': 'proxy_stderr_classification',
+    };
 
 CodexProxyException _proxyClosedException(
   SshProxyChannel channel,

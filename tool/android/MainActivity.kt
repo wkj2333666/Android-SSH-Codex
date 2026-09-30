@@ -15,6 +15,7 @@ class MainActivity : FlutterActivity() {
     private var exportResult: MethodChannel.Result? = null
     private var exportSnapshot: String? = null
     private var attachmentPicker: AttachmentPicker? = null
+    private var connectionDiagnostics: ConnectionDiagnostics? = null
 
     private fun recordLifecycle(event: String) {
         val power = getSystemService(android.os.PowerManager::class.java)
@@ -38,6 +39,8 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         attachmentPicker = AttachmentPicker(this)
+        connectionDiagnostics?.stop()
+        connectionDiagnostics = ConnectionDiagnostics(this).also { it.start() }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger,
             "android_ssh_codex/attachments").setMethodCallHandler { call, result ->
             if (call.method == "pick") {
@@ -55,8 +58,12 @@ class MainActivity : FlutterActivity() {
             when (call.method) {
                 "record" -> {
                     val fields = call.arguments as? Map<*, *> ?: emptyMap<Any, Any>()
-                    DiagnosticLog.record(this, fields["event"] as? String ?: "unknown",
-                        fields.entries.associate { it.key.toString() to it.value })
+                    val event = fields["event"] as? String ?: "unknown"
+                    val snapshot = if (event.endsWith(".error") || event.endsWith(".done") ||
+                        event == "connection.transportLoss" || event == "rpc.disconnected")
+                        connectionDiagnostics?.snapshot() ?: emptyMap() else emptyMap()
+                    DiagnosticLog.record(this, event,
+                        fields.entries.associate { it.key.toString() to it.value } + snapshot)
                     result.success(null)
                 }
                 "export" -> {
@@ -159,6 +166,8 @@ class MainActivity : FlutterActivity() {
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
         DiagnosticLog.record(this, "engine.cleanup")
+        connectionDiagnostics?.stop()
+        connectionDiagnostics = null
         attachmentPicker?.close()
         attachmentPicker = null
         finishExport(false, "Connection activity closed")
