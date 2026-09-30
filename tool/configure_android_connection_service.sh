@@ -13,5 +13,5 @@ if ! grep -Fq 'android:name=".ConnectionService"' "$manifest"; then
 fi
 kotlin_dir="$android_root/app/src/main/kotlin/io/github/wkj2333666/android_ssh_codex"
 mkdir -p "$kotlin_dir" "$android_root/app/src/main/res/drawable"
-cp "$template_root/MainActivity.kt" "$template_root/ConnectionService.kt" "$kotlin_dir/"
+cp "$template_root/MainActivity.kt" "$template_root/ConnectionService.kt" "$template_root/DiagnosticLog.kt" "$kotlin_dir/"
 cp "$template_root/ic_connection.xml" "$android_root/app/src/main/res/drawable/"

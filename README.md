@@ -219,6 +219,21 @@ or address change, or an interception attempt.
 
 ### Collect Android logs
 
+For background disconnects, use the **Export connection diagnostics** bug icon
+in the app's top bar (sidebar on wide screens). Logging is automatic on Android:
+unplug USB, reproduce the issue, return to the app, and export to a text file
+using the system document picker. Export works while disconnected too.
+
+The app keeps two rotating files of about 512 KiB each in private storage,
+surviving app restarts. They contain timestamps, process/lifecycle/service state,
+connection attempts, RPC timeouts, error types and OS error codes—not chat text,
+RPC payloads, hostnames, credentials or raw exception messages. Nothing is uploaded
+automatically. Review exported files before sharing. Clearing app storage removes
+the private logs (and other app data); exported copies remain where you saved them.
+Logging is best-effort: abrupt process termination can lose the latest events.
+
+For additional Android system logs (these may contain sensitive information):
+
 Reproduce the problem, then run:
 
 ```bash

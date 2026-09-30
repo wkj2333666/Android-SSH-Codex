@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:dartssh2/dartssh2.dart';
 
+import '../diagnostics.dart';
 import '../profiles/host_profile.dart';
 import '../profiles/profile_store.dart';
 
@@ -59,6 +61,7 @@ final class SshConnection {
   final SSHClient? jumpClient;
 
   Future<void> close() async {
+    Diagnostics.record('ssh.closeRequested');
     client.close();
     await client.done.catchError((_) {});
     jumpClient?.close();
@@ -144,7 +147,7 @@ final class SshConnector {
       throw ArgumentError('SSH user is required for $label');
     }
     final identities = parsePrivateKeyIdentities(privateKey, passphrase);
-    return SSHClient(
+    final client = SSHClient(
       socket,
       username: user,
       identities: identities,
@@ -172,6 +175,12 @@ final class SshConnector {
       authTimeout: const Duration(seconds: 20),
       ident: 'AndroidSSHCodex_0.1',
     );
+    unawaited(client.done.then((_) {
+      Diagnostics.record('ssh.done');
+    }, onError: (Object error, StackTrace stackTrace) {
+      Diagnostics.record('ssh.error', Diagnostics.errorFields(error));
+    }));
+    return client;
   }
 }
 

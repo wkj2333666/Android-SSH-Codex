@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import 'connection_keep_alive.dart';
+import 'diagnostics.dart';
 import 'profiles/host_profile.dart';
 import 'profiles/profile_store.dart';
 import 'projects/remote_project.dart';
@@ -291,6 +292,11 @@ final class AppController extends ChangeNotifier {
     required bool reconnecting,
   }) async {
     _openingAttempt = attempt;
+    Diagnostics.record('connection.open', {
+      'attempt': attempt,
+      'reconnecting': reconnecting,
+      'background': _inBackground,
+    });
     _selectedHostId = profile.id;
     if (!reconnecting) _selectedTaskId = null;
     _connectionPhase = reconnecting
@@ -395,6 +401,7 @@ final class AppController extends ChangeNotifier {
       await refreshTasks(throwOnError: true, resetPages: true);
       if (attempt != _connectionAttempt) return;
       _connectionPhase = RemoteConnectionPhase.connected;
+      Diagnostics.record('connection.ready', {'attempt': attempt});
       _reconnectAttempt = 0;
       _expediteReconnect = false;
       if (reconnecting) {
@@ -418,6 +425,11 @@ final class AppController extends ChangeNotifier {
       _startRefreshTimer();
     } catch (exception, stackTrace) {
       if (attempt != _connectionAttempt) return;
+      Diagnostics.record('connection.failed', {
+        'attempt': attempt,
+        'stage': stage.name,
+        ...Diagnostics.errorFields(exception),
+      });
       debugPrint(
         'Connection failed during ${stage.name} for '
         '${profile.hostName}:${profile.port}: $exception',
@@ -447,6 +459,12 @@ final class AppController extends ChangeNotifier {
   }
 
   Future<void> _handleTransportLoss(int attempt, HostProfile profile) async {
+    Diagnostics.record('connection.transportLoss', {
+      'attempt': attempt,
+      'currentAttempt': _connectionAttempt,
+      'phase': _connectionPhase.name,
+      'background': _inBackground,
+    });
     if (attempt != _connectionAttempt ||
         _connectionPhase != RemoteConnectionPhase.connected) {
       return;
@@ -470,6 +488,12 @@ final class AppController extends ChangeNotifier {
         ? _reconnectAttempt
         : delays.length - 1;
     final seconds = immediate || _expediteReconnect ? 0 : delays[delayIndex];
+    Diagnostics.record('connection.retryScheduled', {
+      'attempt': attempt,
+      'delaySeconds': seconds,
+      'background': _inBackground,
+      'keepAliveCached': _keepAlive.isEnabled,
+    });
     _expediteReconnect = false;
     _reconnectAttempt++;
     _reconnectTimer = Timer(Duration(seconds: seconds), () {
@@ -497,6 +521,11 @@ final class AppController extends ChangeNotifier {
   }
 
   void enterBackground() {
+    Diagnostics.record('connection.background', {
+      'phase': _connectionPhase.name,
+      'attempt': _connectionAttempt,
+      'keepAliveCached': _keepAlive.isEnabled,
+    });
     _inBackground = true;
     _expediteReconnect = false;
     _refreshTimer?.cancel();
@@ -516,11 +545,17 @@ final class AppController extends ChangeNotifier {
     } catch (exception) {
       if (attempt != _connectionAttempt) return;
       _keepAliveWarning = 'Background connection protection: $exception';
+      Diagnostics.record('keepAlive.error', Diagnostics.errorFields(exception));
       debugPrint(_keepAliveWarning);
     }
   }
 
   Future<void> restoreForegroundConnection() async {
+    Diagnostics.record('connection.foreground', {
+      'phase': _connectionPhase.name,
+      'attempt': _connectionAttempt,
+      'keepAliveCached': _keepAlive.isEnabled,
+    });
     _inBackground = false;
     _expediteReconnect = true;
     final profile =
@@ -1799,6 +1834,7 @@ final class AppController extends ChangeNotifier {
   }
 
   Future<void> disconnect() async {
+    Diagnostics.record('connection.userDisconnect');
     _expediteReconnect = false;
     _connectionAttempt++;
     final stoppingKeepAlive = _setKeepAlive(false);

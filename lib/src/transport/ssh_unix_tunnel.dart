@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:dartssh2/dartssh2.dart';
 import 'package:flutter/foundation.dart';
 
+import '../diagnostics.dart';
 import 'codex_daemon.dart';
 
 abstract interface class SshProxyChannel {
@@ -66,6 +67,8 @@ final class SshUnixTunnel {
   final Completer<void> _firstFailure = Completer<void>();
   StreamSubscription<Socket>? _subscription;
   var _closed = false;
+  static int _nextDiagnosticId = 0;
+  final int _diagnosticId = ++_nextDiagnosticId;
 
   int get localPort => _server.port;
   Future<void> get firstFailure => _firstFailure.future;
@@ -110,6 +113,7 @@ final class SshUnixTunnel {
     StreamSubscription<Uint8List>? stderrSubscription;
     try {
       channel = await _openProxy();
+      Diagnostics.record('tunnel.open', {'tunnel': _diagnosticId});
       if (_closed) return;
       _channels.add(channel);
 
@@ -134,19 +138,35 @@ final class SshUnixTunnel {
       final remoteDone = Completer<void>();
       toRemote = socket.listen(
         channel.stdin.add,
-        onDone: localDone.complete,
-        onError: (_, __) => localDone.complete(),
+        onDone: () {
+          Diagnostics.record('tunnel.localDone', {'tunnel': _diagnosticId});
+          if (!localDone.isCompleted) localDone.complete();
+        },
+        onError: (Object error, StackTrace stackTrace) {
+          Diagnostics.record('tunnel.localError', {
+            'tunnel': _diagnosticId,
+            ...Diagnostics.errorFields(error),
+          });
+          if (!localDone.isCompleted) localDone.complete();
+        },
         cancelOnError: true,
       );
       toLocal = channel.stdout.listen(
         socket.add,
-        onDone: remoteDone.complete,
+        onDone: () {
+          Diagnostics.record('tunnel.stdoutDone', {'tunnel': _diagnosticId});
+          if (!remoteDone.isCompleted) remoteDone.complete();
+        },
         onError: remoteDone.completeError,
         cancelOnError: true,
       );
       unawaited(
         channel.done.then(
           (_) {
+            Diagnostics.record('tunnel.channelDone', {
+              'tunnel': _diagnosticId,
+              'exitCode': channel?.exitCode,
+            });
             if (!remoteDone.isCompleted) remoteDone.complete();
           },
           onError: (Object error, StackTrace stackTrace) {
@@ -167,6 +187,11 @@ final class SshUnixTunnel {
         throw _proxyClosedException(channel, stderr);
       }
     } catch (error, stackTrace) {
+      Diagnostics.record('tunnel.error', {
+        'tunnel': _diagnosticId,
+        'closing': _closed,
+        ...Diagnostics.errorFields(error),
+      });
       debugPrint('Remote Codex Unix tunnel failed: $error');
       debugPrintStack(stackTrace: stackTrace);
       if (!_closed && !_firstFailure.isCompleted) {
@@ -190,6 +215,7 @@ final class SshUnixTunnel {
 
   Future<void> close() async {
     if (_closed) return;
+    Diagnostics.record('tunnel.closeRequested', {'tunnel': _diagnosticId});
     _closed = true;
     await _subscription?.cancel();
     await _server.close();
