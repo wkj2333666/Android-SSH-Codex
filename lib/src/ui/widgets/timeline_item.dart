@@ -259,7 +259,12 @@ class _AttachmentCard extends StatelessWidget {
                                 attachment.path.substring(match.end));
                           })
                         : loadImage!(attachment.path);
-                    final preview = loading.then(_validatePreviewImage);
+                    final preview = loading
+                        .then(_validatePreviewImage)
+                        .then<Uint8List?>(
+                      (bytes) => bytes,
+                      onError: (Object _, StackTrace __) => null,
+                    );
                     unawaited(showDialog<void>(
                       context: context,
                       builder: (context) => AlertDialog(
@@ -267,10 +272,12 @@ class _AttachmentCard extends StatelessWidget {
                         content: SizedBox(
                           width: 500,
                           height: 400,
-                          child: FutureBuilder<Uint8List>(
+                          child: FutureBuilder<Uint8List?>(
                             future: preview,
                             builder: (context, snapshot) {
-                              if (snapshot.hasError) {
+                              if (snapshot.connectionState ==
+                                      ConnectionState.done &&
+                                  !snapshot.hasData) {
                                 return const Text(
                                     'Could not load image. Reconnect and try again (maximum 10 MiB).');
                               }

@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:android_ssh_codex/src/tasks/task_reducer.dart';
 import 'package:android_ssh_codex/src/tasks/message_attachments.dart';
 import 'package:android_ssh_codex/src/ui/timeline_entries.dart';
@@ -26,7 +28,7 @@ void main() {
         loadImage: (path) async {
           reads++;
           expect(path, '/tmp/photo.png');
-          throw StateError('Remote image is no longer available');
+          return Uint8List(0);
         },
       )),
     ));
