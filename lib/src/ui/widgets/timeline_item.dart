@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
@@ -247,6 +248,7 @@ class _AttachmentCard extends StatelessWidget {
                             return base64Decode(attachment.path.substring(match.end));
                           })
                         : loadImage!(attachment.path);
+                    final preview = loading.then(_validatePreviewImage);
                     unawaited(showDialog<void>(
                       context: context,
                       builder: (context) => AlertDialog(
@@ -255,7 +257,7 @@ class _AttachmentCard extends StatelessWidget {
                           width: 500,
                           height: 400,
                           child: FutureBuilder<Uint8List>(
-                            future: loading,
+                            future: preview,
                             builder: (context, snapshot) {
                               if (snapshot.hasError) return const Text('Could not load image. Reconnect and try again (maximum 10 MiB).');
                               if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
@@ -288,6 +290,25 @@ class _AttachmentCard extends StatelessWidget {
       ),
     );
   }
+}
+
+Future<Uint8List> _validatePreviewImage(Uint8List bytes) async {
+  if (bytes.length > 10 * 1024 * 1024) throw StateError('Image too large');
+  final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
+  try {
+    final descriptor = await ui.ImageDescriptor.encoded(buffer);
+    try {
+      if (descriptor.width > 16384 || descriptor.height > 16384 ||
+          descriptor.width * descriptor.height > 64 * 1024 * 1024) {
+        throw StateError('Image dimensions too large');
+      }
+    } finally {
+      descriptor.dispose();
+    }
+  } finally {
+    buffer.dispose();
+  }
+  return bytes;
 }
 
 String _copyableMessageText(TaskItem item) {

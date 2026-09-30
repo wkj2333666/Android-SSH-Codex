@@ -33,7 +33,7 @@ void main() {
     await tester.tap(find.text('Preview image'));
     await tester.pumpAndSettle();
     expect(reads, 1);
-    expect(find.text('Image format is not supported.'), findsOneWidget);
+    expect(find.textContaining('Could not load image.'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
