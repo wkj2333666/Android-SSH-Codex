@@ -24,6 +24,31 @@ final class _RecordingTransport implements RpcTransport {
 }
 
 void main() {
+  test('image-only history is retained and survives item updates', () {
+    final snapshot = CodexRemoteApi.parseThread({
+      'id': 'thread',
+      'turns': [
+        {
+          'id': 'turn',
+          'items': [
+            {
+              'id': 'image',
+              'type': 'userMessage',
+              'content': [
+                {'type': 'localImage', 'path': '/tmp/photo.png'},
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    final item = snapshot.items.single;
+    expect(item.text, isEmpty);
+    expect(item.attachments.single.path, '/tmp/photo.png');
+    expect(
+        item.copyWith(status: 'completed').attachments.single.isImage, isTrue);
+  });
+
   test('start and steer send remote images as native inputs', () async {
     final transport = _RecordingTransport();
     final rpc = JsonRpcClient(transport)..start();

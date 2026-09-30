@@ -1177,6 +1177,17 @@ final class AppController extends ChangeNotifier {
     await refreshTasks();
   }
 
+  Future<Uint8List> loadAttachmentImage(String path) async {
+    final ssh = _ssh;
+    final attempt = _connectionAttempt;
+    if (ssh == null) throw StateError('SSH is disconnected');
+    final bytes = await readAttachmentImage(ssh.client, path);
+    if (!identical(ssh, _ssh) || attempt != _connectionAttempt) {
+      throw StateError('Connection changed');
+    }
+    return bytes;
+  }
+
   Future<TaskMessageDisposition> sendPrompt(
     String prompt, {
     RemoteSkill? skill,

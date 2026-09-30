@@ -1,4 +1,7 @@
+import 'dart:typed_data';
+
 import 'package:android_ssh_codex/src/tasks/task_reducer.dart';
+import 'package:android_ssh_codex/src/tasks/message_attachments.dart';
 import 'package:android_ssh_codex/src/ui/timeline_entries.dart';
 import 'package:android_ssh_codex/src/ui/widgets/codex_directive_content.dart';
 import 'package:android_ssh_codex/src/ui/widgets/markdown_content.dart';
@@ -8,6 +11,75 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('image reads are on demand and failure is contained',
+      (tester) async {
+    var reads = 0;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+          body: TimelineItemView(
+        item: const TaskItem(
+          id: 'image',
+          kind: TaskItemKind.user,
+          text: '',
+          attachments: [
+            MessageAttachment(path: '/tmp/photo.png', isImage: true)
+          ],
+        ),
+        loadImage: (path) async {
+          reads++;
+          expect(path, '/tmp/photo.png');
+          return Uint8List(0);
+        },
+      )),
+    ));
+    expect(reads, 0);
+    await tester.tap(find.text('photo.png'));
+    await tester.pumpAndSettle();
+    expect(reads, 0);
+    await tester.tap(find.text('Preview image'));
+    await tester.pumpAndSettle();
+    expect(reads, 1);
+    expect(find.textContaining('Could not load image.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('attachments are compact and reveal paths only on tap',
+      (tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(
+          body: TimelineItemView(
+              item: TaskItem(
+        id: 'file',
+        kind: TaskItemKind.user,
+        text:
+            'Attached files (on the remote machine):\n/home/me/very-long-path/report.txt',
+      ))),
+    ));
+    expect(find.text('report.txt'), findsOneWidget);
+    expect(find.text('/home/me/very-long-path/report.txt'), findsNothing);
+    await tester.tap(find.text('report.txt'));
+    await tester.pumpAndSettle();
+    expect(find.text('/home/me/very-long-path/report.txt'), findsOneWidget);
+    expect(find.text('Copy path'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('image-only messages show an image card', (tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(
+          body: TimelineItemView(
+              item: TaskItem(
+        id: 'image',
+        kind: TaskItemKind.user,
+        text: '',
+        attachments: [MessageAttachment(path: '/tmp/photo.png', isImage: true)],
+      ))),
+    ));
+    expect(find.text('photo.png'), findsOneWidget);
+    expect(find.byIcon(Icons.image_outlined), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   test('contiguous work events collapse between standalone messages', () {
     const user = TaskItem(
       id: 'user',

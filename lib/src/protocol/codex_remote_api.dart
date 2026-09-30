@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import '../tasks/task_reducer.dart';
+import '../tasks/message_attachments.dart';
 import 'json_rpc_client.dart';
 
 final class RemoteTaskBatch {
@@ -516,8 +517,23 @@ TaskItem? _parseItem(Map<String, dynamic> item) {
     'reasoning' => TaskItemKind.reasoning,
     _ => TaskItemKind.notice,
   };
+  final attachments = <MessageAttachment>[];
+  if (kind == TaskItemKind.user && item['content'] is List) {
+    for (final raw in item['content'] as List) {
+      final part = _map(raw);
+      if (part['type'] == 'localImage' || part['type'] == 'image') {
+        final path = part['path'] ?? part['url'] ?? part['imageUrl'];
+        attachments.add(MessageAttachment(
+          path: path is String ? path : '',
+          name: path is String && path.startsWith('/') ? null : 'Image',
+          isImage: true,
+        ));
+      }
+    }
+  }
   if ((kind == TaskItemKind.user || kind == TaskItemKind.agent) &&
-      text.trim().isEmpty) {
+      text.trim().isEmpty &&
+      attachments.isEmpty) {
     return null;
   }
   final presentation = _itemPresentation(type, item, text);
@@ -525,7 +541,8 @@ TaskItem? _parseItem(Map<String, dynamic> item) {
     id: id,
     kind: kind,
     title: presentation.title,
-    text: presentation.text,
+    text: kind == TaskItemKind.user ? text : presentation.text,
+    attachments: attachments,
     detail: presentation.detail,
     status: item['status']?.toString(),
   );

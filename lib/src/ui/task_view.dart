@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 
 import '../app_controller.dart';
@@ -129,6 +130,7 @@ class _TaskViewState extends State<TaskView> {
     final timeline = _timelineCache.resolve(
       timelineState,
       () => TaskTimeline(
+        loadImage: widget.controller.loadAttachmentImage,
         items: timelineState.items,
         loading: timelineState.loading,
         error: timelineState.error,
@@ -806,6 +808,7 @@ class TaskTimeline extends StatefulWidget {
     this.loadingOlder = false,
     this.olderError,
     this.onLoadOlder,
+    this.loadImage,
     super.key,
   });
 
@@ -817,6 +820,7 @@ class TaskTimeline extends StatefulWidget {
   final bool loadingOlder;
   final String? olderError;
   final Future<void> Function()? onLoadOlder;
+  final Future<Uint8List> Function(String)? loadImage;
 
   @override
   State<TaskTimeline> createState() => _TaskTimelineState();
@@ -1076,7 +1080,7 @@ class _TaskTimelineState extends State<TaskTimeline>
                   }
                   return switch (entries[entries.length - index - 1]) {
                     TimelineMessageEntry(:final item) =>
-                      TimelineItemView(item: item),
+                      TimelineItemView(item: item, loadImage: widget.loadImage),
                     TimelineActivityEntry(:final items) =>
                       TimelineActivityGroup(items: items),
                   };
