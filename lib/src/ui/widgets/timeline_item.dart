@@ -259,12 +259,7 @@ class _AttachmentCard extends StatelessWidget {
                                 attachment.path.substring(match.end));
                           })
                         : loadImage!(attachment.path);
-                    final preview = loading
-                        .then(_validatePreviewImage)
-                        .then<Uint8List?>(
-                      (bytes) => bytes,
-                      onError: (Object _, StackTrace __) => null,
-                    );
+                    final preview = _loadPreviewImage(loading);
                     unawaited(showDialog<void>(
                       context: context,
                       builder: (context) => AlertDialog(
@@ -323,6 +318,14 @@ class _AttachmentCard extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+Future<Uint8List?> _loadPreviewImage(Future<Uint8List> loading) async {
+  try {
+    return await _validatePreviewImage(await loading);
+  } catch (_) {
+    return null;
   }
 }
 
