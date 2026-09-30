@@ -59,7 +59,8 @@ void main() {
       ),
     ));
 
-    expect(find.text('Server default'), findsOneWidget);
+    expect(find.text('GPT-5.6 Sol · high'), findsOneWidget);
+    expect(find.text('Server default'), findsNothing);
     await tester.tap(find.byKey(const Key('turn-settings-selector')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('GPT-5.6 Sol').last);
@@ -135,25 +136,41 @@ void main() {
     expect(find.text('GPT-5.6 Sol · high'), findsOneWidget);
   });
 
-  testWidgets('server default clears model and effort together', (tester) async {
+  testWidgets('implicit values are resolved to concrete settings', (tester) async {
     TurnSettings? selection;
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(body: TurnSettingsPicker(
         models: models,
-        value: const TurnSettings(model: 'gpt-5.6-sol', effort: 'high'),
+        value: const TurnSettings(),
         onChanged: (value) => selection = value,
       )),
     ));
     await tester.tap(find.byKey(const Key('turn-settings-selector')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('turn-model-default')));
-    await tester.pumpAndSettle();
-    expect(find.byType(ChoiceChip), findsNothing);
+    expect(find.text('Server default'), findsNothing);
+    expect(find.text('Default'), findsNothing);
     await tester.tap(find.byKey(const Key('turn-settings-apply')));
     await tester.pumpAndSettle();
     expect(selection, isNotNull);
-    expect(selection!.model, isNull);
-    expect(selection!.effort, isNull);
+    expect(selection!.model, 'gpt-5.6-sol');
+    expect(selection!.effort, 'high');
+  });
+
+  test('task settings take priority over the catalog default', () {
+    final actual = resolveTurnSettings(models, const TurnSettings(),
+        model: 'gpt-5.6-terra', effort: 'medium');
+    expect(actual.model, 'gpt-5.6-terra');
+    expect(actual.effort, 'medium');
+    final override = resolveTurnSettings(models,
+        const TurnSettings(model: 'gpt-5.6-sol', effort: 'high'),
+        model: 'gpt-5.6-terra', effort: 'medium');
+    expect(override.model, 'gpt-5.6-sol');
+    expect(override.effort, 'high');
+    final unknown = resolveTurnSettings(const [], const TurnSettings(),
+        model: 'custom', effort: 'custom-effort');
+    expect(unknown.model, 'custom');
+    expect(unknown.effort, 'custom-effort');
+    expect(resolveTurnSettings(const [], const TurnSettings()).model, isNull);
   });
 
   testWidgets('disabled selector stays closed with an unavailable model',

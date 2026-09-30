@@ -45,6 +45,8 @@ final class TaskSnapshot {
     required this.cwd,
     required this.updatedAt,
     required this.items,
+    this.model,
+    this.reasoningEffort,
   });
 
   final String id;
@@ -53,6 +55,8 @@ final class TaskSnapshot {
   final String cwd;
   final DateTime updatedAt;
   final List<TaskItem> items;
+  final String? model;
+  final String? reasoningEffort;
 }
 
 final class TaskRecord {
@@ -65,6 +69,8 @@ final class TaskRecord {
     required this.items,
     required this.ownership,
     required this.revision,
+    this.model,
+    this.reasoningEffort,
   });
 
   factory TaskRecord.placeholder(String id, int revision) => TaskRecord(
@@ -86,6 +92,8 @@ final class TaskRecord {
   final List<TaskItem> items;
   final TaskOwnership ownership;
   final int revision;
+  final String? model;
+  final String? reasoningEffort;
 
   TaskRecord copyWith({
     String? title,
@@ -95,6 +103,9 @@ final class TaskRecord {
     List<TaskItem>? items,
     TaskOwnership? ownership,
     int? revision,
+    String? model,
+    String? reasoningEffort,
+    bool replaceTurnSettings = false,
   }) =>
       TaskRecord(
         id: id,
@@ -105,6 +116,8 @@ final class TaskRecord {
         items: items ?? this.items,
         ownership: ownership ?? this.ownership,
         revision: revision ?? this.revision,
+        model: replaceTurnSettings ? model : model ?? this.model,
+        reasoningEffort: replaceTurnSettings ? reasoningEffort : reasoningEffort ?? this.reasoningEffort,
       );
 }
 
@@ -184,6 +197,23 @@ final class TaskReducer {
   final Map<String, Set<String>> _seenEvents = {};
 
   TaskState get state => _state;
+
+  void setTurnSettings(int epoch, String taskId, String? model, String? effort) {
+    if (epoch != _state.epoch) return;
+    final current = _state.tasks[taskId];
+    if (current == null || model == null) return;
+    final revision = _state.eventRevision + 1;
+    _state = TaskState(
+      epoch: epoch,
+      refreshGeneration: _state.refreshGeneration,
+      eventRevision: revision,
+      tasks: Map.unmodifiable({
+        ..._state.tasks,
+        taskId: current.copyWith(model: model, reasoningEffort: effort,
+            replaceTurnSettings: true, revision: revision),
+      }),
+    );
+  }
 
   void markLocalParticipation(int epoch, String taskId) {
     if (epoch != _state.epoch) return;
@@ -298,6 +328,9 @@ final class TaskReducer {
         items: preserveItems ? current!.items : snapshot.items,
         ownership: ownership,
         revision: current?.revision ?? eventRevision,
+        model: changedDuringRefresh ? current.model : snapshot.model ?? current?.model,
+        reasoningEffort: changedDuringRefresh ? current.reasoningEffort
+            : snapshot.model != null ? snapshot.reasoningEffort : current?.reasoningEffort,
       );
     }
 
@@ -336,6 +369,8 @@ final class TaskReducer {
         items: _mergeItems(snapshot.items, current?.items ?? const []),
         ownership: _ownershipFor(status, loadedByUs, snapshot.id),
         revision: current?.revision ?? _state.eventRevision,
+        model: snapshot.model ?? current?.model,
+        reasoningEffort: snapshot.model != null ? snapshot.reasoningEffort : current?.reasoningEffort,
       );
     _state = TaskState(
       epoch: _state.epoch,

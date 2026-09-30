@@ -11,6 +11,23 @@ final class TurnSettings {
   final String? effort;
 }
 
+/// Resolve once for both display and sending; never label an implicit choice
+/// with a concrete model while sending a different server-side default.
+TurnSettings resolveTurnSettings(
+  List<RemoteModel> models,
+  TurnSettings value, {
+  String? model,
+  String? effort,
+}) {
+  final name = value.model ?? model ??
+      models.where((candidate) => candidate.isDefault).firstOrNull?.model;
+  final entry = models.where((candidate) => candidate.model == name).firstOrNull;
+  return TurnSettings(
+    model: name,
+    effort: (value.model != null ? value.effort : effort) ?? entry?.defaultReasoningEffort,
+  );
+}
+
 class TurnSettingsPicker extends StatelessWidget {
   const TurnSettingsPicker({
     required this.models,
@@ -27,23 +44,24 @@ class TurnSettingsPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final model = _selectedModel(models, value);
-    final effort = _selectedEffort(model, value);
-    final label = value.model == null
-        ? 'Server default'
-        : '${model?.displayName ?? value.model}'
-            '${effort == null ? '' : ' · $effort'}';
+    final settings = resolveTurnSettings(models, value);
+    final model = _selectedModel(models, settings);
+    final label = settings.model == null
+        ? 'Model unavailable'
+        : '${model?.displayName ?? settings.model} · '
+            '${settings.effort ?? 'Effort unavailable'}';
     return Align(
       alignment: Alignment.centerLeft,
       child: OutlinedButton(
         key: const Key('turn-settings-selector'),
-        onPressed: enabled
+        onPressed: enabled && models.isNotEmpty
             ? () async {
+                FocusScope.of(context).unfocus();
                 final selection = await showModalBottomSheet<TurnSettings>(
                   context: context,
                   isScrollControlled: true,
                   showDragHandle: true,
-                  builder: (_) => _TurnSettingsSheet(models: models, value: value),
+                  builder: (_) => _TurnSettingsSheet(models: models, value: settings),
                 );
                 if (context.mounted && selection != null) onChanged(selection);
               }
@@ -79,7 +97,6 @@ class _TurnSettingsSheetState extends State<_TurnSettingsSheet> {
   @override
   Widget build(BuildContext context) {
     final model = _selectedModel(widget.models, _draft);
-    final effort = _selectedEffort(model, _draft);
     return SafeArea(
       top: false,
       child: SizedBox(
@@ -90,19 +107,16 @@ class _TurnSettingsSheetState extends State<_TurnSettingsSheet> {
             const Padding(
               padding: EdgeInsets.fromLTRB(20, 0, 20, 12),
               child: Text('Model and reasoning effort',
+                  maxLines: 1, overflow: TextOverflow.ellipsis,
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
             ),
             Expanded(
               child: ListView(
                 children: [
-                  ListTile(
-                    key: const Key('turn-model-default'),
-                    title: const Text('Server default'),
-                    subtitle: const Text('Let the server choose model and effort'),
-                    selected: _draft.model == null,
-                    trailing: _draft.model == null ? const Icon(Icons.check) : null,
-                    onTap: () => setState(() => _draft = const TurnSettings()),
-                  ),
+                  if (model == null && _draft.model != null)
+                    ListTile(title: Text(_draft.model!),
+                        subtitle: const Text('Current task model'),
+                        trailing: const Icon(Icons.check)),
                   for (final candidate in widget.models)
                     ListTile(
                       key: ValueKey('turn-model-${candidate.model}'),
@@ -122,15 +136,22 @@ class _TurnSettingsSheetState extends State<_TurnSettingsSheet> {
                         );
                       }),
                     ),
-                  if (model != null) ...[
-                    const Divider(),
-                    const Padding(
-                      padding: EdgeInsets.fromLTRB(20, 8, 20, 8),
-                      child: Text('Reasoning effort'),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Wrap(
+                ],
+              ),
+            ),
+            if (model != null) ...[
+              const Divider(height: 1),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: math.min(160, MediaQuery.sizeOf(context).height * 0.2),
+                ),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Reasoning effort'),
+                      Wrap(
                         spacing: 8,
                         runSpacing: 4,
                         children: [
@@ -140,30 +161,24 @@ class _TurnSettingsSheetState extends State<_TurnSettingsSheet> {
                               child: ChoiceChip(
                                 key: ValueKey('turn-effort-${option.effort}'),
                                 label: Text(option.effort),
-                                selected: option.effort == effort,
+                                selected: option.effort == _draft.effort,
                                 onSelected: (_) => setState(() {
-                                  _draft = TurnSettings(
-                                    model: model.model,
-                                    effort: option.effort,
-                                  );
+                                  _draft = TurnSettings(model: model.model, effort: option.effort);
                                 }),
                               ),
                             ),
                         ],
                       ),
-                    ),
-                  ],
-                ],
+                    ],
+                  ),
+                ),
               ),
-            ),
+            ],
             Padding(
               padding: const EdgeInsets.all(16),
               child: FilledButton(
                 key: const Key('turn-settings-apply'),
-                onPressed: () => Navigator.pop(context, TurnSettings(
-                  model: _draft.model,
-                  effort: _draft.model == null ? null : effort,
-                )),
+                onPressed: _draft.model == null ? null : () => Navigator.pop(context, _draft),
                 child: const Text('Apply'),
               ),
             ),
@@ -176,13 +191,6 @@ class _TurnSettingsSheetState extends State<_TurnSettingsSheet> {
 
 RemoteModel? _selectedModel(List<RemoteModel> models, TurnSettings value) =>
     models.where((candidate) => candidate.model == value.model).firstOrNull;
-
-String? _selectedEffort(RemoteModel? model, TurnSettings value) {
-  if (model == null) return value.effort;
-  return _effortsFor(model).any((option) => option.effort == value.effort)
-      ? value.effort
-      : model.defaultReasoningEffort;
-}
 
 List<RemoteReasoningEffort> _effortsFor(RemoteModel model) {
   if (model.supportedReasoningEfforts
