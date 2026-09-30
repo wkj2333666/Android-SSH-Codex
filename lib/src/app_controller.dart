@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import 'connection_keep_alive.dart';
+import 'attachments.dart';
+import 'diagnostics.dart';
 import 'profiles/host_profile.dart';
 import 'profiles/profile_store.dart';
 import 'projects/remote_project.dart';
@@ -17,6 +19,7 @@ import 'tasks/task_operation_lock.dart';
 import 'tasks/task_reducer.dart';
 import 'tasks/task_refresh_lock.dart';
 import 'transport/codex_daemon.dart';
+import 'transport/attachment_upload.dart';
 import 'transport/ssh_connector.dart';
 import 'transport/ssh_unix_tunnel.dart';
 
@@ -41,6 +44,7 @@ final class QueuedTaskMessage {
     this.skill,
     this.model,
     this.effort,
+    this.imagePaths = const [],
   });
 
   final String id;
@@ -48,6 +52,7 @@ final class QueuedTaskMessage {
   final RemoteSkill? skill;
   final String? model;
   final String? effort;
+  final List<String> imagePaths;
 
   String get timelineItemId => 'local-user:$id';
 }
@@ -291,6 +296,11 @@ final class AppController extends ChangeNotifier {
     required bool reconnecting,
   }) async {
     _openingAttempt = attempt;
+    Diagnostics.record('connection.open', {
+      'attempt': attempt,
+      'reconnecting': reconnecting,
+      'background': _inBackground,
+    });
     _selectedHostId = profile.id;
     if (!reconnecting) _selectedTaskId = null;
     _connectionPhase = reconnecting
@@ -395,6 +405,7 @@ final class AppController extends ChangeNotifier {
       await refreshTasks(throwOnError: true, resetPages: true);
       if (attempt != _connectionAttempt) return;
       _connectionPhase = RemoteConnectionPhase.connected;
+      Diagnostics.record('connection.ready', {'attempt': attempt});
       _reconnectAttempt = 0;
       _expediteReconnect = false;
       if (reconnecting) {
@@ -418,6 +429,11 @@ final class AppController extends ChangeNotifier {
       _startRefreshTimer();
     } catch (exception, stackTrace) {
       if (attempt != _connectionAttempt) return;
+      Diagnostics.record('connection.failed', {
+        'attempt': attempt,
+        'stage': stage.name,
+        ...Diagnostics.errorFields(exception),
+      });
       debugPrint(
         'Connection failed during ${stage.name} for '
         '${profile.hostName}:${profile.port}: $exception',
@@ -447,6 +463,12 @@ final class AppController extends ChangeNotifier {
   }
 
   Future<void> _handleTransportLoss(int attempt, HostProfile profile) async {
+    Diagnostics.record('connection.transportLoss', {
+      'attempt': attempt,
+      'currentAttempt': _connectionAttempt,
+      'phase': _connectionPhase.name,
+      'background': _inBackground,
+    });
     if (attempt != _connectionAttempt ||
         _connectionPhase != RemoteConnectionPhase.connected) {
       return;
@@ -470,6 +492,12 @@ final class AppController extends ChangeNotifier {
         ? _reconnectAttempt
         : delays.length - 1;
     final seconds = immediate || _expediteReconnect ? 0 : delays[delayIndex];
+    Diagnostics.record('connection.retryScheduled', {
+      'attempt': attempt,
+      'delaySeconds': seconds,
+      'background': _inBackground,
+      'keepAliveCached': _keepAlive.isEnabled,
+    });
     _expediteReconnect = false;
     _reconnectAttempt++;
     _reconnectTimer = Timer(Duration(seconds: seconds), () {
@@ -497,6 +525,11 @@ final class AppController extends ChangeNotifier {
   }
 
   void enterBackground() {
+    Diagnostics.record('connection.background', {
+      'phase': _connectionPhase.name,
+      'attempt': _connectionAttempt,
+      'keepAliveCached': _keepAlive.isEnabled,
+    });
     _inBackground = true;
     _expediteReconnect = false;
     _refreshTimer?.cancel();
@@ -516,11 +549,17 @@ final class AppController extends ChangeNotifier {
     } catch (exception) {
       if (attempt != _connectionAttempt) return;
       _keepAliveWarning = 'Background connection protection: $exception';
+      Diagnostics.record('keepAlive.error', Diagnostics.errorFields(exception));
       debugPrint(_keepAliveWarning);
     }
   }
 
   Future<void> restoreForegroundConnection() async {
+    Diagnostics.record('connection.foreground', {
+      'phase': _connectionPhase.name,
+      'attempt': _connectionAttempt,
+      'keepAliveCached': _keepAlive.isEnabled,
+    });
     _inBackground = false;
     _expediteReconnect = true;
     final profile =
@@ -1142,14 +1181,24 @@ final class AppController extends ChangeNotifier {
     RemoteSkill? skill,
     String? model,
     String? effort,
+    List<LocalAttachment> attachments = const [],
   }) async {
     final api = _requireApi();
     final attempt = _connectionAttempt;
     final epoch = _epoch;
     final profileId = _selectedHostId!;
-    final task = selectedTask;
+    var task = selectedTask;
     if (task == null) throw StateError('Select or create a task first.');
-    final normalized = prompt.trim();
+    Attachments.validate(attachments);
+    final uploaded = <RemoteAttachment>[];
+    final ssh = _ssh;
+    for (final attachment in attachments) {
+      if (ssh == null) throw StateError('SSH is disconnected.');
+      uploaded.add(await uploadAttachment(ssh.client, attachment));
+      _ensureCurrentSession(api, attempt, epoch, profileId);
+    }
+    task = _taskReducer.state.tasks[task.id] ?? task;
+    final normalized = attachmentPrompt(prompt, uploaded);
     if (normalized.isEmpty) throw ArgumentError('Message is required.');
     final pending = QueuedTaskMessage(
       id: 'queued-${_nextQueuedMessageId++}',
@@ -1157,6 +1206,8 @@ final class AppController extends ChangeNotifier {
       skill: skill,
       model: model,
       effort: effort,
+      imagePaths: List.unmodifiable(
+          uploaded.where((file) => file.isImage).map((file) => file.path)),
     );
     if (_messageQueue.hasPending(task.id)) {
       _enqueuePrompt(task.id, pending);
@@ -1219,7 +1270,8 @@ final class AppController extends ChangeNotifier {
       }
       try {
         steerRequested = true;
-        await api.steerTurn(task.id, turnId, pending.text);
+        await api.steerTurn(task.id, turnId, pending.text,
+            imagePaths: pending.imagePaths);
         _ensureCurrentSession(api, attempt, epoch, profileId);
       } on RpcRemoteException {
         steerRequested = false;
@@ -1239,7 +1291,8 @@ final class AppController extends ChangeNotifier {
         if (refreshedTurnId == turnId) rethrow;
         _activeTurnIds[task.id] = refreshedTurnId;
         steerRequested = true;
-        await api.steerTurn(task.id, refreshedTurnId, pending.text);
+        await api.steerTurn(task.id, refreshedTurnId, pending.text,
+            imagePaths: pending.imagePaths);
         _ensureCurrentSession(api, attempt, epoch, profileId);
       }
       _recordSubmittedPrompt(
@@ -1303,6 +1356,7 @@ final class AppController extends ChangeNotifier {
         skill: pending.skill,
         model: pending.model,
         effort: pending.effort,
+        imagePaths: pending.imagePaths,
       );
       _ensureCurrentSession(api, attempt, epoch, profileId);
       _recordSubmittedPrompt(
@@ -1565,7 +1619,8 @@ final class AppController extends ChangeNotifier {
         }
         try {
           steerRequested = true;
-          await api.steerTurn(taskId, turnId, pending.text);
+          await api.steerTurn(taskId, turnId, pending.text,
+              imagePaths: pending.imagePaths);
           _ensureCurrentSession(api, attempt, epoch, profileId);
         } on RpcRemoteException {
           steerRequested = false;
@@ -1580,7 +1635,8 @@ final class AppController extends ChangeNotifier {
           if (refreshedTurnId == turnId) rethrow;
           _activeTurnIds[taskId] = refreshedTurnId;
           steerRequested = true;
-          await api.steerTurn(taskId, refreshedTurnId, pending.text);
+          await api.steerTurn(taskId, refreshedTurnId, pending.text,
+              imagePaths: pending.imagePaths);
           _ensureCurrentSession(api, attempt, epoch, profileId);
         }
         _recordSubmittedPrompt(
@@ -1799,6 +1855,7 @@ final class AppController extends ChangeNotifier {
   }
 
   Future<void> disconnect() async {
+    Diagnostics.record('connection.userDisconnect');
     _expediteReconnect = false;
     _connectionAttempt++;
     final stoppingKeepAlive = _setKeepAlive(false);

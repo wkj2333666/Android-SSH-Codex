@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'app_controller.dart';
 import 'connection_lifecycle.dart';
+import 'diagnostics.dart';
 import 'ui/hosts_view.dart';
 import 'ui/tasks_view.dart';
 
@@ -90,7 +91,10 @@ class _Workspace extends StatelessWidget {
                     ? null
                     : AppBar(
                         title: const Text('Remote Codex'),
-                        actions: [_ConnectionAction(controller: controller)],
+                        actions: [
+                          if (Diagnostics.supported) const _DiagnosticExport(),
+                          _ConnectionAction(controller: controller),
+                        ],
                       ),
                 body: wide
                     ? Row(
@@ -182,6 +186,7 @@ class _DesktopNavigation extends StatelessWidget {
                 onTap: () => controller.selectSection(AppSection.tasks),
               ),
               const Spacer(),
+              if (Diagnostics.supported) const _DiagnosticExport(),
               Padding(
                 padding: const EdgeInsets.all(16),
                 child:
@@ -190,6 +195,45 @@ class _DesktopNavigation extends StatelessWidget {
             ],
           ),
         ),
+      );
+}
+
+class _DiagnosticExport extends StatefulWidget {
+  const _DiagnosticExport();
+
+  @override
+  State<_DiagnosticExport> createState() => _DiagnosticExportState();
+}
+
+class _DiagnosticExportState extends State<_DiagnosticExport> {
+  bool _busy = false;
+
+  Future<void> _export() async {
+    setState(() => _busy = true);
+    try {
+      final saved = await Diagnostics.export();
+      if (mounted && saved) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Connection diagnostics saved')),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Could not export diagnostics. Try again.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => IconButton(
+        tooltip: 'Export connection diagnostics',
+        onPressed: _busy ? null : _export,
+        icon: const Icon(Icons.bug_report_outlined),
       );
 }
 

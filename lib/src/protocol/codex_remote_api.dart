@@ -258,11 +258,13 @@ final class CodexRemoteApi {
     RemoteSkill? skill,
     String? model,
     String? effort,
+    List<String> imagePaths = const [],
   }) async {
     await _rpc.request('turn/start', {
       'threadId': threadId,
       'input': [
         {'type': 'text', 'text': text},
+        for (final path in imagePaths) {'type': 'localImage', 'path': path},
         if (skill != null)
           {
             'type': 'skill',
@@ -363,13 +365,15 @@ final class CodexRemoteApi {
   Future<void> steerTurn(
     String threadId,
     String expectedTurnId,
-    String text,
-  ) async {
+    String text, {
+    List<String> imagePaths = const [],
+  }) async {
     await _rpc.request('turn/steer', {
       'threadId': threadId,
       'expectedTurnId': expectedTurnId,
       'input': [
         {'type': 'text', 'text': text},
+        for (final path in imagePaths) {'type': 'localImage', 'path': path},
       ],
     });
   }

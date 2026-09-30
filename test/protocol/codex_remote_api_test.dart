@@ -24,6 +24,32 @@ final class _RecordingTransport implements RpcTransport {
 }
 
 void main() {
+  test('start and steer send remote images as native inputs', () async {
+    final transport = _RecordingTransport();
+    final rpc = JsonRpcClient(transport)..start();
+    final api = CodexRemoteApi(rpc);
+    try {
+      for (final steer in [false, true]) {
+        final sending = steer
+            ? api.steerTurn('thread', 'turn', 'look',
+                imagePaths: ['/remote/image.png'])
+            : api
+                .startTurn('thread', 'look', imagePaths: ['/remote/image.png']);
+        final request = jsonDecode(transport.sent.last) as Map<String, dynamic>;
+        expect(request['method'], steer ? 'turn/steer' : 'turn/start');
+        expect(request['params']['input'], [
+          {'type': 'text', 'text': 'look'},
+          {'type': 'localImage', 'path': '/remote/image.png'},
+        ]);
+        transport.incoming.add(
+            jsonEncode({'id': request['id'], 'result': <String, dynamic>{}}));
+        await sending;
+      }
+    } finally {
+      await rpc.close();
+    }
+  });
+
   test('initialization opts into paged thread history', () async {
     final transport = _RecordingTransport();
     final rpc = JsonRpcClient(transport)..start();

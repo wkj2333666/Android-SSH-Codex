@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
+import '../diagnostics.dart';
 import 'rpc_transport.dart';
 
 final class RpcNotification {
@@ -79,6 +80,8 @@ final class JsonRpcClient {
   Future<void>? _cleanupFuture;
   var _nextId = 1;
   var _closed = false;
+  static int _nextDiagnosticId = 0;
+  final int _diagnosticId = ++_nextDiagnosticId;
 
   Stream<RpcNotification> get notifications => _notifications.stream;
   Stream<RpcServerRequest> get serverRequests => _serverRequests.stream;
@@ -86,6 +89,7 @@ final class JsonRpcClient {
 
   void start() {
     if (_subscription != null || _closed) return;
+    Diagnostics.record('rpc.start', {'rpc': _diagnosticId});
     _subscription = _transport.messages.asyncMap((encoded) async {
       // Preserve wire order while decoding large responses off the UI isolate.
       return encoded.length > 65536
@@ -145,6 +149,7 @@ final class JsonRpcClient {
 
   Future<void> close() async {
     if (!_closed) {
+      Diagnostics.record('rpc.closeRequested', {'rpc': _diagnosticId});
       _closed = true;
       _failPending(const RpcDisconnectedException('RPC client closed'));
       if (!_done.isCompleted) _done.complete();
@@ -193,11 +198,23 @@ final class JsonRpcClient {
     if (pending == null) return;
     pending.cancel();
     final error = RpcTimeoutException(method, id, timeout);
+    Diagnostics.record('rpc.timeout', {
+      'rpc': _diagnosticId,
+      'request': id,
+      'method': method,
+      'timeoutMs': timeout.inMilliseconds,
+    });
     pending.completer.completeError(error);
   }
 
   void _disconnect([Object? error]) {
     if (_closed) return;
+    Diagnostics.record('rpc.disconnected', {
+      'rpc': _diagnosticId,
+      'cause': error == null ? 'streamDone' : 'streamError',
+      'pendingRequests': _pending.length,
+      if (error != null) ...Diagnostics.errorFields(error),
+    });
     _closed = true;
     _failPending(RpcDisconnectedException(
       error == null

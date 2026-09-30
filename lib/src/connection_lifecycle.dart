@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 
+import 'diagnostics.dart';
+
 /// Ignore transient inactive states (dialogs, notification shade, focus changes).
 class ConnectionLifecycle extends WidgetsBindingObserver {
   ConnectionLifecycle({required this.onBackground, required this.onForeground});
@@ -12,6 +14,7 @@ class ConnectionLifecycle extends WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    Diagnostics.record('lifecycle', {'state': state.name});
     if (state == AppLifecycleState.hidden ||
         state == AppLifecycleState.paused) {
       if (_background) return;

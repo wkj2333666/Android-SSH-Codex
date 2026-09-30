@@ -198,6 +198,24 @@ app-server traffic in public issues.
 
 ## Troubleshooting
 
+### Send images and files (Android)
+
+In an existing task, tap the paperclip beside the message box and choose **Image**
+or **File**. Images have a preview; tap a chip to enlarge an image, or its remove
+button to discard it. You can send attachments with or without accompanying text.
+Limits: 4 attachments per message, 10 MiB per file, 20 MiB total. PNG, JPEG, WebP
+and GIF are accepted as images (up to 64 megapixels and 16,384 pixels per side); other formats can be sent
+as files. Queued messages and steering preserve image attachments.
+
+Selecting a file does not upload it. Sending copies it over SSH into a private,
+randomly named directory under `~/.local/share/android-ssh-codex/attachments/` on
+the selected host. Images are sent as native image inputs; other files are provided
+to the agent by remote path, subject to its file-access and format support.
+Uploads are retained for conversation references; remove them manually when no
+longer needed. Failed or interrupted sends may leave unused uploads there.
+This version does not add camera capture, remote-file downloads or an OpenHarmony
+file picker. Attachment names and contents are excluded from diagnostic logs.
+
 ### The SSH connection works, but Codex does not connect
 
 Update Codex on the development machine and confirm that the selected mode is
@@ -218,6 +236,21 @@ trusted channel. An unexpected key change can indicate a rebuilt server, a DNS
 or address change, or an interception attempt.
 
 ### Collect Android logs
+
+For background disconnects, use the **Export connection diagnostics** bug icon
+in the app's top bar (sidebar on wide screens). Logging is automatic on Android:
+unplug USB, reproduce the issue, return to the app, and export to a text file
+using the system document picker. Export works while disconnected too.
+
+The app keeps two rotating files of about 512 KiB each in private storage,
+surviving app restarts. They contain timestamps, process/lifecycle/service state,
+connection attempts, RPC timeouts, error types and OS error codes—not chat text,
+RPC payloads, hostnames, credentials or raw exception messages. Nothing is uploaded
+automatically. Review exported files before sharing. Clearing app storage removes
+the private logs (and other app data); exported copies remain where you saved them.
+Logging is best-effort: abrupt process termination can lose the latest events.
+
+For additional Android system logs (these may contain sensitive information):
 
 Reproduce the problem, then run:
 
