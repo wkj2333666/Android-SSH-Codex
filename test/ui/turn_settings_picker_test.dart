@@ -118,7 +118,8 @@ void main() {
       (tester) async {
     var changes = 0;
     await tester.pumpWidget(MaterialApp(
-      home: Scaffold(body: TurnSettingsPicker(
+      home: Scaffold(
+          body: TurnSettingsPicker(
         models: models,
         value: const TurnSettings(model: 'gpt-5.6-sol', effort: 'high'),
         onChanged: (_) => changes++,
@@ -129,17 +130,23 @@ void main() {
     await tester.tap(find.byKey(const Key('turn-model-gpt-5.6-terra')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('turn-effort-high')), findsNothing);
-    expect(tester.widget<ChoiceChip>(find.byKey(const Key('turn-effort-medium'))).selected, true);
+    expect(
+        tester
+            .widget<ChoiceChip>(find.byKey(const Key('turn-effort-medium')))
+            .selected,
+        true);
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
     expect(changes, 0);
     expect(find.text('GPT-5.6 Sol · high'), findsOneWidget);
   });
 
-  testWidgets('implicit values are resolved to concrete settings', (tester) async {
+  testWidgets('implicit values are resolved to concrete settings',
+      (tester) async {
     TurnSettings? selection;
     await tester.pumpWidget(MaterialApp(
-      home: Scaffold(body: TurnSettingsPicker(
+      home: Scaffold(
+          body: TurnSettingsPicker(
         models: models,
         value: const TurnSettings(),
         onChanged: (value) => selection = value,
@@ -161,8 +168,8 @@ void main() {
         model: 'gpt-5.6-terra', effort: 'medium');
     expect(actual.model, 'gpt-5.6-terra');
     expect(actual.effort, 'medium');
-    final override = resolveTurnSettings(models,
-        const TurnSettings(model: 'gpt-5.6-sol', effort: 'high'),
+    final override = resolveTurnSettings(
+        models, const TurnSettings(model: 'gpt-5.6-sol', effort: 'high'),
         model: 'gpt-5.6-terra', effort: 'medium');
     expect(override.model, 'gpt-5.6-sol');
     expect(override.effort, 'high');
@@ -171,14 +178,18 @@ void main() {
     expect(unknown.model, 'custom');
     expect(unknown.effort, 'custom-effort');
     expect(resolveTurnSettings(const [], const TurnSettings()).model, isNull);
-    expect(resolveTurnSettings(models, const TurnSettings(),
-        useCatalogDefault: false).model, isNull);
+    expect(
+        resolveTurnSettings(models, const TurnSettings(),
+                useCatalogDefault: false)
+            .model,
+        isNull);
   });
 
   testWidgets('disabled selector stays closed with an unavailable model',
       (tester) async {
     await tester.pumpWidget(MaterialApp(
-      home: Scaffold(body: TurnSettingsPicker(
+      home: Scaffold(
+          body: TurnSettingsPicker(
         models: const [],
         value: const TurnSettings(model: 'custom-model', effort: 'high'),
         enabled: false,
@@ -198,7 +209,8 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(MaterialApp(
-      home: Scaffold(body: TurnSettingsPicker(
+      home: Scaffold(
+          body: TurnSettingsPicker(
         models: models,
         value: const TurnSettings(model: 'gpt-5.6-sol', effort: 'high'),
         onChanged: (_) {},

@@ -245,12 +245,16 @@ final class CodexRemoteApi {
     return _map(result['thread'])['id'] as String;
   }
 
-  Future<({String? model, String? effort})> resumeThread(String threadId) async {
+  Future<({String? model, String? effort})> resumeThread(
+      String threadId) async {
     final result = _map(await _rpc.request('thread/resume', {
       'threadId': threadId,
       'excludeTurns': true,
     }));
-    return (model: result['model'] as String?, effort: result['reasoningEffort'] as String?);
+    return (
+      model: result['model'] as String?,
+      effort: result['reasoningEffort'] as String?
+    );
   }
 
   Future<void> startTurn(

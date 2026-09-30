@@ -1360,7 +1360,8 @@ final class AppController extends ChangeNotifier {
         imagePaths: pending.imagePaths,
       );
       _ensureCurrentSession(api, attempt, epoch, profileId);
-      _taskReducer.setTurnSettings(epoch, task.id, pending.model, pending.effort);
+      _taskReducer.setTurnSettings(
+          epoch, task.id, pending.model, pending.effort);
       _recordSubmittedPrompt(
         task.id,
         pending,
@@ -1766,7 +1767,8 @@ final class AppController extends ChangeNotifier {
     if (_subscribedThreadIds.contains(threadId)) return;
     final settings = await api.resumeThread(threadId);
     _ensureCurrentSession(api, attempt, epoch, profileId);
-    _taskReducer.setTurnSettings(epoch, threadId, settings.model, settings.effort);
+    _taskReducer.setTurnSettings(
+        epoch, threadId, settings.model, settings.effort);
     _subscribedThreadIds = {..._subscribedThreadIds, threadId};
   }
 

@@ -117,7 +117,9 @@ final class TaskRecord {
         ownership: ownership ?? this.ownership,
         revision: revision ?? this.revision,
         model: replaceTurnSettings ? model : model ?? this.model,
-        reasoningEffort: replaceTurnSettings ? reasoningEffort : reasoningEffort ?? this.reasoningEffort,
+        reasoningEffort: replaceTurnSettings
+            ? reasoningEffort
+            : reasoningEffort ?? this.reasoningEffort,
       );
 }
 
@@ -198,7 +200,8 @@ final class TaskReducer {
 
   TaskState get state => _state;
 
-  void setTurnSettings(int epoch, String taskId, String? model, String? effort) {
+  void setTurnSettings(
+      int epoch, String taskId, String? model, String? effort) {
     if (epoch != _state.epoch) return;
     final current = _state.tasks[taskId];
     if (current == null || model == null) return;
@@ -209,8 +212,11 @@ final class TaskReducer {
       eventRevision: revision,
       tasks: Map.unmodifiable({
         ..._state.tasks,
-        taskId: current.copyWith(model: model, reasoningEffort: effort,
-            replaceTurnSettings: true, revision: revision),
+        taskId: current.copyWith(
+            model: model,
+            reasoningEffort: effort,
+            replaceTurnSettings: true,
+            revision: revision),
       }),
     );
   }
@@ -328,9 +334,14 @@ final class TaskReducer {
         items: preserveItems ? current!.items : snapshot.items,
         ownership: ownership,
         revision: current?.revision ?? eventRevision,
-        model: changedDuringRefresh ? current.model : snapshot.model ?? current?.model,
-        reasoningEffort: changedDuringRefresh ? current.reasoningEffort
-            : snapshot.model != null ? snapshot.reasoningEffort : current?.reasoningEffort,
+        model: changedDuringRefresh
+            ? current.model
+            : snapshot.model ?? current?.model,
+        reasoningEffort: changedDuringRefresh
+            ? current.reasoningEffort
+            : snapshot.model != null
+                ? snapshot.reasoningEffort
+                : current?.reasoningEffort,
       );
     }
 
@@ -370,7 +381,9 @@ final class TaskReducer {
         ownership: _ownershipFor(status, loadedByUs, snapshot.id),
         revision: current?.revision ?? _state.eventRevision,
         model: snapshot.model ?? current?.model,
-        reasoningEffort: snapshot.model != null ? snapshot.reasoningEffort : current?.reasoningEffort,
+        reasoningEffort: snapshot.model != null
+            ? snapshot.reasoningEffort
+            : current?.reasoningEffort,
       );
     _state = TaskState(
       epoch: _state.epoch,

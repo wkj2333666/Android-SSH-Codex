@@ -183,7 +183,8 @@ class _TaskViewState extends State<TaskView> {
           child: TurnSettingsPicker(
             models: widget.controller.models,
             value: resolveTurnSettings(widget.controller.models, _turnSettings,
-                model: task.model, effort: task.reasoningEffort,
+                model: task.model,
+                effort: task.reasoningEffort,
                 useCatalogDefault: false),
             useCatalogDefault: false,
             enabled: widget.controller.isConnected && !_sending,
@@ -269,8 +270,10 @@ class _TaskViewState extends State<TaskView> {
     final taskId = widget.task.id;
     final submittedAttachments = List<LocalAttachment>.of(_attachments);
     final submittedSkill = _selectedSkill;
-    final settings = resolveTurnSettings(widget.controller.models, _turnSettings,
-        model: widget.task.model, effort: widget.task.reasoningEffort,
+    final settings = resolveTurnSettings(
+        widget.controller.models, _turnSettings,
+        model: widget.task.model,
+        effort: widget.task.reasoningEffort,
         useCatalogDefault: false);
     setState(() {
       _sending = true;

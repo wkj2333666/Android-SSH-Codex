@@ -20,14 +20,17 @@ TurnSettings resolveTurnSettings(
   String? effort,
   bool useCatalogDefault = true,
 }) {
-  final name = value.model ?? model ??
+  final name = value.model ??
+      model ??
       (useCatalogDefault
           ? models.where((candidate) => candidate.isDefault).firstOrNull?.model
           : null);
-  final entry = models.where((candidate) => candidate.model == name).firstOrNull;
+  final entry =
+      models.where((candidate) => candidate.model == name).firstOrNull;
   return TurnSettings(
     model: name,
-    effort: (value.model != null ? value.effort : effort) ?? entry?.defaultReasoningEffort,
+    effort: (value.model != null ? value.effort : effort) ??
+        entry?.defaultReasoningEffort,
   );
 }
 
@@ -67,7 +70,8 @@ class TurnSettingsPicker extends StatelessWidget {
                   context: context,
                   isScrollControlled: true,
                   showDragHandle: true,
-                  builder: (_) => _TurnSettingsSheet(models: models, value: settings),
+                  builder: (_) =>
+                      _TurnSettingsSheet(models: models, value: settings),
                 );
                 if (context.mounted && selection != null) onChanged(selection);
               }
@@ -113,14 +117,16 @@ class _TurnSettingsSheetState extends State<_TurnSettingsSheet> {
             const Padding(
               padding: EdgeInsets.fromLTRB(20, 0, 20, 12),
               child: Text('Model and reasoning effort',
-                  maxLines: 1, overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
             ),
             Expanded(
               child: ListView(
                 children: [
                   if (model == null && _draft.model != null)
-                    ListTile(title: Text(_draft.model!),
+                    ListTile(
+                        title: Text(_draft.model!),
                         subtitle: const Text('Current task model'),
                         trailing: const Icon(Icons.check)),
                   for (final candidate in widget.models)
@@ -129,11 +135,12 @@ class _TurnSettingsSheetState extends State<_TurnSettingsSheet> {
                       title: Text(candidate.displayName),
                       subtitle: candidate.description.isEmpty
                           ? null
-                          : Text(candidate.description, maxLines: 2,
-                              overflow: TextOverflow.ellipsis),
+                          : Text(candidate.description,
+                              maxLines: 2, overflow: TextOverflow.ellipsis),
                       selected: candidate.model == _draft.model,
                       trailing: candidate.model == _draft.model
-                          ? const Icon(Icons.check) : null,
+                          ? const Icon(Icons.check)
+                          : null,
                       onTap: () => setState(() {
                         if (candidate.model == _draft.model) return;
                         _draft = TurnSettings(
@@ -149,7 +156,8 @@ class _TurnSettingsSheetState extends State<_TurnSettingsSheet> {
               const Divider(height: 1),
               ConstrainedBox(
                 constraints: BoxConstraints(
-                  maxHeight: math.min(160, MediaQuery.sizeOf(context).height * 0.2),
+                  maxHeight:
+                      math.min(160, MediaQuery.sizeOf(context).height * 0.2),
                 ),
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
@@ -169,7 +177,9 @@ class _TurnSettingsSheetState extends State<_TurnSettingsSheet> {
                                 label: Text(option.effort),
                                 selected: option.effort == _draft.effort,
                                 onSelected: (_) => setState(() {
-                                  _draft = TurnSettings(model: model.model, effort: option.effort);
+                                  _draft = TurnSettings(
+                                      model: model.model,
+                                      effort: option.effort);
                                 }),
                               ),
                             ),
@@ -184,7 +194,9 @@ class _TurnSettingsSheetState extends State<_TurnSettingsSheet> {
               padding: const EdgeInsets.all(16),
               child: FilledButton(
                 key: const Key('turn-settings-apply'),
-                onPressed: _draft.model == null ? null : () => Navigator.pop(context, _draft),
+                onPressed: _draft.model == null
+                    ? null
+                    : () => Navigator.pop(context, _draft),
                 child: const Text('Apply'),
               ),
             ),
@@ -204,7 +216,8 @@ List<RemoteReasoningEffort> _effortsFor(RemoteModel model) {
     return model.supportedReasoningEfforts;
   }
   return [
-    RemoteReasoningEffort(effort: model.defaultReasoningEffort, description: ''),
+    RemoteReasoningEffort(
+        effort: model.defaultReasoningEffort, description: ''),
     ...model.supportedReasoningEfforts,
   ];
 }

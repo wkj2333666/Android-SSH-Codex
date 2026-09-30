@@ -38,7 +38,8 @@ void main() {
     final stale = reducer.beginRefresh(epoch);
     reducer.setTurnSettings(epoch, 'task', 'actual-model', 'high');
     reducer.applyRefresh(stale, [snapshot('task')], const {});
-    reducer.applyEvent(epoch, const TaskEvent.statusChanged('task', TaskStatus.running));
+    reducer.applyEvent(
+        epoch, const TaskEvent.statusChanged('task', TaskStatus.running));
     expect(reducer.state.tasks['task']!.model, 'actual-model');
     expect(reducer.state.tasks['task']!.reasoningEffort, 'high');
     reducer.setTurnSettings(epoch - 1, 'task', 'stale-model', 'low');
