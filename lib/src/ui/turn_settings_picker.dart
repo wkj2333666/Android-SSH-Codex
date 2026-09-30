@@ -18,9 +18,12 @@ TurnSettings resolveTurnSettings(
   TurnSettings value, {
   String? model,
   String? effort,
+  bool useCatalogDefault = true,
 }) {
   final name = value.model ?? model ??
-      models.where((candidate) => candidate.isDefault).firstOrNull?.model;
+      (useCatalogDefault
+          ? models.where((candidate) => candidate.isDefault).firstOrNull?.model
+          : null);
   final entry = models.where((candidate) => candidate.model == name).firstOrNull;
   return TurnSettings(
     model: name,
@@ -34,6 +37,7 @@ class TurnSettingsPicker extends StatelessWidget {
     required this.value,
     required this.onChanged,
     this.enabled = true,
+    this.useCatalogDefault = true,
     super.key,
   });
 
@@ -41,10 +45,12 @@ class TurnSettingsPicker extends StatelessWidget {
   final TurnSettings value;
   final ValueChanged<TurnSettings> onChanged;
   final bool enabled;
+  final bool useCatalogDefault;
 
   @override
   Widget build(BuildContext context) {
-    final settings = resolveTurnSettings(models, value);
+    final settings = resolveTurnSettings(models, value,
+        useCatalogDefault: useCatalogDefault);
     final model = _selectedModel(models, settings);
     final label = settings.model == null
         ? 'Model unavailable'

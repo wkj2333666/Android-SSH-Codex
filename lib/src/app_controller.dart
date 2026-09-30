@@ -1173,6 +1173,7 @@ final class AppController extends ChangeNotifier {
       effort: effort,
     );
     if (!_isCurrentSession(api, attempt, epoch, profileId)) return;
+    _taskReducer.setTurnSettings(epoch, threadId, model, effort);
     await refreshTasks();
   }
 

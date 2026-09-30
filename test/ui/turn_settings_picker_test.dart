@@ -171,6 +171,8 @@ void main() {
     expect(unknown.model, 'custom');
     expect(unknown.effort, 'custom-effort');
     expect(resolveTurnSettings(const [], const TurnSettings()).model, isNull);
+    expect(resolveTurnSettings(models, const TurnSettings(),
+        useCatalogDefault: false).model, isNull);
   });
 
   testWidgets('disabled selector stays closed with an unavailable model',
