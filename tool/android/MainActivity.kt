@@ -59,7 +59,7 @@ class MainActivity : FlutterActivity() {
                 "record" -> {
                     val fields = call.arguments as? Map<*, *> ?: emptyMap<Any, Any>()
                     val event = fields["event"] as? String ?: "unknown"
-                    val snapshot = if (event.endsWith(".error") || event.endsWith(".done") ||
+                    val snapshot = if (event.endsWith(".error") || event.endsWith(".done") || event.endsWith(".timeout") ||
                         event == "connection.transportLoss" || event == "rpc.disconnected")
                         connectionDiagnostics?.snapshot() ?: emptyMap() else emptyMap()
                     DiagnosticLog.record(this, event,
