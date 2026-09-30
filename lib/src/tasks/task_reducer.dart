@@ -1,3 +1,5 @@
+import 'message_attachments.dart';
+
 enum TaskStatus { unknown, queued, running, completed, failed, interrupted }
 
 enum TaskOwnership { available, local, external }
@@ -12,6 +14,7 @@ final class TaskItem {
     this.title,
     this.detail,
     this.status,
+    this.attachments = const [],
   });
 
   final String id;
@@ -20,6 +23,7 @@ final class TaskItem {
   final String? title;
   final String? detail;
   final String? status;
+  final List<MessageAttachment> attachments;
 
   TaskItem copyWith({
     String? text,
@@ -34,6 +38,7 @@ final class TaskItem {
         title: title ?? this.title,
         detail: detail ?? this.detail,
         status: status ?? this.status,
+        attachments: attachments,
       );
 }
 

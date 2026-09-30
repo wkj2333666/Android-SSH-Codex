@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../tasks/task_reducer.dart';
+import '../../tasks/message_attachments.dart';
 import 'codex_directive_content.dart';
 import 'markdown_content.dart';
 
@@ -14,18 +16,20 @@ class TimelineItemView extends StatelessWidget {
   const TimelineItemView({
     required this.item,
     this.copyText = copyMessageText,
+    this.loadImage,
     super.key,
   });
 
   final TaskItem item;
   final MessageTextCopier copyText;
+  final Future<Uint8List> Function(String)? loadImage;
 
   @override
   Widget build(BuildContext context) {
     return switch (item.kind) {
       TaskItemKind.user ||
       TaskItemKind.agent =>
-        _Message(item: item, copyText: copyText),
+        _Message(item: item, copyText: copyText, loadImage: loadImage),
       _ => _ActivityCard(item: item),
     };
   }
@@ -112,10 +116,11 @@ class _CompactActivityRow extends StatelessWidget {
 }
 
 class _Message extends StatelessWidget {
-  const _Message({required this.item, required this.copyText});
+  const _Message({required this.item, required this.copyText, this.loadImage});
 
   final TaskItem item;
   final MessageTextCopier copyText;
+  final Future<Uint8List> Function(String)? loadImage;
 
   @override
   Widget build(BuildContext context) {
@@ -123,6 +128,7 @@ class _Message extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     final copyableText = _copyableMessageText(item);
     final sending = user && item.status == 'sending';
+    final content = parseAttachmentMessage(item.text, item.attachments);
     return Align(
       alignment: user ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -139,7 +145,16 @@ class _Message extends StatelessWidget {
               user ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
             if (user)
-              MarkdownContent(text: item.text, copyText: copyText)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final attachment in content.attachments)
+                    _AttachmentCard(attachment: attachment, copyText: copyText, loadImage: loadImage),
+                  if (content.text.trim().isNotEmpty)
+                    MarkdownContent(text: content.text, copyText: copyText),
+                ],
+              )
             else
               CodexDirectiveContent(text: item.text, copyText: copyText),
             if (sending || copyableText.isNotEmpty) ...[
@@ -175,6 +190,89 @@ class _Message extends StatelessWidget {
               ),
             ],
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AttachmentCard extends StatelessWidget {
+  const _AttachmentCard({required this.attachment, required this.copyText, this.loadImage});
+
+  final MessageAttachment attachment;
+  final MessageTextCopier copyText;
+  final Future<Uint8List> Function(String)? loadImage;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 6),
+      child: ListTile(
+        dense: true,
+        visualDensity: VisualDensity.compact,
+        leading: Icon(attachment.isImage
+            ? Icons.image_outlined
+            : Icons.insert_drive_file_outlined),
+        title: Text(
+          attachment.label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Text(attachment.isImage ? 'Image attachment' : 'File attachment'),
+        trailing: const Icon(Icons.info_outline, size: 18),
+        onTap: () => showDialog<void>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text(attachment.label, maxLines: 2, overflow: TextOverflow.ellipsis),
+            content: SingleChildScrollView(
+              child: SelectableText(attachment.path.isEmpty
+                  ? 'Image location is not available in this conversation.'
+                  : attachment.path.startsWith('data:')
+                      ? 'Embedded image'
+                      : attachment.path),
+            ),
+            actions: [
+              if (attachment.isImage && attachment.path.startsWith('/') && loadImage != null)
+                TextButton(
+                  onPressed: () {
+                    final loading = loadImage!(attachment.path);
+                    unawaited(showDialog<void>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Image preview'),
+                        content: SizedBox(
+                          width: 500,
+                          height: 400,
+                          child: FutureBuilder<Uint8List>(
+                            future: loading,
+                            builder: (context, snapshot) {
+                              if (snapshot.hasError) return const Text('Could not load image. Reconnect and try again (maximum 10 MiB).');
+                              if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+                              return InteractiveViewer(
+                                child: Image.memory(snapshot.data!, cacheWidth: 1200, fit: BoxFit.contain,
+                                  errorBuilder: (_, __, ___) => const Text('Image format is not supported.'),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))],
+                      ),
+                    ));
+                  },
+                  child: const Text('Preview image'),
+                ),
+              if (attachment.path.isNotEmpty && !attachment.path.startsWith('data:'))
+                TextButton(
+                  onPressed: () => unawaited(_copyMessage(context, attachment.path, copyText)),
+                  child: const Text('Copy path'),
+                ),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+            ],
+          ),
         ),
       ),
     );

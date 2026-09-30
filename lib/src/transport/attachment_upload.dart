@@ -7,6 +7,42 @@ import 'package:dartssh2/dartssh2.dart';
 
 import '../attachments.dart';
 
+/// Explicit, bounded image reads; never fetch attachments during timeline layout.
+Future<Uint8List> readAttachmentImage(SSHClient client, String path) async {
+  if (!path.startsWith('/') || path.contains('\u0000')) {
+    throw ArgumentError('Expected a remote absolute path');
+  }
+  final quoted = "'${path.replaceAll("'", "'\\''")}'";
+  var timedOut = false;
+  final opening = client.execute('head -c 10485761 -- $quoted').then((session) {
+    if (timedOut) session.close();
+    return session;
+  });
+  final session = await opening.timeout(const Duration(seconds: 15), onTimeout: () {
+    timedOut = true;
+    throw TimeoutException('Image channel timed out');
+  });
+  final bytes = BytesBuilder(copy: false);
+  final stderr = session.stderr.listen((_) {}, onError: (Object _) {});
+  try {
+    await (() async {
+      await session.stdin.close();
+      await for (final chunk in session.stdout) {
+        if (bytes.length + chunk.length > Attachments.maxFileBytes) {
+          throw StateError('Image exceeds 10 MiB');
+        }
+        bytes.add(chunk);
+      }
+      await session.done;
+      if (session.exitCode != 0) throw StateError('Image unavailable');
+    })().timeout(const Duration(seconds: 20));
+    return bytes.takeBytes();
+  } finally {
+    session.close();
+    await stderr.cancel();
+  }
+}
+
 String attachmentUploadCommand(String token, String name) {
   if (!RegExp(r'^[a-f0-9]{32}$').hasMatch(token)) {
     throw ArgumentError('Invalid attachment token');
