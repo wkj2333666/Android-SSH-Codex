@@ -1187,7 +1187,7 @@ final class AppController extends ChangeNotifier {
     final attempt = _connectionAttempt;
     final epoch = _epoch;
     final profileId = _selectedHostId!;
-    final task = selectedTask;
+    var task = selectedTask;
     if (task == null) throw StateError('Select or create a task first.');
     Attachments.validate(attachments);
     final uploaded = <RemoteAttachment>[];
@@ -1197,6 +1197,7 @@ final class AppController extends ChangeNotifier {
       uploaded.add(await uploadAttachment(ssh.client, attachment));
       _ensureCurrentSession(api, attempt, epoch, profileId);
     }
+    task = _taskReducer.state.tasks[task.id] ?? task;
     final normalized = attachmentPrompt(prompt, uploaded);
     if (normalized.isEmpty) throw ArgumentError('Message is required.');
     final pending = QueuedTaskMessage(
@@ -1205,7 +1206,8 @@ final class AppController extends ChangeNotifier {
       skill: skill,
       model: model,
       effort: effort,
-      imagePaths: List.unmodifiable(uploaded.where((file) => file.isImage).map((file) => file.path)),
+      imagePaths: List.unmodifiable(
+          uploaded.where((file) => file.isImage).map((file) => file.path)),
     );
     if (_messageQueue.hasPending(task.id)) {
       _enqueuePrompt(task.id, pending);
@@ -1268,7 +1270,8 @@ final class AppController extends ChangeNotifier {
       }
       try {
         steerRequested = true;
-        await api.steerTurn(task.id, turnId, pending.text, imagePaths: pending.imagePaths);
+        await api.steerTurn(task.id, turnId, pending.text,
+            imagePaths: pending.imagePaths);
         _ensureCurrentSession(api, attempt, epoch, profileId);
       } on RpcRemoteException {
         steerRequested = false;
@@ -1288,7 +1291,8 @@ final class AppController extends ChangeNotifier {
         if (refreshedTurnId == turnId) rethrow;
         _activeTurnIds[task.id] = refreshedTurnId;
         steerRequested = true;
-        await api.steerTurn(task.id, refreshedTurnId, pending.text, imagePaths: pending.imagePaths);
+        await api.steerTurn(task.id, refreshedTurnId, pending.text,
+            imagePaths: pending.imagePaths);
         _ensureCurrentSession(api, attempt, epoch, profileId);
       }
       _recordSubmittedPrompt(
@@ -1615,7 +1619,8 @@ final class AppController extends ChangeNotifier {
         }
         try {
           steerRequested = true;
-          await api.steerTurn(taskId, turnId, pending.text, imagePaths: pending.imagePaths);
+          await api.steerTurn(taskId, turnId, pending.text,
+              imagePaths: pending.imagePaths);
           _ensureCurrentSession(api, attempt, epoch, profileId);
         } on RpcRemoteException {
           steerRequested = false;
@@ -1630,7 +1635,8 @@ final class AppController extends ChangeNotifier {
           if (refreshedTurnId == turnId) rethrow;
           _activeTurnIds[taskId] = refreshedTurnId;
           steerRequested = true;
-          await api.steerTurn(taskId, refreshedTurnId, pending.text, imagePaths: pending.imagePaths);
+          await api.steerTurn(taskId, refreshedTurnId, pending.text,
+              imagePaths: pending.imagePaths);
           _ensureCurrentSession(api, attempt, epoch, profileId);
         }
         _recordSubmittedPrompt(

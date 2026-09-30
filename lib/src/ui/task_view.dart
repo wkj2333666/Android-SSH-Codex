@@ -200,16 +200,24 @@ class _TaskViewState extends State<TaskView> {
                     padding: const EdgeInsets.only(right: 8),
                     child: InputChip(
                       avatar: attachment.isImage
-                          ? Image.memory(attachment.bytes, width: 32, height: 32,
-                              cacheWidth: 64, fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => const Icon(Icons.broken_image))
+                          ? Image.memory(attachment.bytes,
+                              width: 32,
+                              height: 32,
+                              cacheWidth: 64,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) =>
+                                  const Icon(Icons.broken_image))
                           : const Icon(Icons.insert_drive_file_outlined),
                       label: ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 160),
-                        child: Text(attachment.name, overflow: TextOverflow.ellipsis),
+                        child: Text(attachment.name,
+                            overflow: TextOverflow.ellipsis),
                       ),
-                      onPressed: attachment.isImage ? () => _previewAttachment(attachment) : null,
-                      onDeleted: () => setState(() => _attachments.remove(attachment)),
+                      onPressed: attachment.isImage
+                          ? () => _previewAttachment(attachment)
+                          : null,
+                      onDeleted: () =>
+                          setState(() => _attachments.remove(attachment)),
                     ),
                   ),
               ],
@@ -232,8 +240,12 @@ class _TaskViewState extends State<TaskView> {
           loadingCompletions: _loadingSkills,
           onCompletion: _selectCompletion,
           onSend: _send,
-          onAttach: Attachments.supported && !_sending && !_pickingAttachment && widget.controller.isConnected
-              ? _pickAttachment : null,
+          onAttach: Attachments.supported &&
+                  !_sending &&
+                  !_pickingAttachment &&
+                  widget.controller.isConnected
+              ? _pickAttachment
+              : null,
         ),
       ],
     );
@@ -319,14 +331,21 @@ class _TaskViewState extends State<TaskView> {
   }
 
   Future<void> _previewAttachment(LocalAttachment attachment) async {
-    await showDialog<void>(context: context, builder: (context) => Dialog(
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Flexible(child: InteractiveViewer(child: Image.memory(attachment.bytes,
-          cacheWidth: 1200,
-          errorBuilder: (_, __, ___) => const Text('Cannot preview image')))),
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
-      ]),
-    ));
+    await showDialog<void>(
+        context: context,
+        builder: (context) => Dialog(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Flexible(
+                    child: InteractiveViewer(
+                        child: Image.memory(attachment.bytes,
+                            cacheWidth: 1200,
+                            errorBuilder: (_, __, ___) =>
+                                const Text('Cannot preview image')))),
+                TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Close')),
+              ]),
+            ));
   }
 
   Future<void> _steerQueuedMessage(String messageId) => _runQueueAction(

@@ -66,7 +66,7 @@ class AttachmentPicker(private val activity: Activity) {
                 if (image) {
                     val options = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
                     android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
-                    require(options.outWidth > 0 && options.outHeight > 0 &&
+                    require(options.outWidth in 1..16384 && options.outHeight in 1..16384 &&
                         options.outWidth.toLong() * options.outHeight <= 64_000_000L) {
                         "Image is invalid or exceeds 64 megapixels"
                     }

@@ -2,7 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 class LocalAttachment {
-  const LocalAttachment({required this.name, required this.bytes, required this.isImage});
+  const LocalAttachment(
+      {required this.name, required this.bytes, required this.isImage});
 
   final String name;
   final Uint8List bytes;
@@ -27,7 +28,8 @@ abstract final class Attachments {
 
   static Future<LocalAttachment?> pick({required bool image}) async {
     final result = await channel.invokeMapMethod<String, dynamic>(
-      'pick', {'image': image},
+      'pick',
+      {'image': image},
     );
     if (result == null) return null;
     final attachment = LocalAttachment(
@@ -42,7 +44,8 @@ abstract final class Attachments {
   static void validate(List<LocalAttachment> attachments) {
     if (attachments.length > maxCount ||
         attachments.any((file) => file.bytes.length > maxFileBytes) ||
-        attachments.fold<int>(0, (sum, file) => sum + file.bytes.length) > maxTotalBytes) {
+        attachments.fold<int>(0, (sum, file) => sum + file.bytes.length) >
+            maxTotalBytes) {
       throw ArgumentError('Up to 4 attachments, 10 MiB each and 20 MiB total.');
     }
   }

@@ -14,7 +14,7 @@ class MainActivity : FlutterActivity() {
     private var permissionResult: MethodChannel.Result? = null
     private var exportResult: MethodChannel.Result? = null
     private var exportSnapshot: String? = null
-    private val attachmentPicker by lazy { AttachmentPicker(this) }
+    private var attachmentPicker: AttachmentPicker? = null
 
     private fun recordLifecycle(event: String) {
         val power = getSystemService(android.os.PowerManager::class.java)
@@ -37,9 +37,14 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        attachmentPicker = AttachmentPicker(this)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger,
             "android_ssh_codex/attachments").setMethodCallHandler { call, result ->
-            if (call.method == "pick") attachmentPicker.pick(call.argument<Boolean>("image") == true, result)
+            if (call.method == "pick") {
+                val picker = attachmentPicker
+                if (picker == null) result.error("ACTIVITY_CLOSED", "File picker closed", null)
+                else picker.pick(call.argument<Boolean>("image") == true, result)
+            }
             else result.notImplemented()
         }
         DiagnosticLog.record(this, "engine.configure", mapOf(
@@ -122,7 +127,7 @@ class MainActivity : FlutterActivity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == 4103) {
-            attachmentPicker.onResult(resultCode, data)
+            attachmentPicker?.onResult(resultCode, data)
             return
         }
         if (requestCode != 4102) return
@@ -154,7 +159,8 @@ class MainActivity : FlutterActivity() {
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
         DiagnosticLog.record(this, "engine.cleanup")
-        attachmentPicker.close()
+        attachmentPicker?.close()
+        attachmentPicker = null
         finishExport(false, "Connection activity closed")
         // This service protects this engine's sockets; never leave an orphan.
         stopService(Intent(this, ConnectionService::class.java))

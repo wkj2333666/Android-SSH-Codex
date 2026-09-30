@@ -31,15 +31,18 @@ void main() {
     try {
       for (final steer in [false, true]) {
         final sending = steer
-            ? api.steerTurn('thread', 'turn', 'look', imagePaths: ['/remote/image.png'])
-            : api.startTurn('thread', 'look', imagePaths: ['/remote/image.png']);
+            ? api.steerTurn('thread', 'turn', 'look',
+                imagePaths: ['/remote/image.png'])
+            : api
+                .startTurn('thread', 'look', imagePaths: ['/remote/image.png']);
         final request = jsonDecode(transport.sent.last) as Map<String, dynamic>;
         expect(request['method'], steer ? 'turn/steer' : 'turn/start');
         expect(request['params']['input'], [
           {'type': 'text', 'text': 'look'},
           {'type': 'localImage', 'path': '/remote/image.png'},
         ]);
-        transport.incoming.add(jsonEncode({'id': request['id'], 'result': <String, dynamic>{}}));
+        transport.incoming.add(
+            jsonEncode({'id': request['id'], 'result': <String, dynamic>{}}));
         await sending;
       }
     } finally {

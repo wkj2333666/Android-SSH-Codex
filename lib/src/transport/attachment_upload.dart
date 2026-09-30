@@ -12,8 +12,10 @@ String attachmentUploadCommand(String token, String name) {
     throw ArgumentError('Invalid attachment token');
   }
   final safeName = name.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
-  final fileName = safeName.isEmpty ? 'attachment' : safeName.substring(0, min(100, safeName.length));
-  final relative = '.local/share/android-ssh-codex/attachments';
+  final fileName = safeName.isEmpty
+      ? 'attachment'
+      : safeName.substring(0, min(100, safeName.length));
+  const relative = '.local/share/android-ssh-codex/attachments';
   return 'umask 077; '
       'mkdir -p "\$HOME/$relative" && '
       'mkdir "\$HOME/$relative/$token" && '
@@ -21,16 +23,21 @@ String attachmentUploadCommand(String token, String name) {
       'printf "%s" "\$HOME/$relative/$token/file-$fileName"';
 }
 
-Future<RemoteAttachment> uploadAttachment(SSHClient client, LocalAttachment attachment) async {
+Future<RemoteAttachment> uploadAttachment(
+    SSHClient client, LocalAttachment attachment) async {
   Attachments.validate([attachment]);
   final random = Random.secure();
-  final token = List.generate(16, (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0')).join();
+  final token = List.generate(
+      16, (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0')).join();
   var openingTimedOut = false;
-  final opening = client.execute(attachmentUploadCommand(token, attachment.name)).then((session) {
+  final opening = client
+      .execute(attachmentUploadCommand(token, attachment.name))
+      .then((session) {
     if (openingTimedOut) session.close();
     return session;
   });
-  final session = await opening.timeout(const Duration(seconds: 15), onTimeout: () {
+  final session =
+      await opening.timeout(const Duration(seconds: 15), onTimeout: () {
     openingTimedOut = true;
     throw TimeoutException('Attachment channel timed out');
   });
@@ -41,22 +48,28 @@ Future<RemoteAttachment> uploadAttachment(SSHClient client, LocalAttachment atta
   final stdoutDone = Completer<void>();
   Object? readError;
   try {
-    stdout = session.stdout.listen((chunk) {
-      if (outputLength + chunk.length <= 8192) output.add(chunk);
-      outputLength += chunk.length;
-    }, onDone: stdoutDone.complete, onError: (Object error) {
-      readError = error;
-      if (!stdoutDone.isCompleted) stdoutDone.complete();
-    }, cancelOnError: true);
+    stdout = session.stdout.listen(
+        (chunk) {
+          if (outputLength + chunk.length <= 8192) output.add(chunk);
+          outputLength += chunk.length;
+        },
+        onDone: stdoutDone.complete,
+        onError: (Object error) {
+          readError = error;
+          if (!stdoutDone.isCompleted) stdoutDone.complete();
+        },
+        cancelOnError: true);
     stderr = session.stderr.listen((_) {}, onError: (Object _) {});
     await Future.wait<void>([
       (() async {
-        await session.stdin.addStream(Stream<Uint8List>.value(attachment.bytes));
+        await session.stdin
+            .addStream(Stream<Uint8List>.value(attachment.bytes));
         await session.stdin.close();
       })(),
       session.done,
       stdoutDone.future,
-    ], eagerError: true).timeout(const Duration(seconds: 60));
+    ], eagerError: true)
+        .timeout(const Duration(seconds: 60));
     if (readError != null || session.exitCode != 0 || outputLength > 8192) {
       throw StateError('Attachment upload failed.');
     }

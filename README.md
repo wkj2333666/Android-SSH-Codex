@@ -204,7 +204,7 @@ In an existing task, tap the paperclip beside the message box and choose **Image
 or **File**. Images have a preview; tap a chip to enlarge an image, or its remove
 button to discard it. You can send attachments with or without accompanying text.
 Limits: 4 attachments per message, 10 MiB per file, 20 MiB total. PNG, JPEG, WebP
-and GIF are accepted as images (up to 64 megapixels); other formats can be sent
+and GIF are accepted as images (up to 64 megapixels and 16,384 pixels per side); other formats can be sent
 as files. Queued messages and steering preserve image attachments.
 
 Selecting a file does not upload it. Sending copies it over SSH into a private,
