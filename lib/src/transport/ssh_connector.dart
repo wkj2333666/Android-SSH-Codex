@@ -54,17 +54,45 @@ List<SSHKeyPair>? parsePrivateKeyIdentities(
 
 typedef HostKeyPrompt = Future<bool> Function(HostKeyChallenge challenge);
 
+final _sshDiagnostics = Expando<_SshDiagnostic>();
+int _nextSshDiagnosticId = 0;
+
+final class _SshDiagnostic {
+  _SshDiagnostic(this.role, this.attempt);
+  final String role;
+  final int? attempt;
+  final int id = ++_nextSshDiagnosticId;
+  final watch = Stopwatch()..start();
+  bool localClose = false;
+  Map<String, Object?> get fields => {
+        'ssh': id,
+        'role': role,
+        'attempt': attempt,
+        'ageMs': watch.elapsedMilliseconds,
+        'localCloseRequested': localClose,
+      };
+}
+
+void _requestSshClose(SSHClient client, String reason) {
+  final diagnostic = _sshDiagnostics[client];
+  if (diagnostic != null) diagnostic.localClose = true;
+  Diagnostics.record('ssh.closeRequested', {
+    ...?diagnostic?.fields,
+    'closeReason': reason,
+  });
+  client.close();
+}
+
 final class SshConnection {
   const SshConnection({required this.client, this.jumpClient});
 
   final SSHClient client;
   final SSHClient? jumpClient;
 
-  Future<void> close() async {
-    Diagnostics.record('ssh.closeRequested');
-    client.close();
+  Future<void> close({String reason = 'transport_cleanup'}) async {
+    _requestSshClose(client, reason);
     await client.done.catchError((_) {});
-    jumpClient?.close();
+    if (jumpClient != null) _requestSshClose(jumpClient!, reason);
     await jumpClient?.done.catchError((_) {});
   }
 }
@@ -78,6 +106,7 @@ final class SshConnector {
     HostProfile profile,
     HostSecret secret, {
     required HostKeyPrompt prompt,
+    int? diagnosticAttempt,
   }) async {
     SSHClient? jumpClient;
     SSHClient? targetClient;
@@ -97,6 +126,7 @@ final class SshConnector {
           timeout: const Duration(seconds: 15),
         );
         jumpClient = _client(
+          diagnostic: _SshDiagnostic('jump', diagnosticAttempt),
           socket: unownedSocket,
           profileId: '${profile.id}.jump',
           label: '${profile.label} jump host',
@@ -113,6 +143,7 @@ final class SshConnector {
       }
 
       targetClient = _client(
+        diagnostic: _SshDiagnostic('target', diagnosticAttempt),
         socket: unownedSocket,
         profileId: profile.id,
         label: profile.label,
@@ -134,6 +165,7 @@ final class SshConnector {
   }
 
   SSHClient _client({
+    required _SshDiagnostic diagnostic,
     required SSHSocket socket,
     required String profileId,
     required String label,
@@ -175,10 +207,18 @@ final class SshConnector {
       authTimeout: const Duration(seconds: 20),
       ident: 'AndroidSSHCodex_0.1',
     );
+    _sshDiagnostics[client] = diagnostic;
+    Diagnostics.record('ssh.open', diagnostic.fields);
     unawaited(client.done.then((_) {
-      Diagnostics.record('ssh.done');
+      Diagnostics.record('ssh.done', {
+        ...diagnostic.fields,
+        'reason': diagnostic.localClose ? 'local_close' : 'eof_without_reason',
+      });
     }, onError: (Object error, StackTrace stackTrace) {
-      Diagnostics.record('ssh.error', Diagnostics.errorFields(error));
+      Diagnostics.record('ssh.error', {
+        ...diagnostic.fields,
+        ...Diagnostics.errorFields(error),
+      });
     }));
     return client;
   }
@@ -186,6 +226,6 @@ final class SshConnector {
 
 Future<void> _closeClient(SSHClient? client) async {
   if (client == null) return;
-  client.close();
+  _requestSshClose(client, 'connection_setup_failed');
   await client.done.catchError((_) {});
 }
