@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:android_ssh_codex/src/tasks/task_reducer.dart';
 import 'package:android_ssh_codex/src/tasks/message_attachments.dart';
 import 'package:android_ssh_codex/src/ui/timeline_entries.dart';
@@ -9,6 +11,32 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('image reads are on demand and failure is contained', (tester) async {
+    var reads = 0;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(body: TimelineItemView(
+        item: const TaskItem(
+          id: 'image', kind: TaskItemKind.user, text: '',
+          attachments: [MessageAttachment(path: '/tmp/photo.png', isImage: true)],
+        ),
+        loadImage: (path) async {
+          reads++;
+          expect(path, '/tmp/photo.png');
+          return Uint8List(0);
+        },
+      )),
+    ));
+    expect(reads, 0);
+    await tester.tap(find.text('photo.png'));
+    await tester.pumpAndSettle();
+    expect(reads, 0);
+    await tester.tap(find.text('Preview image'));
+    await tester.pumpAndSettle();
+    expect(reads, 1);
+    expect(find.text('Image format is not supported.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('attachments are compact and reveal paths only on tap', (tester) async {
     await tester.pumpWidget(const MaterialApp(
       home: Scaffold(body: TimelineItemView(item: TaskItem(

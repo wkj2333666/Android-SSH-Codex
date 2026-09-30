@@ -6,7 +6,15 @@ class MessageAttachment {
   final String? name;
   final bool isImage;
 
-  String get label => name ?? path.split('/').last;
+  String get label {
+    if (name != null) return name!;
+    final basename = path.split('/').last;
+    if (path.contains('/.local/share/android-ssh-codex/attachments/') &&
+        basename.startsWith('file-')) {
+      return basename.substring(5);
+    }
+    return basename.isEmpty ? (isImage ? 'Image' : 'File') : basename;
+  }
 }
 
 class AttachmentMessage {
