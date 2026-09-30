@@ -19,5 +19,6 @@ cmp "$repo_root/tool/android/MainActivity.kt" "$fixture/app/src/main/kotlin/io/g
 cmp "$repo_root/tool/android/ConnectionService.kt" "$fixture/app/src/main/kotlin/io/github/wkj2333666/android_ssh_codex/ConnectionService.kt"
 test -s "$fixture/app/src/main/res/drawable/ic_connection.xml"
 cmp "$repo_root/tool/android/DiagnosticLog.kt" "$fixture/app/src/main/kotlin/io/github/wkj2333666/android_ssh_codex/DiagnosticLog.kt"
+cmp "$repo_root/tool/android/AttachmentPicker.kt" "$fixture/app/src/main/kotlin/io/github/wkj2333666/android_ssh_codex/AttachmentPicker.kt"
 grep -Fq 'bash tool/configure_android_connection_service.sh' "$repo_root/tool/prepare_android.sh"
 echo 'android_connection_service_test: PASS'

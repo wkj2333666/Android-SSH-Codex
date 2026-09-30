@@ -220,7 +220,8 @@ class _DiagnosticExportState extends State<_DiagnosticExport> {
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not export diagnostics. Try again.')),
+          const SnackBar(
+              content: Text('Could not export diagnostics. Try again.')),
         );
       }
     } finally {

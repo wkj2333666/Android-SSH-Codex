@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
 import '../app_controller.dart';
+import '../attachments.dart';
 import '../protocol/codex_remote_api.dart';
 import '../tasks/task_message_queue.dart';
 import '../tasks/task_reducer.dart';
@@ -71,6 +72,8 @@ class _TaskViewState extends State<TaskView> {
   List<RemoteSkill>? _availableSkills;
   List<ComposerCompletion> _completions = const [];
   var _loadingSkills = false;
+  var _pickingAttachment = false;
+  List<LocalAttachment> _attachments = [];
 
   @override
   void initState() {
@@ -91,6 +94,7 @@ class _TaskViewState extends State<TaskView> {
       _sending = false;
       _commandBusy = false;
       _queueActionBusy = false;
+      _attachments = [];
     }
   }
 
@@ -184,6 +188,35 @@ class _TaskViewState extends State<TaskView> {
           ),
         ),
         const Divider(height: 1),
+        if (_attachments.isNotEmpty)
+          SizedBox(
+            height: 64,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              children: [
+                for (final attachment in _attachments)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: InputChip(
+                      avatar: attachment.isImage
+                          ? Image.memory(attachment.bytes, width: 32, height: 32,
+                              cacheWidth: 64, fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => const Icon(Icons.broken_image))
+                          : const Icon(Icons.insert_drive_file_outlined),
+                      label: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 160),
+                        child: Text(attachment.name, overflow: TextOverflow.ellipsis),
+                      ),
+                      onPressed: attachment.isImage ? () => _previewAttachment(attachment) : null,
+                      onDeleted: () => setState(() => _attachments.remove(attachment)),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        if (_sending || _pickingAttachment)
+          const LinearProgressIndicator(minHeight: 2),
         _Composer(
           controller: _composer,
           inputEnabled: isTaskComposerInputEnabled(
@@ -199,6 +232,8 @@ class _TaskViewState extends State<TaskView> {
           loadingCompletions: _loadingSkills,
           onCompletion: _selectCompletion,
           onSend: _send,
+          onAttach: Attachments.supported && !_sending && !_pickingAttachment && widget.controller.isConnected
+              ? _pickAttachment : null,
         ),
       ],
     );
@@ -215,12 +250,15 @@ class _TaskViewState extends State<TaskView> {
     if (_sending) return;
     final submittedText = _composer.text;
     final text = submittedText.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty && _attachments.isEmpty) return;
+    final taskId = widget.task.id;
+    final submittedAttachments = List<LocalAttachment>.of(_attachments);
     final submittedSkill = _selectedSkill;
     setState(() {
       _sending = true;
       _selectedSkill = null;
       _completions = const [];
+      _attachments = [];
     });
     _composer.clear();
     try {
@@ -229,15 +267,17 @@ class _TaskViewState extends State<TaskView> {
         skill: submittedSkill,
         model: _turnSettings.model,
         effort: _turnSettings.effort,
+        attachments: submittedAttachments,
       );
-      if (!mounted) return;
+      if (!mounted || widget.task.id != taskId) return;
       if (disposition == TaskMessageDisposition.queued) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Message queued for the next turn.')),
         );
       }
     } catch (exception) {
-      if (mounted) {
+      if (mounted && widget.task.id == taskId) {
+        setState(() => _attachments = submittedAttachments);
         final restored = restoreComposerDraft(
           currentText: _composer.text,
           submittedText: submittedText,
@@ -254,8 +294,39 @@ class _TaskViewState extends State<TaskView> {
       }
       _showError(exception);
     } finally {
-      if (mounted) setState(() => _sending = false);
+      if (mounted && widget.task.id == taskId) setState(() => _sending = false);
     }
+  }
+
+  Future<void> _pickAttachment(bool image) async {
+    if (_attachments.length >= Attachments.maxCount) {
+      _showError('Up to 4 attachments per message.');
+      return;
+    }
+    final taskId = widget.task.id;
+    setState(() => _pickingAttachment = true);
+    try {
+      final picked = await Attachments.pick(image: image);
+      if (!mounted || widget.task.id != taskId || picked == null) return;
+      final files = [..._attachments, picked];
+      Attachments.validate(files);
+      setState(() => _attachments = files);
+    } catch (error) {
+      if (mounted && widget.task.id == taskId) _showError(error);
+    } finally {
+      if (mounted) setState(() => _pickingAttachment = false);
+    }
+  }
+
+  Future<void> _previewAttachment(LocalAttachment attachment) async {
+    await showDialog<void>(context: context, builder: (context) => Dialog(
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Flexible(child: InteractiveViewer(child: Image.memory(attachment.bytes,
+          cacheWidth: 1200,
+          errorBuilder: (_, __, ___) => const Text('Cannot preview image')))),
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+      ]),
+    ));
   }
 
   Future<void> _steerQueuedMessage(String messageId) => _runQueueAction(
@@ -1117,6 +1188,7 @@ class _Composer extends StatelessWidget {
     required this.loadingCompletions,
     required this.onCompletion,
     required this.onSend,
+    this.onAttach,
   });
 
   final TextEditingController controller;
@@ -1126,6 +1198,7 @@ class _Composer extends StatelessWidget {
   final bool loadingCompletions;
   final ValueChanged<ComposerCompletion> onCompletion;
   final VoidCallback onSend;
+  final ValueChanged<bool>? onAttach;
 
   @override
   Widget build(BuildContext context) => SafeArea(
@@ -1144,6 +1217,17 @@ class _Composer extends StatelessWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
+                  if (Attachments.supported)
+                    PopupMenuButton<bool>(
+                      tooltip: 'Attach image or file',
+                      enabled: onAttach != null,
+                      onSelected: onAttach,
+                      icon: const Icon(Icons.attach_file),
+                      itemBuilder: (_) => const [
+                        PopupMenuItem(value: true, child: Text('Image')),
+                        PopupMenuItem(value: false, child: Text('File')),
+                      ],
+                    ),
                   Expanded(
                     child: TextField(
                       controller: controller,

@@ -14,6 +14,7 @@ class MainActivity : FlutterActivity() {
     private var permissionResult: MethodChannel.Result? = null
     private var exportResult: MethodChannel.Result? = null
     private var exportSnapshot: String? = null
+    private val attachmentPicker by lazy { AttachmentPicker(this) }
 
     private fun recordLifecycle(event: String) {
         val power = getSystemService(android.os.PowerManager::class.java)
@@ -36,6 +37,11 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger,
+            "android_ssh_codex/attachments").setMethodCallHandler { call, result ->
+            if (call.method == "pick") attachmentPicker.pick(call.argument<Boolean>("image") == true, result)
+            else result.notImplemented()
+        }
         DiagnosticLog.record(this, "engine.configure", mapOf(
             "version" to packageManager.getPackageInfo(packageName, 0).versionName,
             "sdk" to Build.VERSION.SDK_INT))
@@ -115,6 +121,10 @@ class MainActivity : FlutterActivity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 4103) {
+            attachmentPicker.onResult(resultCode, data)
+            return
+        }
         if (requestCode != 4102) return
         val uri = data?.data
         val snapshot = exportSnapshot
@@ -144,6 +154,7 @@ class MainActivity : FlutterActivity() {
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
         DiagnosticLog.record(this, "engine.cleanup")
+        attachmentPicker.close()
         finishExport(false, "Connection activity closed")
         // This service protects this engine's sockets; never leave an orphan.
         stopService(Intent(this, ConnectionService::class.java))

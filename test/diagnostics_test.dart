@@ -29,7 +29,8 @@ void main() {
     await Future<void>.delayed(Duration.zero);
     expect(calls.single.method, 'record');
     expect(calls.single.arguments['attempt'], 2);
-    expect(DateTime.parse(calls.single.arguments['time'] as String).isUtc, true);
+    expect(
+        DateTime.parse(calls.single.arguments['time'] as String).isUtc, true);
     expect(await Diagnostics.export(), false);
   });
 
@@ -97,7 +98,8 @@ void main() {
     await rpc.close();
     await transport.input.close();
     await Future<void>.delayed(Duration.zero);
-    final failures = events.where((event) => event['event'] == 'rpc.disconnected');
+    final failures =
+        events.where((event) => event['event'] == 'rpc.disconnected');
     expect(failures.length, 1);
     expect(failures.single['cause'], 'streamError');
     expect(failures.single['osCode'], 104);

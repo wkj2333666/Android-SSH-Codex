@@ -20,7 +20,8 @@ Future<bool> foregroundTransportDisconnected(
     Diagnostics.record('probe.disconnected');
     return true;
   } catch (exception) {
-    Diagnostics.record('probe.inconclusive', Diagnostics.errorFields(exception));
+    Diagnostics.record(
+        'probe.inconclusive', Diagnostics.errorFields(exception));
     debugPrint('Foreground probe inconclusive; keeping connection: $exception');
   }
   return false;

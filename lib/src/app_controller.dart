@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import 'connection_keep_alive.dart';
+import 'attachments.dart';
 import 'diagnostics.dart';
 import 'profiles/host_profile.dart';
 import 'profiles/profile_store.dart';
@@ -18,6 +19,7 @@ import 'tasks/task_operation_lock.dart';
 import 'tasks/task_reducer.dart';
 import 'tasks/task_refresh_lock.dart';
 import 'transport/codex_daemon.dart';
+import 'transport/attachment_upload.dart';
 import 'transport/ssh_connector.dart';
 import 'transport/ssh_unix_tunnel.dart';
 
@@ -42,6 +44,7 @@ final class QueuedTaskMessage {
     this.skill,
     this.model,
     this.effort,
+    this.imagePaths = const [],
   });
 
   final String id;
@@ -49,6 +52,7 @@ final class QueuedTaskMessage {
   final RemoteSkill? skill;
   final String? model;
   final String? effort;
+  final List<String> imagePaths;
 
   String get timelineItemId => 'local-user:$id';
 }
@@ -1177,6 +1181,7 @@ final class AppController extends ChangeNotifier {
     RemoteSkill? skill,
     String? model,
     String? effort,
+    List<LocalAttachment> attachments = const [],
   }) async {
     final api = _requireApi();
     final attempt = _connectionAttempt;
@@ -1184,7 +1189,15 @@ final class AppController extends ChangeNotifier {
     final profileId = _selectedHostId!;
     final task = selectedTask;
     if (task == null) throw StateError('Select or create a task first.');
-    final normalized = prompt.trim();
+    Attachments.validate(attachments);
+    final uploaded = <RemoteAttachment>[];
+    final ssh = _ssh;
+    for (final attachment in attachments) {
+      if (ssh == null) throw StateError('SSH is disconnected.');
+      uploaded.add(await uploadAttachment(ssh.client, attachment));
+      _ensureCurrentSession(api, attempt, epoch, profileId);
+    }
+    final normalized = attachmentPrompt(prompt, uploaded);
     if (normalized.isEmpty) throw ArgumentError('Message is required.');
     final pending = QueuedTaskMessage(
       id: 'queued-${_nextQueuedMessageId++}',
@@ -1192,6 +1205,7 @@ final class AppController extends ChangeNotifier {
       skill: skill,
       model: model,
       effort: effort,
+      imagePaths: List.unmodifiable(uploaded.where((file) => file.isImage).map((file) => file.path)),
     );
     if (_messageQueue.hasPending(task.id)) {
       _enqueuePrompt(task.id, pending);
@@ -1254,7 +1268,7 @@ final class AppController extends ChangeNotifier {
       }
       try {
         steerRequested = true;
-        await api.steerTurn(task.id, turnId, pending.text);
+        await api.steerTurn(task.id, turnId, pending.text, imagePaths: pending.imagePaths);
         _ensureCurrentSession(api, attempt, epoch, profileId);
       } on RpcRemoteException {
         steerRequested = false;
@@ -1274,7 +1288,7 @@ final class AppController extends ChangeNotifier {
         if (refreshedTurnId == turnId) rethrow;
         _activeTurnIds[task.id] = refreshedTurnId;
         steerRequested = true;
-        await api.steerTurn(task.id, refreshedTurnId, pending.text);
+        await api.steerTurn(task.id, refreshedTurnId, pending.text, imagePaths: pending.imagePaths);
         _ensureCurrentSession(api, attempt, epoch, profileId);
       }
       _recordSubmittedPrompt(
@@ -1338,6 +1352,7 @@ final class AppController extends ChangeNotifier {
         skill: pending.skill,
         model: pending.model,
         effort: pending.effort,
+        imagePaths: pending.imagePaths,
       );
       _ensureCurrentSession(api, attempt, epoch, profileId);
       _recordSubmittedPrompt(
@@ -1600,7 +1615,7 @@ final class AppController extends ChangeNotifier {
         }
         try {
           steerRequested = true;
-          await api.steerTurn(taskId, turnId, pending.text);
+          await api.steerTurn(taskId, turnId, pending.text, imagePaths: pending.imagePaths);
           _ensureCurrentSession(api, attempt, epoch, profileId);
         } on RpcRemoteException {
           steerRequested = false;
@@ -1615,7 +1630,7 @@ final class AppController extends ChangeNotifier {
           if (refreshedTurnId == turnId) rethrow;
           _activeTurnIds[taskId] = refreshedTurnId;
           steerRequested = true;
-          await api.steerTurn(taskId, refreshedTurnId, pending.text);
+          await api.steerTurn(taskId, refreshedTurnId, pending.text, imagePaths: pending.imagePaths);
           _ensureCurrentSession(api, attempt, epoch, profileId);
         }
         _recordSubmittedPrompt(
