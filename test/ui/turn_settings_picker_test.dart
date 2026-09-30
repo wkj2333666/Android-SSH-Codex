@@ -60,14 +60,19 @@ void main() {
     ));
 
     expect(find.text('Server default'), findsOneWidget);
-    await tester.tap(find.byKey(const Key('turn-model-selector')));
+    await tester.tap(find.byKey(const Key('turn-settings-selector')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('GPT-5.6 Sol').last);
     await tester.pumpAndSettle();
 
+    expect(selection.model, isNull);
+    await tester.tap(find.byKey(const Key('turn-settings-apply')));
+    await tester.pumpAndSettle();
+
     expect(selection.model, 'gpt-5.6-sol');
     expect(selection.effort, 'high');
-    expect(find.text('high'), findsOneWidget);
+    expect(find.text('GPT-5.6 Sol · high'), findsOneWidget);
+    expect(find.byType(DropdownButtonFormField<String>), findsNothing);
   });
 
   testWidgets('effort menu contains only values advertised by the model',
@@ -93,15 +98,100 @@ void main() {
       ),
     ));
 
-    await tester.tap(find.byKey(const Key('turn-effort-selector')));
+    await tester.tap(find.byKey(const Key('turn-settings-selector')));
     await tester.pumpAndSettle();
 
     expect(find.text('medium'), findsOneWidget);
     expect(find.text('high'), findsWidgets);
     expect(find.text('xhigh'), findsNothing);
-    await tester.tap(find.text('medium'));
+    await tester.ensureVisible(find.byKey(const Key('turn-effort-medium')));
+    await tester.tap(find.byKey(const Key('turn-effort-medium')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('turn-settings-apply')));
     await tester.pumpAndSettle();
 
     expect(selection.effort, 'medium');
+  });
+
+  testWidgets('switching models resets effort; dismissal discards draft',
+      (tester) async {
+    var changes = 0;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(body: TurnSettingsPicker(
+        models: models,
+        value: const TurnSettings(model: 'gpt-5.6-sol', effort: 'high'),
+        onChanged: (_) => changes++,
+      )),
+    ));
+    await tester.tap(find.byKey(const Key('turn-settings-selector')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('turn-model-gpt-5.6-terra')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('turn-effort-high')), findsNothing);
+    expect(tester.widget<ChoiceChip>(find.byKey(const Key('turn-effort-medium'))).selected, true);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(changes, 0);
+    expect(find.text('GPT-5.6 Sol · high'), findsOneWidget);
+  });
+
+  testWidgets('server default clears model and effort together', (tester) async {
+    TurnSettings? selection;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(body: TurnSettingsPicker(
+        models: models,
+        value: const TurnSettings(model: 'gpt-5.6-sol', effort: 'high'),
+        onChanged: (value) => selection = value,
+      )),
+    ));
+    await tester.tap(find.byKey(const Key('turn-settings-selector')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('turn-model-default')));
+    await tester.pumpAndSettle();
+    expect(find.byType(ChoiceChip), findsNothing);
+    await tester.tap(find.byKey(const Key('turn-settings-apply')));
+    await tester.pumpAndSettle();
+    expect(selection, isNotNull);
+    expect(selection!.model, isNull);
+    expect(selection!.effort, isNull);
+  });
+
+  testWidgets('disabled selector stays closed with an unavailable model',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(body: TurnSettingsPicker(
+        models: const [],
+        value: const TurnSettings(model: 'custom-model', effort: 'high'),
+        enabled: false,
+        onChanged: (_) => fail('disabled picker changed settings'),
+      )),
+    ));
+    expect(find.text('custom-model · high'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('turn-settings-selector')));
+    await tester.pumpAndSettle();
+    expect(find.text('Model and reasoning effort'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('combined panel scrolls on a small screen', (tester) async {
+    tester.view.physicalSize = const Size(320, 480);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(body: TurnSettingsPicker(
+        models: models,
+        value: const TurnSettings(model: 'gpt-5.6-sol', effort: 'high'),
+        onChanged: (_) {},
+      )),
+    ));
+    await tester.tap(find.byKey(const Key('turn-settings-selector')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('turn-effort-medium')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('turn-effort-medium')));
+    await tester.tap(find.byKey(const Key('turn-settings-apply')));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
   });
 }
