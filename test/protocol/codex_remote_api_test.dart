@@ -356,10 +356,14 @@ void main() {
         'id': request['id'],
         'result': {
           'thread': {'id': 'thr_large', 'turns': <Object>[]},
+          'model': 'actual-model',
+          'reasoningEffort': 'high',
         },
       }));
 
-      await resuming;
+      final settings = await resuming;
+      expect(settings.model, 'actual-model');
+      expect(settings.effort, 'high');
     } finally {
       await rpc.close();
     }

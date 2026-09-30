@@ -182,7 +182,11 @@ class _TaskViewState extends State<TaskView> {
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
           child: TurnSettingsPicker(
             models: widget.controller.models,
-            value: _turnSettings,
+            value: resolveTurnSettings(widget.controller.models, _turnSettings,
+                model: task.model,
+                effort: task.reasoningEffort,
+                useCatalogDefault: false),
+            useCatalogDefault: false,
             enabled: widget.controller.isConnected && !_sending,
             onChanged: (value) => setState(() => _turnSettings = value),
           ),
@@ -266,6 +270,11 @@ class _TaskViewState extends State<TaskView> {
     final taskId = widget.task.id;
     final submittedAttachments = List<LocalAttachment>.of(_attachments);
     final submittedSkill = _selectedSkill;
+    final settings = resolveTurnSettings(
+        widget.controller.models, _turnSettings,
+        model: widget.task.model,
+        effort: widget.task.reasoningEffort,
+        useCatalogDefault: false);
     setState(() {
       _sending = true;
       _selectedSkill = null;
@@ -277,8 +286,8 @@ class _TaskViewState extends State<TaskView> {
       final disposition = await widget.controller.sendPrompt(
         text,
         skill: submittedSkill,
-        model: _turnSettings.model,
-        effort: _turnSettings.effort,
+        model: settings.model,
+        effort: settings.effort,
         attachments: submittedAttachments,
       );
       if (!mounted || widget.task.id != taskId) return;

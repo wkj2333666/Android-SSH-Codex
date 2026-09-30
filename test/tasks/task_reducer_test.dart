@@ -32,6 +32,20 @@ void main() {
     expect(reducer.state.tasks, isEmpty);
   });
 
+  test('resumed settings survive stale metadata and item updates', () {
+    final epoch = reducer.beginConnection();
+    reducer.applySnapshot(epoch, snapshot('task'), const {});
+    final stale = reducer.beginRefresh(epoch);
+    reducer.setTurnSettings(epoch, 'task', 'actual-model', 'high');
+    reducer.applyRefresh(stale, [snapshot('task')], const {});
+    reducer.applyEvent(
+        epoch, const TaskEvent.statusChanged('task', TaskStatus.running));
+    expect(reducer.state.tasks['task']!.model, 'actual-model');
+    expect(reducer.state.tasks['task']!.reasoningEffort, 'high');
+    reducer.setTurnSettings(epoch - 1, 'task', 'stale-model', 'low');
+    expect(reducer.state.tasks['task']!.model, 'actual-model');
+  });
+
   test('a new connection does not retain tasks from the previous host', () {
     final firstEpoch = reducer.beginConnection();
     final firstRefresh = reducer.beginRefresh(firstEpoch);

@@ -111,7 +111,8 @@ class _TaskList extends StatelessWidget {
         mode == TaskListMode.projects ? controller.selectedProject : null;
     final cwd = TextEditingController(text: project?.cwd);
     final prompt = TextEditingController();
-    var turnSettings = const TurnSettings();
+    var turnSettings =
+        resolveTurnSettings(controller.models, const TurnSettings());
     final accepted = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(

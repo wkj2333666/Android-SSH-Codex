@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../protocol/codex_remote_api.dart';
@@ -9,144 +11,215 @@ final class TurnSettings {
   final String? effort;
 }
 
+/// Resolve once for both display and sending; never label an implicit choice
+/// with a concrete model while sending a different server-side default.
+TurnSettings resolveTurnSettings(
+  List<RemoteModel> models,
+  TurnSettings value, {
+  String? model,
+  String? effort,
+  bool useCatalogDefault = true,
+}) {
+  final name = value.model ??
+      model ??
+      (useCatalogDefault
+          ? models.where((candidate) => candidate.isDefault).firstOrNull?.model
+          : null);
+  final entry =
+      models.where((candidate) => candidate.model == name).firstOrNull;
+  return TurnSettings(
+    model: name,
+    effort: (value.model != null ? value.effort : effort) ??
+        entry?.defaultReasoningEffort,
+  );
+}
+
 class TurnSettingsPicker extends StatelessWidget {
   const TurnSettingsPicker({
     required this.models,
     required this.value,
     required this.onChanged,
     this.enabled = true,
+    this.useCatalogDefault = true,
     super.key,
   });
-
-  static const _serverDefault = '';
 
   final List<RemoteModel> models;
   final TurnSettings value;
   final ValueChanged<TurnSettings> onChanged;
   final bool enabled;
+  final bool useCatalogDefault;
 
   @override
   Widget build(BuildContext context) {
-    final selectedModel =
-        models.where((candidate) => candidate.model == value.model).firstOrNull;
-    final efforts = selectedModel == null
-        ? const <RemoteReasoningEffort>[]
-        : _effortsFor(selectedModel);
-    final selectedEffort = efforts.any((item) => item.effort == value.effort)
-        ? value.effort
-        : selectedModel?.defaultReasoningEffort;
-
-    return Row(
-      children: [
-        Expanded(
-          flex: 3,
-          child: SizedBox(
-            key: const Key('turn-model-selector'),
-            child: DropdownButtonFormField<String>(
-              key: Key('turn-model-value-${value.model}'),
-              initialValue: value.model ?? _serverDefault,
-              isExpanded: true,
-              decoration: const InputDecoration(
-                labelText: 'Model',
-                isDense: true,
-                prefixIcon: Icon(Icons.memory_outlined),
-              ),
-              items: [
-                const DropdownMenuItem(
-                  value: _serverDefault,
-                  child: Text('Server default'),
-                ),
-                for (final model in models)
-                  DropdownMenuItem(
-                    value: model.model,
-                    child: Text(
-                      model.displayName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-              ],
-              onChanged: enabled
-                  ? (modelName) {
-                      if (modelName == null || modelName == _serverDefault) {
-                        onChanged(const TurnSettings());
-                        return;
-                      }
-                      final model = models
-                          .where((candidate) => candidate.model == modelName)
-                          .firstOrNull;
-                      if (model == null) return;
-                      onChanged(
-                        TurnSettings(
-                          model: model.model,
-                          effort: model.defaultReasoningEffort,
-                        ),
-                      );
-                    }
-                  : null,
-            ),
-          ),
+    final settings = resolveTurnSettings(models, value,
+        useCatalogDefault: useCatalogDefault);
+    final model = _selectedModel(models, settings);
+    final label = settings.model == null
+        ? 'Model unavailable'
+        : '${model?.displayName ?? settings.model} · '
+            '${settings.effort ?? 'Effort unavailable'}';
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: OutlinedButton(
+        key: const Key('turn-settings-selector'),
+        onPressed: enabled && models.isNotEmpty
+            ? () async {
+                FocusScope.of(context).unfocus();
+                final selection = await showModalBottomSheet<TurnSettings>(
+                  context: context,
+                  isScrollControlled: true,
+                  showDragHandle: true,
+                  builder: (_) =>
+                      _TurnSettingsSheet(models: models, value: settings),
+                );
+                if (context.mounted && selection != null) onChanged(selection);
+              }
+            : null,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.memory_outlined, size: 18),
+            const SizedBox(width: 8),
+            Flexible(child: Text(label, overflow: TextOverflow.ellipsis)),
+            const SizedBox(width: 4),
+            const Icon(Icons.expand_more, size: 18),
+          ],
         ),
-        const SizedBox(width: 8),
-        Expanded(
-          flex: 2,
-          child: SizedBox(
-            key: const Key('turn-effort-selector'),
-            child: DropdownButtonFormField<String>(
-              key: Key(
-                'turn-effort-value-${value.model}-$selectedEffort',
-              ),
-              initialValue: selectedEffort,
-              isExpanded: true,
-              decoration: const InputDecoration(
-                labelText: 'Effort',
-                isDense: true,
-                prefixIcon: Icon(Icons.psychology_outlined),
-              ),
-              hint: const Text('Default'),
-              items: [
-                for (final option in efforts)
-                  DropdownMenuItem(
-                    value: option.effort,
-                    child: option.description.isEmpty
-                        ? Text(option.effort)
-                        : Tooltip(
-                            message: option.description,
-                            child: Text(option.effort),
-                          ),
-                  ),
-              ],
-              onChanged: enabled && selectedModel != null
-                  ? (effort) {
-                      if (effort == null) return;
-                      onChanged(
-                        TurnSettings(
-                          model: selectedModel.model,
-                          effort: effort,
-                        ),
-                      );
-                    }
-                  : null,
-            ),
-          ),
-        ),
-      ],
+      ),
     );
   }
+}
 
-  List<RemoteReasoningEffort> _effortsFor(RemoteModel model) {
-    if (model.supportedReasoningEfforts
-        .any((item) => item.effort == model.defaultReasoningEffort)) {
-      return model.supportedReasoningEfforts;
-    }
-    return [
-      RemoteReasoningEffort(
-        effort: model.defaultReasoningEffort,
-        description: '',
+class _TurnSettingsSheet extends StatefulWidget {
+  const _TurnSettingsSheet({required this.models, required this.value});
+
+  final List<RemoteModel> models;
+  final TurnSettings value;
+
+  @override
+  State<_TurnSettingsSheet> createState() => _TurnSettingsSheetState();
+}
+
+class _TurnSettingsSheetState extends State<_TurnSettingsSheet> {
+  late TurnSettings _draft = widget.value;
+
+  @override
+  Widget build(BuildContext context) {
+    final model = _selectedModel(widget.models, _draft);
+    return SafeArea(
+      top: false,
+      child: SizedBox(
+        height: math.min(560, MediaQuery.sizeOf(context).height * 0.75),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 0, 20, 12),
+              child: Text('Model and reasoning effort',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+            ),
+            Expanded(
+              child: ListView(
+                children: [
+                  if (model == null && _draft.model != null)
+                    ListTile(
+                        title: Text(_draft.model!),
+                        subtitle: const Text('Current task model'),
+                        trailing: const Icon(Icons.check)),
+                  for (final candidate in widget.models)
+                    ListTile(
+                      key: ValueKey('turn-model-${candidate.model}'),
+                      title: Text(candidate.displayName),
+                      subtitle: candidate.description.isEmpty
+                          ? null
+                          : Text(candidate.description,
+                              maxLines: 2, overflow: TextOverflow.ellipsis),
+                      selected: candidate.model == _draft.model,
+                      trailing: candidate.model == _draft.model
+                          ? const Icon(Icons.check)
+                          : null,
+                      onTap: () => setState(() {
+                        if (candidate.model == _draft.model) return;
+                        _draft = TurnSettings(
+                          model: candidate.model,
+                          effort: candidate.defaultReasoningEffort,
+                        );
+                      }),
+                    ),
+                ],
+              ),
+            ),
+            if (model != null) ...[
+              const Divider(height: 1),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight:
+                      math.min(160, MediaQuery.sizeOf(context).height * 0.2),
+                ),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Reasoning effort'),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        children: [
+                          for (final option in _effortsFor(model))
+                            Tooltip(
+                              message: option.description,
+                              child: ChoiceChip(
+                                key: ValueKey('turn-effort-${option.effort}'),
+                                label: Text(option.effort),
+                                selected: option.effort == _draft.effort,
+                                onSelected: (_) => setState(() {
+                                  _draft = TurnSettings(
+                                      model: model.model,
+                                      effort: option.effort);
+                                }),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: FilledButton(
+                key: const Key('turn-settings-apply'),
+                onPressed: _draft.model == null
+                    ? null
+                    : () => Navigator.pop(context, _draft),
+                child: const Text('Apply'),
+              ),
+            ),
+          ],
+        ),
       ),
-      ...model.supportedReasoningEfforts,
-    ];
+    );
   }
+}
+
+RemoteModel? _selectedModel(List<RemoteModel> models, TurnSettings value) =>
+    models.where((candidate) => candidate.model == value.model).firstOrNull;
+
+List<RemoteReasoningEffort> _effortsFor(RemoteModel model) {
+  if (model.supportedReasoningEfforts
+      .any((item) => item.effort == model.defaultReasoningEffort)) {
+    return model.supportedReasoningEfforts;
+  }
+  return [
+    RemoteReasoningEffort(
+        effort: model.defaultReasoningEffort, description: ''),
+    ...model.supportedReasoningEfforts,
+  ];
 }
 
 extension<T> on Iterable<T> {
