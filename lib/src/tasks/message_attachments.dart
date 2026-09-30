@@ -1,6 +1,7 @@
 /// Presentation metadata only. The original prompt is never rewritten.
 class MessageAttachment {
-  const MessageAttachment({required this.path, this.name, this.isImage = false});
+  const MessageAttachment(
+      {required this.path, this.name, this.isImage = false});
 
   final String path;
   final String? name;

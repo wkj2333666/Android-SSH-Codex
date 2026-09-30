@@ -152,7 +152,10 @@ class _Message extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   for (final attachment in content.attachments)
-                    _AttachmentCard(attachment: attachment, copyText: copyText, loadImage: loadImage),
+                    _AttachmentCard(
+                        attachment: attachment,
+                        copyText: copyText,
+                        loadImage: loadImage),
                   if (content.text.trim().isNotEmpty)
                     MarkdownContent(text: content.text, copyText: copyText),
                 ],
@@ -199,7 +202,8 @@ class _Message extends StatelessWidget {
 }
 
 class _AttachmentCard extends StatelessWidget {
-  const _AttachmentCard({required this.attachment, required this.copyText, this.loadImage});
+  const _AttachmentCard(
+      {required this.attachment, required this.copyText, this.loadImage});
 
   final MessageAttachment attachment;
   final MessageTextCopier copyText;
@@ -220,12 +224,14 @@ class _AttachmentCard extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
-        subtitle: Text(attachment.isImage ? 'Image attachment' : 'File attachment'),
+        subtitle:
+            Text(attachment.isImage ? 'Image attachment' : 'File attachment'),
         trailing: const Icon(Icons.info_outline, size: 18),
         onTap: () => showDialog<void>(
           context: context,
           builder: (context) => AlertDialog(
-            title: Text(attachment.label, maxLines: 2, overflow: TextOverflow.ellipsis),
+            title: Text(attachment.label,
+                maxLines: 2, overflow: TextOverflow.ellipsis),
             content: SingleChildScrollView(
               child: SelectableText(attachment.path.isEmpty
                   ? 'Image location is not available in this conversation.'
@@ -241,11 +247,16 @@ class _AttachmentCard extends StatelessWidget {
                   onPressed: () {
                     final loading = attachment.path.startsWith('data:')
                         ? Future<Uint8List>.sync(() {
-                            final match = RegExp(r'^data:image/(?:png|jpeg|webp|gif);base64,').firstMatch(attachment.path);
-                            if (match == null || attachment.path.length > 14 * 1024 * 1024) {
-                              throw const FormatException('Unsupported or oversized image');
+                            final match = RegExp(
+                                    r'^data:image/(?:png|jpeg|webp|gif);base64,')
+                                .firstMatch(attachment.path);
+                            if (match == null ||
+                                attachment.path.length > 14 * 1024 * 1024) {
+                              throw const FormatException(
+                                  'Unsupported or oversized image');
                             }
-                            return base64Decode(attachment.path.substring(match.end));
+                            return base64Decode(
+                                attachment.path.substring(match.end));
                           })
                         : loadImage!(attachment.path);
                     final preview = loading.then(_validatePreviewImage);
@@ -259,25 +270,41 @@ class _AttachmentCard extends StatelessWidget {
                           child: FutureBuilder<Uint8List>(
                             future: preview,
                             builder: (context, snapshot) {
-                              if (snapshot.hasError) return const Text('Could not load image. Reconnect and try again (maximum 10 MiB).');
-                              if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+                              if (snapshot.hasError) {
+                                return const Text(
+                                    'Could not load image. Reconnect and try again (maximum 10 MiB).');
+                              }
+                              if (!snapshot.hasData) {
+                                return const Center(
+                                    child: CircularProgressIndicator());
+                              }
                               return InteractiveViewer(
-                                child: Image.memory(snapshot.data!, cacheWidth: 1200, fit: BoxFit.contain,
-                                  errorBuilder: (_, __, ___) => const Text('Image format is not supported.'),
+                                child: Image.memory(
+                                  snapshot.data!,
+                                  cacheWidth: 1200,
+                                  fit: BoxFit.contain,
+                                  errorBuilder: (_, __, ___) => const Text(
+                                      'Image format is not supported.'),
                                 ),
                               );
                             },
                           ),
                         ),
-                        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))],
+                        actions: [
+                          TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('Close'))
+                        ],
                       ),
                     ));
                   },
                   child: const Text('Preview image'),
                 ),
-              if (attachment.path.isNotEmpty && !attachment.path.startsWith('data:'))
+              if (attachment.path.isNotEmpty &&
+                  !attachment.path.startsWith('data:'))
                 TextButton(
-                  onPressed: () => unawaited(_copyMessage(context, attachment.path, copyText)),
+                  onPressed: () => unawaited(
+                      _copyMessage(context, attachment.path, copyText)),
                   child: const Text('Copy path'),
                 ),
               TextButton(
@@ -298,7 +325,8 @@ Future<Uint8List> _validatePreviewImage(Uint8List bytes) async {
   try {
     final descriptor = await ui.ImageDescriptor.encoded(buffer);
     try {
-      if (descriptor.width > 16384 || descriptor.height > 16384 ||
+      if (descriptor.width > 16384 ||
+          descriptor.height > 16384 ||
           descriptor.width * descriptor.height > 64 * 1024 * 1024) {
         throw StateError('Image dimensions too large');
       }

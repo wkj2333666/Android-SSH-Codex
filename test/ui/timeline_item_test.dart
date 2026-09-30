@@ -11,13 +11,19 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('image reads are on demand and failure is contained', (tester) async {
+  testWidgets('image reads are on demand and failure is contained',
+      (tester) async {
     var reads = 0;
     await tester.pumpWidget(MaterialApp(
-      home: Scaffold(body: TimelineItemView(
+      home: Scaffold(
+          body: TimelineItemView(
         item: const TaskItem(
-          id: 'image', kind: TaskItemKind.user, text: '',
-          attachments: [MessageAttachment(path: '/tmp/photo.png', isImage: true)],
+          id: 'image',
+          kind: TaskItemKind.user,
+          text: '',
+          attachments: [
+            MessageAttachment(path: '/tmp/photo.png', isImage: true)
+          ],
         ),
         loadImage: (path) async {
           reads++;
@@ -37,11 +43,16 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('attachments are compact and reveal paths only on tap', (tester) async {
+  testWidgets('attachments are compact and reveal paths only on tap',
+      (tester) async {
     await tester.pumpWidget(const MaterialApp(
-      home: Scaffold(body: TimelineItemView(item: TaskItem(
-        id: 'file', kind: TaskItemKind.user,
-        text: 'Attached files (on the remote machine):\n/home/me/very-long-path/report.txt',
+      home: Scaffold(
+          body: TimelineItemView(
+              item: TaskItem(
+        id: 'file',
+        kind: TaskItemKind.user,
+        text:
+            'Attached files (on the remote machine):\n/home/me/very-long-path/report.txt',
       ))),
     ));
     expect(find.text('report.txt'), findsOneWidget);
@@ -55,8 +66,12 @@ void main() {
 
   testWidgets('image-only messages show an image card', (tester) async {
     await tester.pumpWidget(const MaterialApp(
-      home: Scaffold(body: TimelineItemView(item: TaskItem(
-        id: 'image', kind: TaskItemKind.user, text: '',
+      home: Scaffold(
+          body: TimelineItemView(
+              item: TaskItem(
+        id: 'image',
+        kind: TaskItemKind.user,
+        text: '',
         attachments: [MessageAttachment(path: '/tmp/photo.png', isImage: true)],
       ))),
     ));

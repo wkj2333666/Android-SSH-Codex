@@ -45,7 +45,8 @@ void main() {
     final item = snapshot.items.single;
     expect(item.text, isEmpty);
     expect(item.attachments.single.path, '/tmp/photo.png');
-    expect(item.copyWith(status: 'completed').attachments.single.isImage, isTrue);
+    expect(
+        item.copyWith(status: 'completed').attachments.single.isImage, isTrue);
   });
 
   test('start and steer send remote images as native inputs', () async {

@@ -18,7 +18,8 @@ Future<Uint8List> readAttachmentImage(SSHClient client, String path) async {
     if (timedOut) session.close();
     return session;
   });
-  final session = await opening.timeout(const Duration(seconds: 15), onTimeout: () {
+  final session =
+      await opening.timeout(const Duration(seconds: 15), onTimeout: () {
     timedOut = true;
     throw TimeoutException('Image channel timed out');
   });
@@ -35,7 +36,8 @@ Future<Uint8List> readAttachmentImage(SSHClient client, String path) async {
       }
       await session.done;
       if (session.exitCode != 0) throw StateError('Image unavailable');
-    })().timeout(const Duration(seconds: 20));
+    })()
+        .timeout(const Duration(seconds: 20));
     return bytes.takeBytes();
   } finally {
     session.close();
