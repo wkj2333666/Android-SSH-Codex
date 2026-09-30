@@ -53,26 +53,37 @@ void main() {
     expect(fields['osCode'], 104);
     expect(fields.toString(), isNot(contains('secret')));
     expect(fields.toString(), isNot(contains('sensitive')));
-    expect(Diagnostics.errorFields(const FormatException('secret', 'payload'))['reason'], 'unknown');
+    expect(
+        Diagnostics.errorFields(
+            const FormatException('secret', 'payload'))['reason'],
+        'unknown');
   });
 
   test('unwraps SSH socket and authentication errors without leaking text', () {
-    final fields = Diagnostics.errorFields(SSHAuthAbortError('private user',
-      SSHSocketError(const SocketException('private host',
-        osError: OSError('private OS message', 103)))));
-    expect(fields['errorChain'], ['SSHAuthAbortError', 'SSHSocketError', 'SocketException']);
+    final fields = Diagnostics.errorFields(SSHAuthAbortError(
+        'private user',
+        SSHSocketError(const SocketException('private host',
+            osError: OSError('private OS message', 103)))));
+    expect(fields['errorChain'],
+        ['SSHAuthAbortError', 'SSHSocketError', 'SocketException']);
     expect(fields['osCode'], 103);
     expect(fields['reason'], 'connection_aborted');
     expect(fields.toString(), isNot(contains('private')));
-    expect(Diagnostics.errorFields(SSHSocketError('private unknown cause'))['reason'], 'unknown');
-    expect(Diagnostics.errorFields(TimeoutException('private'))['reason'], 'timeout');
+    expect(
+        Diagnostics.errorFields(
+            SSHSocketError('private unknown cause'))['reason'],
+        'unknown');
+    expect(Diagnostics.errorFields(TimeoutException('private'))['reason'],
+        'timeout');
   });
 
   test('proxy diagnostics retain categories but never raw stderr', () {
-    final fields = proxyDiagnosticFields('private-host: downstream closed before WebSocket upgrade');
+    final fields = proxyDiagnosticFields(
+        'private-host: downstream closed before WebSocket upgrade');
     expect(fields['reason'], 'downstream_closed_before_upgrade');
     expect(fields.toString(), isNot(contains('private-host')));
-    expect(proxyDiagnosticFields('unknown sensitive output')['reason'], 'proxy_exit_unknown');
+    expect(proxyDiagnosticFields('unknown sensitive output')['reason'],
+        'proxy_exit_unknown');
     expect(safeExitSignal('TERM'), 'TERM');
     expect(safeExitSignal('secret value'), 'other');
   });

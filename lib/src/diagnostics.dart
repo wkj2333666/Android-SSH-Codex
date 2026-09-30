@@ -58,8 +58,10 @@ abstract final class Diagnostics {
       SSHAuthFailError() => 'ssh_authentication_failed',
       SSHHostkeyError() => 'ssh_host_key_rejected',
       SSHChannelOpenError() => 'ssh_channel_open_rejected',
-      SSHHandshakeError(message: 'Handshake timed out') => 'ssh_handshake_timeout',
-      SocketException() || OSError() when Platform.isAndroid || Platform.isLinux =>
+      SSHHandshakeError(message: 'Handshake timed out') =>
+        'ssh_handshake_timeout',
+      SocketException() ||
+      OSError() when Platform.isAndroid || Platform.isLinux =>
         switch (osCode) {
           1 => 'operation_not_permitted',
           13 => 'access_denied',

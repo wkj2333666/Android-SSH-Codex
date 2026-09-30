@@ -1933,7 +1933,8 @@ final class AppController extends ChangeNotifier {
       .whereType<TaskRecord>()
       .toList(growable: false);
 
-  Future<void> _closeTransport({String reason = 'connection_replaced_or_closed'}) async {
+  Future<void> _closeTransport(
+      {String reason = 'connection_replaced_or_closed'}) async {
     Diagnostics.record('connection.closeRequested', {'closeReason': reason});
     _refreshTimer?.cancel();
     _refreshTimer = null;

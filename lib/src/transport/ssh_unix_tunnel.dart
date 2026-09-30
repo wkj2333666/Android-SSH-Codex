@@ -240,8 +240,20 @@ final class SshUnixTunnel {
 
 String? safeExitSignal(String? signal) => switch (signal) {
       null => null,
-      'ABRT' || 'ALRM' || 'FPE' || 'HUP' || 'ILL' || 'INT' || 'KILL' ||
-      'PIPE' || 'QUIT' || 'SEGV' || 'TERM' || 'USR1' || 'USR2' => signal,
+      'ABRT' ||
+      'ALRM' ||
+      'FPE' ||
+      'HUP' ||
+      'ILL' ||
+      'INT' ||
+      'KILL' ||
+      'PIPE' ||
+      'QUIT' ||
+      'SEGV' ||
+      'TERM' ||
+      'USR1' ||
+      'USR2' =>
+        signal,
       _ => 'other',
     };
 
