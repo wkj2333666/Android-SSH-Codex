@@ -404,7 +404,10 @@ class _InlineAttachmentImageState extends State<_InlineAttachmentImage> {
                       Flexible(
                         child: InteractiveViewer(
                           child: Image.memory(bytes,
-                              cacheWidth: 1200, fit: BoxFit.contain),
+                              cacheWidth: 1200,
+                              fit: BoxFit.contain,
+                              errorBuilder: (_, __, ___) =>
+                                  const Text('Image format is not supported.')),
                         ),
                       ),
                       TextButton(
@@ -418,7 +421,9 @@ class _InlineAttachmentImageState extends State<_InlineAttachmentImage> {
               child: Image.memory(bytes,
                   cacheWidth: 560,
                   fit: BoxFit.contain,
-                  semanticLabel: widget.attachment.label),
+                  semanticLabel: widget.attachment.label,
+                  errorBuilder: (_, __, ___) =>
+                      const Center(child: Text('Image format is not supported.'))),
             );
           },
         ),
