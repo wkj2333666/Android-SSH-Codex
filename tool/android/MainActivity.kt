@@ -15,6 +15,7 @@ class MainActivity : FlutterActivity() {
     private var exportResult: MethodChannel.Result? = null
     private var exportSnapshot: String? = null
     private var attachmentPicker: AttachmentPicker? = null
+    private var attachmentDownloads: AttachmentDownloads? = null
     private var connectionDiagnostics: ConnectionDiagnostics? = null
 
     private fun recordLifecycle(event: String) {
@@ -39,11 +40,18 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         attachmentPicker = AttachmentPicker(this)
+        attachmentDownloads = AttachmentDownloads(this)
         connectionDiagnostics?.stop()
         connectionDiagnostics = ConnectionDiagnostics(this).also { it.start() }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger,
             "android_ssh_codex/attachments").setMethodCallHandler { call, result ->
-            if (call.method == "pick") {
+            if (call.method == "downloadDirectory") result.success(cacheDir.absolutePath)
+            else if (call.method == "saveDownload") {
+                val downloads = attachmentDownloads
+                if (downloads == null) result.error("ACTIVITY_CLOSED", "Save picker closed", null)
+                else downloads.save(call.argument<String>("path") ?: "", call.argument<String>("name") ?: "download", result)
+            }
+            else if (call.method == "pick") {
                 val picker = attachmentPicker
                 if (picker == null) result.error("ACTIVITY_CLOSED", "File picker closed", null)
                 else picker.pick(call.argument<Boolean>("image") == true, result)
@@ -133,6 +141,10 @@ class MainActivity : FlutterActivity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 4104) {
+            attachmentDownloads?.onResult(resultCode, data)
+            return
+        }
         if (requestCode == 4103) {
             attachmentPicker?.onResult(resultCode, data)
             return
@@ -169,6 +181,8 @@ class MainActivity : FlutterActivity() {
         connectionDiagnostics?.stop()
         connectionDiagnostics = null
         attachmentPicker?.close()
+        attachmentDownloads?.close()
+        attachmentDownloads = null
         attachmentPicker = null
         finishExport(false, "Connection activity closed")
         // This service protects this engine's sockets; never leave an orphan.

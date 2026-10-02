@@ -9,6 +9,7 @@ import '../../tasks/task_reducer.dart';
 import '../../tasks/message_attachments.dart';
 import 'codex_directive_content.dart';
 import 'markdown_content.dart';
+import 'remote_file_actions.dart';
 
 typedef MessageTextCopier = Future<void> Function(String text);
 
@@ -211,6 +212,7 @@ class _AttachmentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final thisContext = context;
     return Card(
       margin: const EdgeInsets.only(bottom: 6),
       child: ListTile(
@@ -240,6 +242,8 @@ class _AttachmentCard extends StatelessWidget {
                       : attachment.path),
             ),
             actions: [
+              if (attachment.path.startsWith('/') && RemoteFileActions.maybeOf(thisContext) != null)
+                TextButton(onPressed: () => unawaited(showRemoteFileDownload(thisContext, attachment.path)), child: const Text('Download')),
               if (attachment.isImage &&
                   ((attachment.path.startsWith('/') && loadImage != null) ||
                       attachment.path.startsWith('data:image/')))
