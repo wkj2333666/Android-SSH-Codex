@@ -39,10 +39,12 @@ class AttachmentDownloads(private val activity: Activity) {
         worker.execute {
             var success = false
             try {
-                activity.contentResolver.openOutputStream(uri, "wt")?.use { output ->
+                val output = activity.contentResolver.openOutputStream(uri, "wt")
+                    ?: throw java.io.IOException("No output stream")
+                output.use {
                     file.inputStream().use { it.copyTo(output, 65536) }
-                    success = true
                 }
+                success = true
             } catch (_: Exception) { /* Report failure without exposing file contents. */ }
             activity.runOnUiThread {
                 if (pending !== result) return@runOnUiThread
