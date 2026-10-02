@@ -57,12 +57,14 @@ class MarkdownContent extends StatelessWidget {
     required this.text,
     this.openExternalLink = launchExternalLink,
     this.copyText = copyMarkdownText,
+    this.selectable = true,
     super.key,
   });
 
   final String text;
   final ExternalLinkOpener openExternalLink;
   final MarkdownTextCopier copyText;
+  final bool selectable;
 
   @override
   Widget build(BuildContext context) {
@@ -72,7 +74,7 @@ class MarkdownContent extends StatelessWidget {
     );
     return MarkdownBody(
       data: text,
-      selectable: true,
+      selectable: selectable,
       extensionSet: md.ExtensionSet(
         [
           FormulaBlockSyntax(),

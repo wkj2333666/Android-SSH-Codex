@@ -207,6 +207,11 @@ Limits: 4 attachments per message, 10 MiB per file, 20 MiB total. PNG, JPEG, Web
 and GIF are accepted as images (up to 64 megapixels and 16,384 pixels per side); other formats can be sent
 as files. Queued messages and steering preserve image attachments.
 
+Sent images appear as bounded inline thumbnails in the conversation. Tap a
+thumbnail to zoom; if loading fails, use Retry. Only mounted timeline images
+are requested, with the same 10 MiB and dimension limits as uploads.
+Question prompts and answer options support Markdown formatting.
+
 Selecting a file does not upload it. Sending copies it over SSH into a private,
 randomly named directory under `~/.local/share/android-ssh-codex/attachments/` on
 the selected host. Images are sent as native image inputs; other files are provided

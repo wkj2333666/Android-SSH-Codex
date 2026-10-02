@@ -7,14 +7,14 @@ import 'package:dartssh2/dartssh2.dart';
 
 import '../attachments.dart';
 
-/// Explicit, bounded image reads; never fetch attachments during timeline layout.
+/// Bounded image reads for lazily mounted timeline thumbnails and previews.
 Future<Uint8List> readAttachmentImage(SSHClient client, String path) async {
   if (!path.startsWith('/') || path.contains('\u0000')) {
     throw ArgumentError('Expected a remote absolute path');
   }
   final quoted = "'${path.replaceAll("'", "'\\''")}'";
   var timedOut = false;
-  final opening = client.execute('head -c 10485761 -- $quoted').then((session) {
+  final opening = client.execute('test -f $quoted && head -c 10485761 -- $quoted').then((session) {
     if (timedOut) session.close();
     return session;
   });

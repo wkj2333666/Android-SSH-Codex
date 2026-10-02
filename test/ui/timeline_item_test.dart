@@ -11,7 +11,7 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('image reads are on demand and failure is contained',
+  testWidgets('visible images load automatically and failure can be retried',
       (tester) async {
     var reads = 0;
     await tester.pumpWidget(MaterialApp(
@@ -32,14 +32,41 @@ void main() {
         },
       )),
     ));
-    expect(reads, 0);
-    await tester.tap(find.text('photo.png'));
-    await tester.pumpAndSettle();
-    expect(reads, 0);
-    await tester.tap(find.text('Preview image'));
     await tester.pumpAndSettle();
     expect(reads, 1);
+    await tester.tap(find.text('Image unavailable · Retry'));
+    await tester.pumpAndSettle();
+    expect(reads, 2);
+    await tester.tap(find.text('photo.png'));
+    await tester.pumpAndSettle();
+    expect(reads, 2);
+    await tester.tap(find.text('Preview image'));
+    await tester.pumpAndSettle();
+    expect(reads, 3);
     expect(find.textContaining('Could not load image.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('embedded images display inline and tap opens zoom preview',
+      (tester) async {
+    const data = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=';
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(body: TimelineItemView(item: TaskItem(
+        id: 'embedded', kind: TaskItemKind.user, text: '',
+        attachments: [MessageAttachment(path: 'data:image/png;base64,$data',
+            name: 'Image', isImage: true)],
+      ))),
+    ));
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    });
+    await tester.pumpAndSettle();
+    expect(find.byType(Image), findsOneWidget);
+    final image = tester.widget<Image>(find.byType(Image));
+    expect(image.semanticLabel, 'Image');
+    await tester.tap(find.byType(Image));
+    await tester.pumpAndSettle();
+    expect(find.byType(InteractiveViewer), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -170,9 +197,10 @@ void main() {
       (tester) async {
     await tester.pumpWidget(const MaterialApp(
       home: Scaffold(
-        body: MarkdownContent(
+        body: TimelineItemView(item: TaskItem(
+          id: 'reply', kind: TaskItemKind.agent,
           text: '**Result** with `code` and \$x^2 + y^2 = z^2\$',
-        ),
+        )),
       ),
     ));
 
