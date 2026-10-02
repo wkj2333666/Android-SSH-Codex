@@ -50,10 +50,12 @@ class _UserInputPanelState extends State<UserInputPanel> {
                       for (final option in q.options)
                         ListTile(
                           dense: true,
-                          title: MarkdownContent(text: option.label, selectable: false),
+                          title: MarkdownContent(
+                              text: option.label, selectable: false),
                           subtitle: option.description.isEmpty
                               ? null
-                              : MarkdownContent(text: option.description, selectable: false),
+                              : MarkdownContent(
+                                  text: option.description, selectable: false),
                           leading: Icon(!_useCustom.contains(q.id) &&
                                   _selected[q.id] == option.label
                               ? Icons.radio_button_checked

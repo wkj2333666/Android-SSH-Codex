@@ -14,7 +14,9 @@ Future<Uint8List> readAttachmentImage(SSHClient client, String path) async {
   }
   final quoted = "'${path.replaceAll("'", "'\\''")}'";
   var timedOut = false;
-  final opening = client.execute('test -f $quoted && head -c 10485761 -- $quoted').then((session) {
+  final opening = client
+      .execute('test -f $quoted && head -c 10485761 -- $quoted')
+      .then((session) {
     if (timedOut) session.close();
     return session;
   });

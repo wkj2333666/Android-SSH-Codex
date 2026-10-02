@@ -49,12 +49,19 @@ void main() {
 
   testWidgets('embedded images display inline and tap opens zoom preview',
       (tester) async {
-    const data = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=';
+    const data =
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=';
     await tester.pumpWidget(const MaterialApp(
-      home: Scaffold(body: TimelineItemView(item: TaskItem(
-        id: 'embedded', kind: TaskItemKind.user, text: '',
-        attachments: [MessageAttachment(path: 'data:image/png;base64,$data',
-            name: 'Image', isImage: true)],
+      home: Scaffold(
+          body: TimelineItemView(
+              item: TaskItem(
+        id: 'embedded',
+        kind: TaskItemKind.user,
+        text: '',
+        attachments: [
+          MessageAttachment(
+              path: 'data:image/png;base64,$data', name: 'Image', isImage: true)
+        ],
       ))),
     ));
     await tester.runAsync(() async {
@@ -197,8 +204,10 @@ void main() {
       (tester) async {
     await tester.pumpWidget(const MaterialApp(
       home: Scaffold(
-        body: TimelineItemView(item: TaskItem(
-          id: 'reply', kind: TaskItemKind.agent,
+        body: TimelineItemView(
+            item: TaskItem(
+          id: 'reply',
+          kind: TaskItemKind.agent,
           text: '**Result** with `code` and \$x^2 + y^2 = z^2\$',
         )),
       ),
