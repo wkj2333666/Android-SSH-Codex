@@ -389,7 +389,9 @@ class _InlineAttachmentImageState extends State<_InlineAttachmentImage> {
             final bytes = snapshot.data;
             if (bytes == null) {
               return TextButton.icon(
-                onPressed: () => setState(() => _preview = _load()),
+                onPressed: () => setState(() {
+                  _preview = _load();
+                }),
                 icon: const Icon(Icons.refresh),
                 label: const Text('Image unavailable · Retry'),
               );
