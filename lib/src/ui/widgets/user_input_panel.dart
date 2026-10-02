@@ -42,15 +42,16 @@ class _UserInputPanelState extends State<UserInputPanel> {
                       Text(q.header, style: Theme.of(context).textTheme.titleSmall),
                       Text(q.question),
                       for (final option in q.options)
-                        RadioListTile<String>(
+                        ListTile(
                           dense: true,
                           title: Text(option.label),
                           subtitle: option.description.isEmpty ? null : Text(option.description),
-                          value: option.label,
-                          groupValue: _useCustom.contains(q.id) ? null : _selected[q.id],
-                          onChanged: (value) => setState(() {
+                          leading: Icon(!_useCustom.contains(q.id) && _selected[q.id] == option.label
+                              ? Icons.radio_button_checked : Icons.radio_button_unchecked),
+                          selected: !_useCustom.contains(q.id) && _selected[q.id] == option.label,
+                          onTap: () => setState(() {
                             _useCustom.remove(q.id);
-                            _selected[q.id] = value!;
+                            _selected[q.id] = option.label;
                           }),
                         ),
                       if (q.options.isEmpty || q.isOther)
