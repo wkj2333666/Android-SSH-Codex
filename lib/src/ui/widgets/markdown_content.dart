@@ -91,7 +91,8 @@ class MarkdownContent extends StatelessWidget {
         ),
       },
       onTapLink: (_, href, __) {
-        if (href != null && RemoteFileActions.maybeOf(context) != null &&
+        if (href != null &&
+            RemoteFileActions.maybeOf(context) != null &&
             remoteFilePath(href, '/') != null) {
           unawaited(showRemoteFileDownload(context, href));
         } else {
@@ -99,9 +100,11 @@ class MarkdownContent extends StatelessWidget {
         }
       },
       imageBuilder: (uri, title, alt) {
-        if (RemoteFileActions.maybeOf(context) != null && remoteFilePath(uri.toString(), '/') != null) {
+        if (RemoteFileActions.maybeOf(context) != null &&
+            remoteFilePath(uri.toString(), '/') != null) {
           return OutlinedButton.icon(
-            onPressed: () => unawaited(showRemoteFileDownload(context, uri.toString())),
+            onPressed: () =>
+                unawaited(showRemoteFileDownload(context, uri.toString())),
             icon: const Icon(Icons.download_outlined),
             label: Text(alt?.isNotEmpty == true ? alt! : 'Download image'),
           );

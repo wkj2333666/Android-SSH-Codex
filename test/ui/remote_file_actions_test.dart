@@ -5,14 +5,23 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('file links require confirmation and web links stay external', (tester) async {
+  testWidgets('file links require confirmation and web links stay external',
+      (tester) async {
     final downloads = <String>[];
     final web = <Uri>[];
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: RemoteFileActions(
-      download: (path) async { downloads.add(path); return true; },
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: RemoteFileActions(
+      download: (path) async {
+        downloads.add(path);
+        return true;
+      },
       child: MarkdownContent(
         text: '[Report](sandbox:/mnt/data/report.pdf)',
-        openExternalLink: (uri) async { web.add(uri); return true; },
+        openExternalLink: (uri) async {
+          web.add(uri);
+          return true;
+        },
       ),
     ))));
     final markdown = tester.widget<MarkdownBody>(find.byType(MarkdownBody));

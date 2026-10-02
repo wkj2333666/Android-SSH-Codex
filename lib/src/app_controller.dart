@@ -1202,22 +1202,30 @@ final class AppController extends ChangeNotifier {
     final ssh = _ssh;
     final attempt = _connectionAttempt;
     final path = downloads.remoteFilePath(link, selectedTask?.cwd ?? '');
-    if (ssh == null || path == null) throw StateError('Remote file unavailable');
+    if (ssh == null || path == null)
+      throw StateError('Remote file unavailable');
     _downloadingFile = true;
     Directory? temporary;
     try {
-      final cache = await Attachments.channel.invokeMethod<String>('downloadDirectory');
+      final cache =
+          await Attachments.channel.invokeMethod<String>('downloadDirectory');
       if (cache == null) throw StateError('No download directory');
       temporary = await Directory(cache).createTemp('codex-download-');
       final file = File('${temporary.path}/payload.bin');
       await downloads.downloadRemoteFile(ssh.client, path, file);
-      if (!identical(ssh, _ssh) || attempt != _connectionAttempt) throw StateError('Connection changed');
+      if (!identical(ssh, _ssh) || attempt != _connectionAttempt)
+        throw StateError('Connection changed');
       return await Attachments.channel.invokeMethod<bool>('saveDownload', {
-        'path': file.path,
-        'name': path.split('/').last,
-      }) ?? false;
+            'path': file.path,
+            'name': path.split('/').last,
+          }) ??
+          false;
     } finally {
-      try { await temporary?.delete(recursive: true); } finally { _downloadingFile = false; }
+      try {
+        await temporary?.delete(recursive: true);
+      } finally {
+        _downloadingFile = false;
+      }
     }
   }
 
@@ -1843,8 +1851,12 @@ final class AppController extends ChangeNotifier {
     if (notification.method == 'serverRequest/resolved') {
       final id = notification.params['requestId'];
       final threadId = notification.params['threadId'];
-      _userInputRequests = _userInputRequests.where((r) => r.id != id || r.threadId != threadId).toList();
-      _approvals = _approvals.where((r) => r.requestId != id || r.threadId != threadId).toList();
+      _userInputRequests = _userInputRequests
+          .where((r) => r.id != id || r.threadId != threadId)
+          .toList();
+      _approvals = _approvals
+          .where((r) => r.requestId != id || r.threadId != threadId)
+          .toList();
       notifyListeners();
       return;
     }
@@ -1923,7 +1935,8 @@ final class AppController extends ChangeNotifier {
   }
 
   void answerUserInput(UserInputRequest request, Map<String, String> answers) {
-    if (!isConnected || !_userInputRequests.any((r) => identical(r, request))) return;
+    if (!isConnected || !_userInputRequests.any((r) => identical(r, request)))
+      return;
     try {
       _rpc!.respond(request.id, request.response(answers));
     } catch (_) {
@@ -1931,7 +1944,8 @@ final class AppController extends ChangeNotifier {
       notifyListeners();
       return;
     }
-    _userInputRequests = _userInputRequests.where((r) => !identical(r, request)).toList();
+    _userInputRequests =
+        _userInputRequests.where((r) => !identical(r, request)).toList();
     notifyListeners();
   }
 

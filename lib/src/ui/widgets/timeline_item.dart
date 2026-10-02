@@ -242,8 +242,12 @@ class _AttachmentCard extends StatelessWidget {
                       : attachment.path),
             ),
             actions: [
-              if (attachment.path.startsWith('/') && RemoteFileActions.maybeOf(thisContext) != null)
-                TextButton(onPressed: () => unawaited(showRemoteFileDownload(thisContext, attachment.path)), child: const Text('Download')),
+              if (attachment.path.startsWith('/') &&
+                  RemoteFileActions.maybeOf(thisContext) != null)
+                TextButton(
+                    onPressed: () => unawaited(
+                        showRemoteFileDownload(thisContext, attachment.path)),
+                    child: const Text('Download')),
               if (attachment.isImage &&
                   ((attachment.path.startsWith('/') && loadImage != null) ||
                       attachment.path.startsWith('data:image/')))
