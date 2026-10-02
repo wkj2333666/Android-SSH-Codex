@@ -1924,7 +1924,13 @@ final class AppController extends ChangeNotifier {
 
   void answerUserInput(UserInputRequest request, Map<String, String> answers) {
     if (!isConnected || !_userInputRequests.any((r) => identical(r, request))) return;
-    _rpc!.respond(request.id, request.response(answers));
+    try {
+      _rpc!.respond(request.id, request.response(answers));
+    } catch (_) {
+      _error = 'Could not send answers. Check the connection and retry.';
+      notifyListeners();
+      return;
+    }
     _userInputRequests = _userInputRequests.where((r) => !identical(r, request)).toList();
     notifyListeners();
   }
