@@ -7,6 +7,8 @@ import 'package:markdown/markdown.dart' as md;
 import 'package:url_launcher/url_launcher.dart';
 
 import 'formula_markdown.dart';
+import 'remote_file_actions.dart';
+import '../../transport/file_download.dart';
 
 typedef ExternalLinkOpener = Future<bool> Function(Uri uri);
 typedef MarkdownTextCopier = Future<void> Function(String text);
@@ -89,9 +91,26 @@ class MarkdownContent extends StatelessWidget {
         ),
       },
       onTapLink: (_, href, __) {
-        unawaited(openWebLink(context, href, openExternalLink));
+        if (href != null &&
+            RemoteFileActions.maybeOf(context) != null &&
+            remoteFilePath(href, '/') != null) {
+          unawaited(showRemoteFileDownload(context, href));
+        } else {
+          unawaited(openWebLink(context, href, openExternalLink));
+        }
       },
-      imageBuilder: (uri, title, alt) => _BlockedImage(alt: alt),
+      imageBuilder: (uri, title, alt) {
+        if (RemoteFileActions.maybeOf(context) != null &&
+            remoteFilePath(uri.toString(), '/') != null) {
+          return OutlinedButton.icon(
+            onPressed: () =>
+                unawaited(showRemoteFileDownload(context, uri.toString())),
+            icon: const Icon(Icons.download_outlined),
+            label: Text(alt?.isNotEmpty == true ? alt! : 'Download image'),
+          );
+        }
+        return _BlockedImage(alt: alt);
+      },
       styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
         code: codeTextStyle?.copyWith(
           backgroundColor: theme.colorScheme.surfaceContainerHighest,

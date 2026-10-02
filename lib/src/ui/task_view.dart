@@ -12,6 +12,8 @@ import 'task_timeline_render_cache.dart';
 import 'timeline_entries.dart';
 import 'turn_settings_picker.dart';
 import 'widgets/timeline_item.dart';
+import 'widgets/user_input_panel.dart';
+import 'widgets/remote_file_actions.dart';
 
 bool isTaskComposerInputEnabled({
   required TaskRecord task,
@@ -150,7 +152,29 @@ class _TaskViewState extends State<TaskView> {
           onCommand: _handleCommand,
         ),
         const Divider(height: 1),
-        Expanded(child: timeline),
+        Expanded(
+            child: RemoteFileActions(
+                download: widget.controller.downloadFile, child: timeline)),
+        if (widget.controller.userInputRequests
+            .any((r) => r.threadId == task.id))
+          ConstrainedBox(
+            constraints: BoxConstraints(
+                maxHeight: (MediaQuery.sizeOf(context).height -
+                        MediaQuery.viewInsetsOf(context).bottom) *
+                    0.4),
+            child: SingleChildScrollView(
+              child: Column(children: [
+                for (final request in widget.controller.userInputRequests
+                    .where((r) => r.threadId == task.id))
+                  UserInputPanel(
+                    key: ObjectKey(request),
+                    request: request,
+                    onAnswer: (answers) =>
+                        widget.controller.answerUserInput(request, answers),
+                  ),
+              ]),
+            ),
+          ),
         for (final approval in approvals)
           _ApprovalBar(
             approval: approval,

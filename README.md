@@ -235,6 +235,23 @@ Do not accept the new fingerprint until you have verified the change through a
 trusted channel. An unexpected key change can indicate a rebuilt server, a DNS
 or address change, or an interception attempt.
 
+### Download files and answer questions
+
+On Android, tap a file link in an agent reply (absolute remote paths,
+`sandbox:/…`, `file:///…`, or project-relative paths), confirm the download,
+then choose a save location in the system picker. Attachment cards also have a
+Download action. Files are streamed over the existing SSH connection, with a
+100 MiB limit and a two-minute transfer timeout; temporary copies are removed
+after saving, cancelling or failure. HTTP/HTTPS links still open in your browser.
+Remote files must exist on the connected SSH host; links to a different sandbox
+cannot be downloaded through this connection.
+
+Structured agent questions appear above the composer. Select an option or enter
+a custom answer when offered, then submit; nothing is automatically selected or
+submitted. Both blocking and non-blocking questions are supported. Skip submits
+empty answers. Prompts disappear when resolved by another client and are cleared
+on disconnect, so an old prompt cannot answer a new connection's request.
+
 ### Collect Android logs
 
 For background disconnects, use the **Export connection diagnostics** bug icon

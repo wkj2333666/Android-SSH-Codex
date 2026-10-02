@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
@@ -9,6 +10,7 @@ import 'profiles/host_profile.dart';
 import 'profiles/profile_store.dart';
 import 'projects/remote_project.dart';
 import 'protocol/codex_remote_api.dart';
+import 'protocol/user_input_request.dart';
 import 'protocol/foreground_probe.dart';
 import 'protocol/json_rpc_client.dart';
 import 'protocol/websocket_rpc_transport.dart';
@@ -20,6 +22,7 @@ import 'tasks/task_reducer.dart';
 import 'tasks/task_refresh_lock.dart';
 import 'transport/codex_daemon.dart';
 import 'transport/attachment_upload.dart';
+import 'transport/file_download.dart' as downloads;
 import 'transport/ssh_connector.dart';
 import 'transport/ssh_unix_tunnel.dart';
 
@@ -144,6 +147,8 @@ final class AppController extends ChangeNotifier {
   HostKeyChallenge? _hostKeyChallenge;
   Completer<bool>? _hostKeyCompleter;
   List<PendingApproval> _approvals = const [];
+  List<UserInputRequest> _userInputRequests = const [];
+  List<UserInputRequest> get userInputRequests => _userInputRequests;
   final Set<String> _interactiveThreadIds = {};
   Set<String> _subscribedThreadIds = {};
   SshConnection? _ssh;
@@ -1189,6 +1194,43 @@ final class AppController extends ChangeNotifier {
     return bytes;
   }
 
+  bool _downloadingFile = false;
+
+  Future<bool> downloadFile(String link) async {
+    if (_downloadingFile) throw StateError('A download is already active');
+    if (!Attachments.supported) throw UnsupportedError('Android download only');
+    final ssh = _ssh;
+    final attempt = _connectionAttempt;
+    final path = downloads.remoteFilePath(link, selectedTask?.cwd ?? '');
+    if (ssh == null || path == null) {
+      throw StateError('Remote file unavailable');
+    }
+    _downloadingFile = true;
+    Directory? temporary;
+    try {
+      final cache =
+          await Attachments.channel.invokeMethod<String>('downloadDirectory');
+      if (cache == null) throw StateError('No download directory');
+      temporary = await Directory(cache).createTemp('codex-download-');
+      final file = File('${temporary.path}/payload.bin');
+      await downloads.downloadRemoteFile(ssh.client, path, file);
+      if (!identical(ssh, _ssh) || attempt != _connectionAttempt) {
+        throw StateError('Connection changed');
+      }
+      return await Attachments.channel.invokeMethod<bool>('saveDownload', {
+            'path': file.path,
+            'name': path.split('/').last,
+          }) ??
+          false;
+    } finally {
+      try {
+        await temporary?.delete(recursive: true);
+      } finally {
+        _downloadingFile = false;
+      }
+    }
+  }
+
   Future<TaskMessageDisposition> sendPrompt(
     String prompt, {
     RemoteSkill? skill,
@@ -1808,6 +1850,18 @@ final class AppController extends ChangeNotifier {
 
   void _handleNotification(int attempt, RpcNotification notification) {
     if (attempt != _connectionAttempt) return;
+    if (notification.method == 'serverRequest/resolved') {
+      final id = notification.params['requestId'];
+      final threadId = notification.params['threadId'];
+      _userInputRequests = _userInputRequests
+          .where((r) => r.id != id || r.threadId != threadId)
+          .toList();
+      _approvals = _approvals
+          .where((r) => r.requestId != id || r.threadId != threadId)
+          .toList();
+      notifyListeners();
+      return;
+    }
     final event = CodexRemoteApi.parseNotification(
       notification.method,
       notification.params,
@@ -1854,6 +1908,17 @@ final class AppController extends ChangeNotifier {
 
   void _handleServerRequest(int attempt, RpcServerRequest request) {
     if (attempt != _connectionAttempt) return;
+    if (request.method == 'item/tool/requestUserInput') {
+      if (_userInputRequests.any((r) => r.id == request.id)) return;
+      try {
+        final input = UserInputRequest(request);
+        _userInputRequests = [..._userInputRequests, input];
+        notifyListeners();
+      } catch (_) {
+        _rpc?.respondError(request.id, -32602, 'Invalid user input request');
+      }
+      return;
+    }
     if (!request.method.contains('requestApproval')) {
       _rpc?.respondError(request.id, -32601, 'Unsupported server request');
       return;
@@ -1869,6 +1934,22 @@ final class AppController extends ChangeNotifier {
       throw StateError('Connect to a host first.');
     }
     return api;
+  }
+
+  void answerUserInput(UserInputRequest request, Map<String, String> answers) {
+    if (!isConnected || !_userInputRequests.any((r) => identical(r, request))) {
+      return;
+    }
+    try {
+      _rpc!.respond(request.id, request.response(answers));
+    } catch (_) {
+      _error = 'Could not send answers. Check the connection and retry.';
+      notifyListeners();
+      return;
+    }
+    _userInputRequests =
+        _userInputRequests.where((r) => !identical(r, request)).toList();
+    notifyListeners();
   }
 
   Future<void> disconnect() async {
@@ -1935,6 +2016,7 @@ final class AppController extends ChangeNotifier {
 
   Future<void> _closeTransport(
       {String reason = 'connection_replaced_or_closed'}) async {
+    _userInputRequests = const [];
     Diagnostics.record('connection.closeRequested', {'closeReason': reason});
     _refreshTimer?.cancel();
     _refreshTimer = null;

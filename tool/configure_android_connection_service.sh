@@ -15,5 +15,6 @@ kotlin_dir="$android_root/app/src/main/kotlin/io/github/wkj2333666/android_ssh_c
 mkdir -p "$kotlin_dir" "$android_root/app/src/main/res/drawable"
 cp "$template_root/MainActivity.kt" "$template_root/ConnectionService.kt" "$template_root/DiagnosticLog.kt" "$kotlin_dir/"
 cp "$template_root/AttachmentPicker.kt" "$kotlin_dir/"
+cp "$template_root/AttachmentDownloads.kt" "$kotlin_dir/"
 cp "$template_root/ConnectionDiagnostics.kt" "$kotlin_dir/"
 cp "$template_root/ic_connection.xml" "$android_root/app/src/main/res/drawable/"
