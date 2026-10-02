@@ -215,118 +215,221 @@ class _AttachmentCard extends StatelessWidget {
     final thisContext = context;
     return Card(
       margin: const EdgeInsets.only(bottom: 6),
-      child: ListTile(
-        dense: true,
-        visualDensity: VisualDensity.compact,
-        leading: Icon(attachment.isImage
-            ? Icons.image_outlined
-            : Icons.insert_drive_file_outlined),
-        title: Text(
-          attachment.label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        subtitle:
-            Text(attachment.isImage ? 'Image attachment' : 'File attachment'),
-        trailing: const Icon(Icons.info_outline, size: 18),
-        onTap: () => showDialog<void>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: Text(attachment.label,
-                maxLines: 2, overflow: TextOverflow.ellipsis),
-            content: SingleChildScrollView(
-              child: SelectableText(attachment.path.isEmpty
-                  ? 'Image location is not available in this conversation.'
-                  : attachment.path.startsWith('data:')
-                      ? 'Embedded image'
-                      : attachment.path),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (attachment.isImage &&
+              ((attachment.path.startsWith('/') && loadImage != null) ||
+                  attachment.path.startsWith('data:image/')))
+            _InlineAttachmentImage(
+              key: ValueKey(attachment.path),
+              attachment: attachment,
+              loadImage: loadImage,
             ),
-            actions: [
-              if (attachment.path.startsWith('/') &&
-                  RemoteFileActions.maybeOf(thisContext) != null)
-                TextButton(
-                    onPressed: () => unawaited(
-                        showRemoteFileDownload(thisContext, attachment.path)),
-                    child: const Text('Download')),
-              if (attachment.isImage &&
-                  ((attachment.path.startsWith('/') && loadImage != null) ||
-                      attachment.path.startsWith('data:image/')))
-                TextButton(
-                  onPressed: () {
-                    final loading = attachment.path.startsWith('data:')
-                        ? Future<Uint8List>.sync(() {
-                            final match = RegExp(
-                                    r'^data:image/(?:png|jpeg|webp|gif);base64,')
-                                .firstMatch(attachment.path);
-                            if (match == null ||
-                                attachment.path.length > 14 * 1024 * 1024) {
-                              throw const FormatException(
-                                  'Unsupported or oversized image');
-                            }
-                            return base64Decode(
-                                attachment.path.substring(match.end));
-                          })
-                        : loadImage!(attachment.path);
-                    final preview = _loadPreviewImage(loading);
-                    unawaited(showDialog<void>(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: const Text('Image preview'),
-                        content: SizedBox(
-                          width: 500,
-                          height: 400,
-                          child: FutureBuilder<Uint8List?>(
-                            future: preview,
-                            builder: (context, snapshot) {
-                              if (snapshot.connectionState ==
-                                      ConnectionState.done &&
-                                  !snapshot.hasData) {
-                                return const Text(
-                                    'Could not load image. Reconnect and try again (maximum 10 MiB).');
-                              }
-                              if (!snapshot.hasData) {
-                                return const Center(
-                                    child: CircularProgressIndicator());
-                              }
-                              return InteractiveViewer(
-                                child: Image.memory(
-                                  snapshot.data!,
-                                  cacheWidth: 1200,
-                                  fit: BoxFit.contain,
-                                  errorBuilder: (_, __, ___) => const Text(
-                                      'Image format is not supported.'),
-                                ),
-                              );
-                            },
+          ListTile(
+            dense: true,
+            visualDensity: VisualDensity.compact,
+            leading: Icon(attachment.isImage
+                ? Icons.image_outlined
+                : Icons.insert_drive_file_outlined),
+            title: Text(
+              attachment.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            subtitle: Text(
+                attachment.isImage ? 'Image attachment' : 'File attachment'),
+            trailing: const Icon(Icons.info_outline, size: 18),
+            onTap: () => showDialog<void>(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: Text(attachment.label,
+                    maxLines: 2, overflow: TextOverflow.ellipsis),
+                content: SingleChildScrollView(
+                  child: SelectableText(attachment.path.isEmpty
+                      ? 'Image location is not available in this conversation.'
+                      : attachment.path.startsWith('data:')
+                          ? 'Embedded image'
+                          : attachment.path),
+                ),
+                actions: [
+                  if (attachment.path.startsWith('/') &&
+                      RemoteFileActions.maybeOf(thisContext) != null)
+                    TextButton(
+                        onPressed: () => unawaited(showRemoteFileDownload(
+                            thisContext, attachment.path)),
+                        child: const Text('Download')),
+                  if (attachment.isImage &&
+                      ((attachment.path.startsWith('/') && loadImage != null) ||
+                          attachment.path.startsWith('data:image/')))
+                    TextButton(
+                      onPressed: () {
+                        final loading = attachment.path.startsWith('data:')
+                            ? Future<Uint8List>.sync(() {
+                                final match = RegExp(
+                                        r'^data:image/(?:png|jpeg|webp|gif);base64,')
+                                    .firstMatch(attachment.path);
+                                if (match == null ||
+                                    attachment.path.length > 14 * 1024 * 1024) {
+                                  throw const FormatException(
+                                      'Unsupported or oversized image');
+                                }
+                                return base64Decode(
+                                    attachment.path.substring(match.end));
+                              })
+                            : loadImage!(attachment.path);
+                        final preview = _loadPreviewImage(loading);
+                        unawaited(showDialog<void>(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text('Image preview'),
+                            content: SizedBox(
+                              width: 500,
+                              height: 400,
+                              child: FutureBuilder<Uint8List?>(
+                                future: preview,
+                                builder: (context, snapshot) {
+                                  if (snapshot.connectionState ==
+                                          ConnectionState.done &&
+                                      !snapshot.hasData) {
+                                    return const Text(
+                                        'Could not load image. Reconnect and try again (maximum 10 MiB).');
+                                  }
+                                  if (!snapshot.hasData) {
+                                    return const Center(
+                                        child: CircularProgressIndicator());
+                                  }
+                                  return InteractiveViewer(
+                                    child: Image.memory(
+                                      snapshot.data!,
+                                      cacheWidth: 1200,
+                                      fit: BoxFit.contain,
+                                      errorBuilder: (_, __, ___) => const Text(
+                                          'Image format is not supported.'),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                            actions: [
+                              TextButton(
+                                  onPressed: () => Navigator.pop(context),
+                                  child: const Text('Close'))
+                            ],
                           ),
-                        ),
-                        actions: [
-                          TextButton(
-                              onPressed: () => Navigator.pop(context),
-                              child: const Text('Close'))
-                        ],
-                      ),
-                    ));
-                  },
-                  child: const Text('Preview image'),
-                ),
-              if (attachment.path.isNotEmpty &&
-                  !attachment.path.startsWith('data:'))
-                TextButton(
-                  onPressed: () => unawaited(
-                      _copyMessage(context, attachment.path, copyText)),
-                  child: const Text('Copy path'),
-                ),
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Close'),
+                        ));
+                      },
+                      child: const Text('Preview image'),
+                    ),
+                  if (attachment.path.isNotEmpty &&
+                      !attachment.path.startsWith('data:'))
+                    TextButton(
+                      onPressed: () => unawaited(
+                          _copyMessage(context, attachment.path, copyText)),
+                      child: const Text('Copy path'),
+                    ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Close'),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
+}
+
+class _InlineAttachmentImage extends StatefulWidget {
+  const _InlineAttachmentImage({
+    required this.attachment,
+    required this.loadImage,
+    super.key,
+  });
+
+  final MessageAttachment attachment;
+  final Future<Uint8List> Function(String)? loadImage;
+
+  @override
+  State<_InlineAttachmentImage> createState() => _InlineAttachmentImageState();
+}
+
+class _InlineAttachmentImageState extends State<_InlineAttachmentImage> {
+  late Future<Uint8List?> _preview;
+
+  @override
+  void initState() {
+    super.initState();
+    _preview = _load();
+  }
+
+  Future<Uint8List?> _load() => _loadPreviewImage(Future.sync(() {
+        final path = widget.attachment.path;
+        if (!path.startsWith('data:')) return widget.loadImage!(path);
+        final match = RegExp(r'^data:image/(?:png|jpeg|webp|gif);base64,')
+            .firstMatch(path);
+        if (match == null || path.length > 14 * 1024 * 1024) {
+          throw const FormatException('Unsupported or oversized image');
+        }
+        return base64Decode(path.substring(match.end));
+      }));
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        width: 280,
+        height: 180,
+        child: FutureBuilder<Uint8List?>(
+          future: _preview,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            final bytes = snapshot.data;
+            if (bytes == null) {
+              return TextButton.icon(
+                onPressed: () => setState(() {
+                  _preview = _load();
+                }),
+                icon: const Icon(Icons.refresh),
+                label: const Text('Image unavailable · Retry'),
+              );
+            }
+            return InkWell(
+              onTap: () => showDialog<void>(
+                context: context,
+                builder: (context) => Dialog(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: InteractiveViewer(
+                          child: Image.memory(bytes,
+                              cacheWidth: 1200,
+                              fit: BoxFit.contain,
+                              errorBuilder: (_, __, ___) =>
+                                  const Text('Image format is not supported.')),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Close'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              child: Image.memory(bytes,
+                  cacheWidth: 560,
+                  fit: BoxFit.contain,
+                  semanticLabel: widget.attachment.label,
+                  errorBuilder: (_, __, ___) => const Center(
+                      child: Text('Image format is not supported.'))),
+            );
+          },
+        ),
+      );
 }
 
 Future<Uint8List?> _loadPreviewImage(Future<Uint8List> loading) async {

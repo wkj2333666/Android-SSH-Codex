@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../protocol/user_input_request.dart';
+import 'markdown_content.dart';
 
 class UserInputPanel extends StatefulWidget {
   const UserInputPanel(
@@ -45,14 +46,16 @@ class _UserInputPanelState extends State<UserInputPanel> {
                     for (final q in widget.request.questions) ...[
                       Text(q.header,
                           style: Theme.of(context).textTheme.titleSmall),
-                      Text(q.question),
+                      MarkdownContent(text: q.question),
                       for (final option in q.options)
                         ListTile(
                           dense: true,
-                          title: Text(option.label),
+                          title: MarkdownContent(
+                              text: option.label, selectable: false),
                           subtitle: option.description.isEmpty
                               ? null
-                              : Text(option.description),
+                              : MarkdownContent(
+                                  text: option.description, selectable: false),
                           leading: Icon(!_useCustom.contains(q.id) &&
                                   _selected[q.id] == option.label
                               ? Icons.radio_button_checked

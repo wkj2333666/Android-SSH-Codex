@@ -3,6 +3,7 @@ import 'package:android_ssh_codex/src/protocol/user_input_request.dart';
 import 'package:android_ssh_codex/src/ui/widgets/user_input_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
 void main() {
   testWidgets('no automatic answer; user can select or type a custom answer',
@@ -17,10 +18,10 @@ void main() {
         {
           'id': 'q',
           'header': 'Choice',
-          'question': 'Which?',
+          'question': '**Which?**',
           'isOther': true,
           'options': [
-            {'label': 'First', 'description': 'Recommended'}
+            {'label': 'First', 'description': '**Recommended**'}
           ]
         }
       ],
@@ -33,7 +34,10 @@ void main() {
     ))));
     expect(tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
         isNull);
-    await tester.tap(find.text('First'));
+    expect(find.byType(MarkdownBody), findsNWidgets(3));
+    expect(find.text('**Which?**'), findsNothing);
+    expect(find.textContaining('Which?', findRichText: true), findsOneWidget);
+    await tester.tap(find.text('First', findRichText: true));
     await tester.pump();
     await tester.tap(find.text('Submit answers'));
     expect(submitted, {'q': 'First'});
