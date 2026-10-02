@@ -422,8 +422,8 @@ class _InlineAttachmentImageState extends State<_InlineAttachmentImage> {
                   cacheWidth: 560,
                   fit: BoxFit.contain,
                   semanticLabel: widget.attachment.label,
-                  errorBuilder: (_, __, ___) =>
-                      const Center(child: Text('Image format is not supported.'))),
+                  errorBuilder: (_, __, ___) => const Center(
+                      child: Text('Image format is not supported.'))),
             );
           },
         ),
