@@ -1202,8 +1202,9 @@ final class AppController extends ChangeNotifier {
     final ssh = _ssh;
     final attempt = _connectionAttempt;
     final path = downloads.remoteFilePath(link, selectedTask?.cwd ?? '');
-    if (ssh == null || path == null)
+    if (ssh == null || path == null) {
       throw StateError('Remote file unavailable');
+    }
     _downloadingFile = true;
     Directory? temporary;
     try {
@@ -1213,8 +1214,9 @@ final class AppController extends ChangeNotifier {
       temporary = await Directory(cache).createTemp('codex-download-');
       final file = File('${temporary.path}/payload.bin');
       await downloads.downloadRemoteFile(ssh.client, path, file);
-      if (!identical(ssh, _ssh) || attempt != _connectionAttempt)
+      if (!identical(ssh, _ssh) || attempt != _connectionAttempt) {
         throw StateError('Connection changed');
+      }
       return await Attachments.channel.invokeMethod<bool>('saveDownload', {
             'path': file.path,
             'name': path.split('/').last,
@@ -1935,8 +1937,9 @@ final class AppController extends ChangeNotifier {
   }
 
   void answerUserInput(UserInputRequest request, Map<String, String> answers) {
-    if (!isConnected || !_userInputRequests.any((r) => identical(r, request)))
+    if (!isConnected || !_userInputRequests.any((r) => identical(r, request))) {
       return;
+    }
     try {
       _rpc!.respond(request.id, request.response(answers));
     } catch (_) {
