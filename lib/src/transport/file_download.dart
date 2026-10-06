@@ -55,12 +55,16 @@ String fileDownloadCommand(String path) {
   if (!path.startsWith('/') || path.contains('\u0000')) {
     throw ArgumentError('Invalid path');
   }
-  final quoted = "'${path.replaceAll("'", "'\\''")}'";
-  return 'if ! test -e $quoted; then exit 44; '
+  final quoted = _shellQuote(path);
+  final script = 'if ! test -e $quoted; then exit 44; '
       'elif ! test -f $quoted; then exit 45; '
       'elif ! test -r $quoted; then exit 46; fi; '
       'head -c ${maxDownloadBytes + 1} -- $quoted';
+  // SSH exec uses the account's login shell, which may be fish rather than sh.
+  return '/bin/sh -c ${_shellQuote(script)}';
 }
+
+String _shellQuote(String value) => "'${value.replaceAll("'", "'\\''")}'";
 
 Future<void> downloadRemoteFile(SSHClient client, String path, File destination,
     {void Function(DownloadProgress)? onProgress}) async {

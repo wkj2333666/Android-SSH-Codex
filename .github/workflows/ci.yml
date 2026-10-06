@@ -30,6 +30,8 @@ jobs:
           path: ~/.pub-cache
           key: pub-${{ runner.os }}-${{ hashFiles('pubspec.yaml', 'pubspec.lock') }}
           restore-keys: pub-${{ runner.os }}-
+      - name: Install fish for SSH login-shell regression tests
+        run: sudo apt-get update -qq && sudo apt-get install -y fish
       - run: flutter pub get
       - name: Verify dependency lock
         run: git diff --exit-code -- pubspec.lock
