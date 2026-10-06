@@ -218,7 +218,7 @@ the selected host. Images are sent as native image inputs; other files are provi
 to the agent by remote path, subject to its file-access and format support.
 Uploads are retained for conversation references; remove them manually when no
 longer needed. Failed or interrupted sends may leave unused uploads there.
-This version does not add camera capture, remote-file downloads or an OpenHarmony
+This version does not add camera capture or an OpenHarmony
 file picker. Attachment names and contents are excluded from diagnostic logs.
 
 ### The SSH connection works, but Codex does not connect
@@ -241,6 +241,11 @@ trusted channel. An unexpected key change can indicate a rebuilt server, a DNS
 or address change, or an interception attempt.
 
 ### Download files and answer questions
+
+Downloads show received bytes and a percentage when the remote file size is
+available. Errors distinguish missing files, directories, read permissions,
+transfer timeouts and phone save failures. Diagnostic logs record the failing
+stage without recording file paths or contents.
 
 On Android, tap a file link in an agent reply (absolute remote paths,
 `sandbox:/…`, `file:///…`, or project-relative paths), confirm the download,

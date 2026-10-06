@@ -154,7 +154,9 @@ class _TaskViewState extends State<TaskView> {
         const Divider(height: 1),
         Expanded(
             child: RemoteFileActions(
-                download: widget.controller.downloadFile, child: timeline)),
+                download: widget.controller.downloadFile,
+                downloadWithProgress: widget.controller.downloadFile,
+                child: timeline)),
         if (widget.controller.userInputRequests
             .any((r) => r.threadId == task.id))
           ConstrainedBox(

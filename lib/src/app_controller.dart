@@ -1196,7 +1196,8 @@ final class AppController extends ChangeNotifier {
 
   bool _downloadingFile = false;
 
-  Future<bool> downloadFile(String link) async {
+  Future<bool> downloadFile(String link,
+      {void Function(downloads.DownloadProgress)? onProgress}) async {
     if (_downloadingFile) throw StateError('A download is already active');
     if (!Attachments.supported) throw UnsupportedError('Android download only');
     final ssh = _ssh;
@@ -1207,21 +1208,34 @@ final class AppController extends ChangeNotifier {
     }
     _downloadingFile = true;
     Directory? temporary;
+    var stage = 'temporary_storage';
     try {
       final cache =
           await Attachments.channel.invokeMethod<String>('downloadDirectory');
       if (cache == null) throw StateError('No download directory');
       temporary = await Directory(cache).createTemp('codex-download-');
       final file = File('${temporary.path}/payload.bin');
-      await downloads.downloadRemoteFile(ssh.client, path, file);
+      stage = 'ssh_transfer';
+      await downloads.downloadRemoteFile(ssh.client, path, file,
+          onProgress: onProgress);
       if (!identical(ssh, _ssh) || attempt != _connectionAttempt) {
         throw StateError('Connection changed');
       }
+      stage = 'phone_save';
+      onProgress?.call(downloads.DownloadProgress(
+          await file.length(), await file.length(),
+          saving: true));
       return await Attachments.channel.invokeMethod<bool>('saveDownload', {
             'path': file.path,
             'name': path.split('/').last,
           }) ??
           false;
+    } catch (error) {
+      Diagnostics.record('download.failed', {
+        'stage': stage,
+        ...Diagnostics.errorFields(error),
+      });
+      rethrow;
     } finally {
       try {
         await temporary?.delete(recursive: true);
