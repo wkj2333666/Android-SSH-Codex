@@ -64,6 +64,10 @@ String fileDownloadCommand(String path) {
       'elif ! test -r $quoted; then exit 46; fi; '
       'head -c ${maxDownloadBytes + 1} -- $quoted';
   // SSH exec uses the account's login shell, which may be fish rather than sh.
+  return _posixShellCommand(script);
+}
+
+String _posixShellCommand(String script) {
   final argument = script.replaceAllMapped(
       RegExp(r'[^a-zA-Z0-9_./-]'), (match) => '\\${match[0]}');
   return '/bin/sh -c $argument';
@@ -140,7 +144,9 @@ Future<void> downloadRemoteFile(SSHClient client, String path, File destination,
 
 Future<int?> _fileSize(SSHClient client, String quoted) async {
   var expired = false;
-  final opening = client.execute('stat -Lc %s -- $quoted').then((session) {
+  final opening = client
+      .execute(_posixShellCommand('stat -Lc %s -- $quoted'))
+      .then((session) {
     if (expired) session.close();
     return session;
   });
