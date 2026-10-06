@@ -11,9 +11,12 @@ class ConnectionNetwork {
   Timer? _debounce;
   String? _signature;
   bool _disposed = false;
+  bool _started = false;
 
   Future<void> start() async {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    if (_started || _disposed) return;
+    _started = true;
     channel.setMethodCallHandler((call) async {
       if (call.method == 'networkChanged') accept(call.arguments);
     });
@@ -44,7 +47,7 @@ class ConnectionNetwork {
   void dispose() {
     _disposed = true;
     _debounce?.cancel();
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+    if (_started) {
       channel.setMethodCallHandler(null);
     }
   }

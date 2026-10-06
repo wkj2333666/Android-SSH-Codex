@@ -21,6 +21,7 @@ class _AndroidSshCodexAppState extends State<AndroidSshCodexApp> {
   @override
   void initState() {
     super.initState();
+    widget.controller.observeNetwork();
     _lifecycle = ConnectionLifecycle(
       onBackground: () => widget.controller.enterBackground(),
       onForeground: () => widget.controller.restoreForegroundConnection(),

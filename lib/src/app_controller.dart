@@ -243,7 +243,6 @@ final class AppController extends ChangeNotifier {
       Set.unmodifiable(_inFlightQueuedMessageIds[taskId] ?? const <String>{});
 
   Future<void> initialize() async {
-    await _network.start();
     HostProfile? autoConnectProfile;
     try {
       _profiles = await _store.readProfiles();
@@ -260,6 +259,8 @@ final class AppController extends ChangeNotifier {
       unawaited(connectHost(autoConnectProfile));
     }
   }
+
+  void observeNetwork() => unawaited(_network.start());
 
   void selectSection(AppSection section) {
     if (_section == section) return;
