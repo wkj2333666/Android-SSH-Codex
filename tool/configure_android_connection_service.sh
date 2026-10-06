@@ -12,9 +12,11 @@ if ! grep -Fq 'android:name=".ConnectionService"' "$manifest"; then
   sed -i '/<\/application>/i\        <service android:name=".ConnectionService" android:exported="false" android:stopWithTask="true" android:foregroundServiceType="specialUse">\n            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Maintains a user-initiated interactive SSH tunnel to a remote coding agent while switching apps." />\n        </service>' "$manifest"
 fi
 kotlin_dir="$android_root/app/src/main/kotlin/io/github/wkj2333666/android_ssh_codex"
+sed -i 's/android:stopWithTask="true"/android:stopWithTask="false"/' "$manifest"
 mkdir -p "$kotlin_dir" "$android_root/app/src/main/res/drawable"
 cp "$template_root/MainActivity.kt" "$template_root/ConnectionService.kt" "$template_root/DiagnosticLog.kt" "$kotlin_dir/"
 cp "$template_root/AttachmentPicker.kt" "$kotlin_dir/"
 cp "$template_root/AttachmentDownloads.kt" "$kotlin_dir/"
 cp "$template_root/ConnectionDiagnostics.kt" "$kotlin_dir/"
+cp "$template_root/ConnectionRuntime.kt" "$kotlin_dir/"
 cp "$template_root/ic_connection.xml" "$android_root/app/src/main/res/drawable/"

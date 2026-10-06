@@ -11,11 +11,13 @@ import android.os.Build
 import android.os.PowerManager
 
 /** Observe network/power changes without pinging or changing connection policy. */
-class ConnectionDiagnostics(context: Context) {
+class ConnectionDiagnostics(context: Context,
+    private val onNetworkChanged: ((Map<String, Any?>) -> Unit)? = null) {
     private val app = context.applicationContext
     private val connectivity = app.getSystemService(ConnectivityManager::class.java)
     private var networkRegistered = false
     private var powerRegistered = false
+    private val blockedNetworks = java.util.concurrent.ConcurrentHashMap<Long, Boolean>()
 
     private val callback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) = logNetwork("network.available", network)
@@ -24,8 +26,10 @@ class ConnectionDiagnostics(context: Context) {
             logNetwork("network.losing", network, mapOf("maxMsToLive" to maxMsToLive))
         override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) =
             logNetwork("network.capabilities", network, capabilities(caps))
-        override fun onBlockedStatusChanged(network: Network, blocked: Boolean) =
+        override fun onBlockedStatusChanged(network: Network, blocked: Boolean) {
+            blockedNetworks[network.networkHandle] = blocked
             logNetwork("network.blocked", network, mapOf("blocked" to blocked))
+        }
     }
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -74,6 +78,7 @@ class ConnectionDiagnostics(context: Context) {
         mapOf(
             "activeNetwork" to network?.networkHandle,
             "networkPresent" to (network != null),
+            "blocked" to (network?.let { blockedNetworks[it.networkHandle] } ?: false),
             "metered" to connectivity.isActiveNetworkMetered,
             "dataSaverStatus" to connectivity.restrictBackgroundStatus,
             "powerSave" to power.isPowerSaveMode,
@@ -86,6 +91,8 @@ class ConnectionDiagnostics(context: Context) {
 
     private fun logNetwork(event: String, network: Network, fields: Map<String, Any?> = emptyMap()) {
         DiagnosticLog.record(app, event, fields + ("network" to network.networkHandle))
+        onNetworkChanged?.invoke(snapshot() + ("event" to event))
+        if (event == "network.lost") blockedNetworks.remove(network.networkHandle)
     }
 
     private fun capabilities(caps: NetworkCapabilities?): Map<String, Any?> = mapOf(

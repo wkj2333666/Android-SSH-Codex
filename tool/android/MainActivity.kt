@@ -11,6 +11,11 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
+    override fun provideFlutterEngine(context: android.content.Context): FlutterEngine =
+        ConnectionRuntime.obtain(context)
+
+    override fun shouldDestroyEngineWithHost(): Boolean = false
+
     private var permissionResult: MethodChannel.Result? = null
     private var exportResult: MethodChannel.Result? = null
     private var exportSnapshot: String? = null
@@ -41,8 +46,7 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         attachmentPicker = AttachmentPicker(this)
         attachmentDownloads = AttachmentDownloads(this)
-        connectionDiagnostics?.stop()
-        connectionDiagnostics = ConnectionDiagnostics(this).also { it.start() }
+        connectionDiagnostics = ConnectionRuntime.observer()
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger,
             "android_ssh_codex/attachments").setMethodCallHandler { call, result ->
             if (call.method == "downloadDirectory") result.success(cacheDir.absolutePath)
@@ -105,6 +109,7 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger,
             "android_ssh_codex/connection_service").setMethodCallHandler { call, result ->
             when (call.method) {
+                "status" -> result.success(ConnectionService.active)
                 "start" -> {
                     try {
                         startForegroundService(Intent(this, ConnectionService::class.java))
@@ -178,15 +183,13 @@ class MainActivity : FlutterActivity() {
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
         DiagnosticLog.record(this, "engine.cleanup")
-        connectionDiagnostics?.stop()
         connectionDiagnostics = null
         attachmentPicker?.close()
         attachmentDownloads?.close()
         attachmentDownloads = null
         attachmentPicker = null
         finishExport(false, "Connection activity closed")
-        // This service protects this engine's sockets; never leave an orphan.
-        stopService(Intent(this, ConnectionService::class.java))
+        ConnectionRuntime.installDetachedHandlers(applicationContext, flutterEngine)
         permissionResult?.error("ACTIVITY_CLOSED", "Connection activity closed", null)
         permissionResult = null
         super.cleanUpFlutterEngine(flutterEngine)

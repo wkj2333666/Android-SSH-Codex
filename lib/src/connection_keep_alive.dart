@@ -11,10 +11,14 @@ class ConnectionKeepAlive {
 
   bool get isEnabled => _enabled;
 
-  Future<void> setEnabled(bool enabled) {
+  Future<void> setEnabled(bool enabled, {bool verifyNative = false}) {
     final operation = _pending.then((_) async {
       if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
-      if (_enabled == enabled) return;
+      if (_enabled == enabled) {
+        if (!enabled || !verifyNative) return;
+        if (await channel.invokeMethod<bool>('status') == true) return;
+        _enabled = false;
+      }
       Diagnostics.record('keepAlive.request', {'enabled': enabled});
       final notifications = await channel.invokeMethod<bool>(
         enabled ? 'start' : 'stop',

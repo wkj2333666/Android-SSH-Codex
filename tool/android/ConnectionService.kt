@@ -18,6 +18,7 @@ class ConnectionService : Service() {
             private set
     }
     private var wakeLock: PowerManager.WakeLock? = null
+    private var connectionEngine: io.flutter.embedding.engine.FlutterEngine? = null
 
     @SuppressLint("WakelockTimeout") // Lifetime is bounded by the visible connection service.
     override fun onCreate() {
@@ -48,6 +49,7 @@ class ConnectionService : Service() {
             .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$packageName:SSHConnection")
             .also { it.setReferenceCounted(false); it.acquire() }
         active = true
+        connectionEngine = ConnectionRuntime.obtain(applicationContext)
         DiagnosticLog.record(this, "service.foreground", mapOf("wakeLockHeld" to wakeLock?.isHeld))
     }
 
@@ -63,12 +65,12 @@ class ConnectionService : Service() {
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         DiagnosticLog.record(this, "service.taskRemoved")
-        stopSelf()
         super.onTaskRemoved(rootIntent)
     }
 
     override fun onDestroy() {
         active = false
+        connectionEngine = null
         DiagnosticLog.record(this, "service.destroy", mapOf("wakeLockHeld" to wakeLock?.isHeld))
         wakeLock?.let { if (it.isHeld) it.release() }
         wakeLock = null

@@ -15,7 +15,8 @@ class ConnectionLifecycle extends WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     Diagnostics.record('lifecycle', {'state': state.name});
-    if (state == AppLifecycleState.hidden ||
+    if (state == AppLifecycleState.detached ||
+        state == AppLifecycleState.hidden ||
         state == AppLifecycleState.paused) {
       if (_background) return;
       _background = true;
