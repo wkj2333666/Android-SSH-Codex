@@ -24,8 +24,11 @@ void main() {
 
   test('download command quotes shell metacharacters and bounds output', () {
     expect(fileDownloadCommand("/tmp/a'\$(touch bad)"), contains("'\\''"));
+    expect(fileDownloadCommand('/tmp/a'), contains('exit 44'));
+    expect(fileDownloadCommand('/tmp/a'), contains('exit 45'));
+    expect(fileDownloadCommand('/tmp/a'), contains('exit 46'));
     expect(fileDownloadCommand('/tmp/a'),
-        'test -f \'/tmp/a\' && head -c 104857601 -- \'/tmp/a\'');
+        endsWith('head -c 104857601 -- \'/tmp/a\''));
     expect(() => fileDownloadCommand('relative'), throwsArgumentError);
   });
 }
