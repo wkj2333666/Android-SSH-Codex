@@ -57,6 +57,12 @@ bool _retryable(Object error) {
       (error is SSHHandshakeError && error.message == 'Handshake timed out');
 }
 
+Future<T> _untilClosed<T>(SSHClient client, Future<T> operation) => Future.any([
+      operation,
+      client.done
+          .then<T>((_) => throw SSHStateError('Download connection closed')),
+    ]);
+
 /// Owns its entire SSH connection. dartssh2 2.x SftpClient.close alone does not
 /// release its SSH channel, so a download must never borrow the chat client.
 class SftpDownloadSource implements DownloadSource {
@@ -72,8 +78,10 @@ class SftpDownloadSource implements DownloadSource {
     SftpClient? sftp;
     try {
       fileDownloadCommand(path); // Reject malformed paths before any remote IO.
-      sftp = await connection.client.sftp().timeout(const Duration(seconds: 15));
-      final file = await sftp.open(path).timeout(const Duration(seconds: 15));
+      sftp =
+          await connection.client.sftp().timeout(const Duration(seconds: 15));
+      final file = await _untilClosed(connection.client, sftp.open(path))
+          .timeout(const Duration(seconds: 15));
       return SftpDownloadSource._(connection, sftp, file, path);
     } catch (_) {
       sftp?.close();
@@ -87,14 +95,14 @@ class SftpDownloadSource implements DownloadSource {
     if (connection.client.isClosed) {
       throw SSHStateError('Download connection closed');
     }
-    final attrs = await file.stat();
+    final attrs = await _untilClosed(connection.client, file.stat());
     final size = attrs.size;
     if (!attrs.isFile || size == null || size < 0 || size > maxDownloadBytes) {
       throw const FileDownloadException(
           'Download requires a regular file of at most 100 MiB.');
     }
-    final result =
-        await connection.client.runWithResult(fileDownloadDigestCommand(path));
+    final result = await _untilClosed(connection.client,
+        connection.client.runWithResult(fileDownloadDigestCommand(path)));
     final digest = RegExp(r'^([a-fA-F0-9]{64})\s')
         .firstMatch(String.fromCharCodes(result.stdout))
         ?.group(1);
@@ -110,7 +118,8 @@ class SftpDownloadSource implements DownloadSource {
     if (connection.client.isClosed) {
       throw SSHStateError('Download connection closed');
     }
-    return file.readBytes(offset: offset, length: length);
+    return _untilClosed(
+        connection.client, file.readBytes(offset: offset, length: length));
   }
 
   @override
