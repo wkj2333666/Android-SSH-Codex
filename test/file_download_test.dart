@@ -29,7 +29,8 @@ void main() {
     expect(fileDownloadCommand('/tmp/a'), contains(r'exit\ 45'));
     expect(fileDownloadCommand('/tmp/a'), contains(r'exit\ 46'));
     expect(fileDownloadCommand('/tmp/a'), startsWith('/bin/sh -c '));
-    expect(fileDownloadCommand('/tmp/a'), contains(r'head\ -c\ 104857601\ --\ '));
+    expect(
+        fileDownloadCommand('/tmp/a'), contains(r'head\ -c\ 104857601\ --\ '));
     expect(() => fileDownloadCommand('relative'), throwsArgumentError);
   });
 
