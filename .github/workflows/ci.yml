@@ -31,7 +31,7 @@ jobs:
           key: pub-${{ runner.os }}-${{ hashFiles('pubspec.yaml', 'pubspec.lock') }}
           restore-keys: pub-${{ runner.os }}-
       - name: Install fish for SSH login-shell regression tests
-        run: sudo apt-get update -qq && sudo apt-get install -y fish
+        run: sudo apt-get update -qq && sudo apt-get install -y fish openssh-server
       - run: flutter pub get
       - name: Verify dependency lock
         run: git diff --exit-code -- pubspec.lock
@@ -49,3 +49,5 @@ jobs:
           git diff -- lib test
       - run: flutter analyze
       - run: flutter test --reporter expanded
+      - name: Real SSH file download regression
+        run: bash tool/test_download_ssh.sh

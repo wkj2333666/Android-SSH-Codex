@@ -1233,7 +1233,13 @@ final class AppController extends ChangeNotifier {
     } catch (error) {
       Diagnostics.record('download.failed', {
         'stage': stage,
-        ...Diagnostics.errorFields(error),
+        if (error is downloads.FileDownloadException) ...{
+          'transferStage': error.stage,
+          'receivedBytes': error.received,
+          'exitCode': error.exitCode,
+        },
+        ...Diagnostics.errorFields(
+            error is downloads.FileDownloadException ? error.cause ?? error : error),
       });
       rethrow;
     } finally {
