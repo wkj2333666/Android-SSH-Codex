@@ -52,15 +52,28 @@ String? remoteFilePath(String value, String cwd) {
 }
 
 String fileDownloadCommand(String path) {
-  if (!path.startsWith('/') || path.contains('\u0000')) {
+  if (!path.startsWith('/') ||
+      path.contains('\u0000') ||
+      path.contains('\n') ||
+      path.contains('\r')) {
     throw ArgumentError('Invalid path');
   }
-  final quoted = "'${path.replaceAll("'", "'\\''")}'";
-  return 'if ! test -e $quoted; then exit 44; '
+  final quoted = _shellQuote(path);
+  final script = 'if ! test -e $quoted; then exit 44; '
       'elif ! test -f $quoted; then exit 45; '
       'elif ! test -r $quoted; then exit 46; fi; '
       'head -c ${maxDownloadBytes + 1} -- $quoted';
+  // SSH exec uses the account's login shell, which may be fish rather than sh.
+  return _posixShellCommand(script);
 }
+
+String _posixShellCommand(String script) {
+  final argument = script.replaceAllMapped(
+      RegExp(r'[^a-zA-Z0-9_./-]'), (match) => '\\${match[0]}');
+  return '/bin/sh -c $argument';
+}
+
+String _shellQuote(String value) => "'${value.replaceAll("'", "'\\''")}'";
 
 Future<void> downloadRemoteFile(SSHClient client, String path, File destination,
     {void Function(DownloadProgress)? onProgress}) async {
@@ -131,7 +144,9 @@ Future<void> downloadRemoteFile(SSHClient client, String path, File destination,
 
 Future<int?> _fileSize(SSHClient client, String quoted) async {
   var expired = false;
-  final opening = client.execute('stat -Lc %s -- $quoted').then((session) {
+  final opening = client
+      .execute(_posixShellCommand('stat -Lc %s -- $quoted'))
+      .then((session) {
     if (expired) session.close();
     return session;
   });
