@@ -8,8 +8,10 @@ import '../../transport/file_download.dart';
 
 class RemoteFileActions extends InheritedWidget {
   const RemoteFileActions(
-      {required this.download, this.downloadWithProgress,
-      required super.child, super.key});
+      {required this.download,
+      this.downloadWithProgress,
+      required super.child,
+      super.key});
   final Future<bool> Function(String) download;
   final Future<bool> Function(String,
       {void Function(DownloadProgress)? onProgress})? downloadWithProgress;
@@ -60,16 +62,18 @@ Future<void> showRemoteFileDownload(BuildContext context, String path) async {
           builder: (context, value, _) {
             final total = value.total;
             final fraction = total != null && total > 0
-                ? (value.received / total).clamp(0.0, 1.0) : null;
+                ? (value.received / total).clamp(0.0, 1.0)
+                : null;
             return Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 LinearProgressIndicator(value: value.saving ? null : fraction),
                 const SizedBox(height: 12),
-                Text(value.saving ? 'Choose a location, then saving…'
+                Text(value.saving
+                    ? 'Choose a location, then saving…'
                     : '${(value.received / 1048576).toStringAsFixed(2)} MiB received'
-                      '${fraction == null ? "" : " · ${(fraction * 100).toStringAsFixed(0)}%"}'),
+                        '${fraction == null ? "" : " · ${(fraction * 100).toStringAsFixed(0)}%"}'),
               ],
             );
           },
@@ -81,10 +85,9 @@ Future<void> showRemoteFileDownload(BuildContext context, String path) async {
   try {
     final saved = actions.downloadWithProgress == null
         ? await actions.download(path)
-        : await actions.downloadWithProgress!(path,
-            onProgress: (value) {
-              if (!finished) progress.value = value;
-            });
+        : await actions.downloadWithProgress!(path, onProgress: (value) {
+            if (!finished) progress.value = value;
+          });
     if (!context.mounted) return;
     messenger.hideCurrentSnackBar();
     messenger.showSnackBar(
@@ -92,7 +95,8 @@ Future<void> showRemoteFileDownload(BuildContext context, String path) async {
   } catch (error) {
     if (!context.mounted) return;
     messenger.hideCurrentSnackBar();
-    messenger.showSnackBar(SnackBar(content: Text(downloadErrorMessage(error))));
+    messenger
+        .showSnackBar(SnackBar(content: Text(downloadErrorMessage(error))));
   } finally {
     finished = true;
     if (route.isActive) navigator.removeRoute(route);
@@ -104,9 +108,12 @@ Future<void> showRemoteFileDownload(BuildContext context, String path) async {
 
 String downloadErrorMessage(Object error) {
   if (error is FileDownloadException) return error.message;
-  if (error is TimeoutException) return 'Download timed out. Check the connection and retry.';
-  if (error is FileSystemException) return 'Phone temporary storage could not be written. Check free space.';
-  if (error is PlatformException) return 'Could not save on the phone (${error.code}). Choose another location.';
+  if (error is TimeoutException)
+    return 'Download timed out. Check the connection and retry.';
+  if (error is FileSystemException)
+    return 'Phone temporary storage could not be written. Check free space.';
+  if (error is PlatformException)
+    return 'Could not save on the phone (${error.code}). Choose another location.';
   if (error is StateError) return 'Download failed: ${error.message}';
   return 'Download failed (${error.runtimeType}). Check the SSH connection and retry.';
 }

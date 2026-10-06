@@ -62,8 +62,7 @@ String fileDownloadCommand(String path) {
       'head -c ${maxDownloadBytes + 1} -- $quoted';
 }
 
-Future<void> downloadRemoteFile(
-    SSHClient client, String path, File destination,
+Future<void> downloadRemoteFile(SSHClient client, String path, File destination,
     {void Function(DownloadProgress)? onProgress}) async {
   final command = fileDownloadCommand(path);
   int? total;
@@ -75,7 +74,8 @@ Future<void> downloadRemoteFile(
     // Hosts without stat still support byte-count progress.
   }
   if (total != null && total > maxDownloadBytes) {
-    throw const FileDownloadException('File exceeds the 100 MiB download limit.');
+    throw const FileDownloadException(
+        'File exceeds the 100 MiB download limit.');
   }
   onProgress?.call(DownloadProgress(0, total));
   var timedOut = false;
@@ -99,7 +99,8 @@ Future<void> downloadRemoteFile(
       await for (final chunk in session.stdout) {
         length += chunk.length;
         if (length > maxDownloadBytes) {
-          throw const FileDownloadException('File exceeds the 100 MiB download limit.');
+          throw const FileDownloadException(
+              'File exceeds the 100 MiB download limit.');
         }
         await file!.writeFrom(chunk);
         if (updates.elapsedMilliseconds >= 100) {
@@ -110,10 +111,12 @@ Future<void> downloadRemoteFile(
       await session.done;
       if (session.exitCode != 0) {
         throw FileDownloadException(switch (session.exitCode) {
-          44 => 'File does not exist on the connected SSH host. A sandbox link may refer to a different machine.',
+          44 =>
+            'File does not exist on the connected SSH host. A sandbox link may refer to a different machine.',
           45 => 'The link points to a directory, not a file.',
           46 => 'The SSH account cannot read this file.',
-          _ => 'SSH file transfer failed (exit ${session.exitCode ?? "unknown"}).',
+          _ =>
+            'SSH file transfer failed (exit ${session.exitCode ?? "unknown"}).',
         });
       }
       onProgress?.call(DownloadProgress(length, total));
@@ -132,8 +135,8 @@ Future<int?> _fileSize(SSHClient client, String quoted) async {
     if (expired) session.close();
     return session;
   });
-  final session = await opening.timeout(const Duration(seconds: 15),
-      onTimeout: () {
+  final session =
+      await opening.timeout(const Duration(seconds: 15), onTimeout: () {
     expired = true;
     throw TimeoutException('File size lookup timed out');
   });
@@ -150,7 +153,8 @@ Future<int?> _fileSize(SSHClient client, String quoted) async {
       if (session.exitCode != 0) return null;
       final size = int.tryParse(String.fromCharCodes(bytes).trim());
       return size != null && size >= 0 ? size : null;
-    })().timeout(const Duration(seconds: 15));
+    })()
+        .timeout(const Duration(seconds: 15));
   } finally {
     session.close();
     await stderr.cancel();

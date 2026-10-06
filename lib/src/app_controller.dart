@@ -1223,7 +1223,8 @@ final class AppController extends ChangeNotifier {
       }
       stage = 'phone_save';
       onProgress?.call(downloads.DownloadProgress(
-          await file.length(), await file.length(), saving: true));
+          await file.length(), await file.length(),
+          saving: true));
       return await Attachments.channel.invokeMethod<bool>('saveDownload', {
             'path': file.path,
             'name': path.split('/').last,

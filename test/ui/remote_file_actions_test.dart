@@ -11,16 +11,19 @@ void main() {
   testWidgets('download reports progress and specific failure', (tester) async {
     final completion = Completer<bool>();
     void Function(DownloadProgress)? update;
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: RemoteFileActions(
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: RemoteFileActions(
       download: (_) async => false,
       downloadWithProgress: (_, {onProgress}) {
         update = onProgress;
         return completion.future;
       },
-      child: Builder(builder: (context) => TextButton(
-        onPressed: () => showRemoteFileDownload(context, '/tmp/file'),
-        child: const Text('Start'),
-      )),
+      child: Builder(
+          builder: (context) => TextButton(
+                onPressed: () => showRemoteFileDownload(context, '/tmp/file'),
+                child: const Text('Start'),
+              )),
     ))));
     await tester.tap(find.text('Start'));
     await tester.pumpAndSettle();
@@ -29,9 +32,15 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     update!(const DownloadProgress(1048576, 2097152));
     await tester.pump();
-    expect(tester.widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator)).value, 0.5);
+    expect(
+        tester
+            .widget<LinearProgressIndicator>(
+                find.byType(LinearProgressIndicator))
+            .value,
+        0.5);
     expect(find.text('1.00 MiB received · 50%'), findsOneWidget);
-    completion.completeError(const FileDownloadException('File does not exist.'));
+    completion
+        .completeError(const FileDownloadException('File does not exist.'));
     await tester.pumpAndSettle();
     expect(find.byType(LinearProgressIndicator), findsNothing);
     expect(find.text('File does not exist.'), findsOneWidget);
