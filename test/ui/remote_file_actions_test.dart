@@ -10,11 +10,13 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   testWidgets('download reports progress and specific failure', (tester) async {
     final completion = Completer<bool>();
+    var cancellations = 0;
     void Function(DownloadProgress)? update;
     await tester.pumpWidget(MaterialApp(
         home: Scaffold(
             body: RemoteFileActions(
       download: (_) async => false,
+      cancelDownload: () => cancellations++,
       downloadWithProgress: (_, {onProgress}) {
         update = onProgress;
         return completion.future;
@@ -39,6 +41,18 @@ void main() {
             .value,
         0.5);
     expect(find.text('1.00 MiB received · 50%'), findsOneWidget);
+    update!(const DownloadProgress(1048576, 2097152, reconnecting: true));
+    await tester.pump();
+    expect(find.text('Connection interrupted. Reconnecting and resuming…'),
+        findsOneWidget);
+    update!(const DownloadProgress(1048576, 2097152, verifying: true));
+    await tester.pump();
+    expect(find.text('Verifying file integrity…'), findsOneWidget);
+    update!(const DownloadProgress(1048576, 2097152, bytesPerSecond: 2097152));
+    await tester.pump();
+    expect(find.text('2.00 MiB/s'), findsOneWidget);
+    await tester.tap(find.text('Cancel download'));
+    expect(cancellations, 1);
     completion
         .completeError(const FileDownloadException('File does not exist.'));
     await tester.pumpAndSettle();

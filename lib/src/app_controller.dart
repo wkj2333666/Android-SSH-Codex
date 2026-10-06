@@ -24,6 +24,7 @@ import 'tasks/task_refresh_lock.dart';
 import 'transport/codex_daemon.dart';
 import 'transport/attachment_upload.dart';
 import 'transport/file_download.dart' as downloads;
+import 'transport/resumable_download.dart';
 import 'transport/ssh_connector.dart';
 import 'transport/ssh_unix_tunnel.dart';
 
@@ -285,6 +286,7 @@ final class AppController extends ChangeNotifier {
   Future<HostSecret> readSecret(String id) => _store.readSecret(id);
 
   Future<void> connectHost(HostProfile profile) async {
+    cancelDownload();
     final attempt = ++_connectionAttempt;
     _cancelHostKeyPrompt();
     _reconnectTimer?.cancel();
@@ -564,7 +566,9 @@ final class AppController extends ChangeNotifier {
     final attempt = _connectionAttempt;
     final epoch = _epoch;
     try {
-      final disconnected = await foregroundTransportDisconnected(rpc);
+      final sshHealthy = await _ssh?.checkHealth() ?? false;
+      final disconnected =
+          !sshHealthy || await foregroundTransportDisconnected(rpc);
       if (!_isCurrentSession(api, attempt, epoch, profile.id)) return;
       if (disconnected) {
         _expediteReconnect = true;
@@ -649,7 +653,9 @@ final class AppController extends ChangeNotifier {
     final attempt = _connectionAttempt;
     final epoch = _epoch;
     try {
-      final disconnected = await foregroundTransportDisconnected(rpc);
+      final sshHealthy = await _ssh?.checkHealth() ?? false;
+      final disconnected =
+          !sshHealthy || await foregroundTransportDisconnected(rpc);
       if (!_isCurrentSession(api, attempt, epoch, profile.id) ||
           _inBackground) {
         return;
@@ -1246,18 +1252,28 @@ final class AppController extends ChangeNotifier {
   }
 
   bool _downloadingFile = false;
+  DownloadCancellation? _downloadCancellation;
+
+  void cancelDownload() {
+    final cancellation = _downloadCancellation;
+    if (cancellation == null || cancellation.isCancelled) return;
+    Diagnostics.record('download.cancelRequested');
+    cancellation.cancel();
+  }
 
   Future<bool> downloadFile(String link,
       {void Function(downloads.DownloadProgress)? onProgress}) async {
     if (_downloadingFile) throw StateError('A download is already active');
     if (!Attachments.supported) throw UnsupportedError('Android download only');
     final ssh = _ssh;
-    final attempt = _connectionAttempt;
+    final profile = selectedHost;
     final path = downloads.remoteFilePath(link, selectedTask?.cwd ?? '');
-    if (ssh == null || path == null) {
+    if (ssh == null || profile == null || path == null) {
       throw StateError('Remote file unavailable');
     }
     _downloadingFile = true;
+    final cancellation = DownloadCancellation();
+    _downloadCancellation = cancellation;
     Directory? temporary;
     var stage = 'temporary_storage';
     try {
@@ -1267,11 +1283,29 @@ final class AppController extends ChangeNotifier {
       temporary = await Directory(cache).createTemp('codex-download-');
       final file = File('${temporary.path}/payload.bin');
       stage = 'ssh_transfer';
-      await downloads.downloadRemoteFile(ssh.client, path, file,
-          onProgress: onProgress);
-      if (!identical(ssh, _ssh) || attempt != _connectionAttempt) {
-        throw StateError('Connection changed');
-      }
+      final secret = await _store.readSecret(profile.id);
+      await downloadResumableFile(
+        destination: file,
+        cancellation: cancellation,
+        connect: () async {
+          cancellation.check();
+          final connection = await _connector.connect(profile, secret,
+              prompt: (_) async => false, diagnosticRole: 'download');
+          if (cancellation.isCancelled) {
+            await connection.close(reason: 'download_cancelled');
+            throw DownloadCancelled();
+          }
+          return SftpDownloadSource.open(connection, path);
+        },
+        onProgress: onProgress,
+        onRetry: (retry, received, error) =>
+            Diagnostics.record('download.retry', {
+          'retry': retry,
+          'receivedBytes': received,
+          ...Diagnostics.errorFields(error),
+        }),
+      );
+      cancellation.check();
       stage = 'phone_save';
       onProgress?.call(downloads.DownloadProgress(
           await file.length(), await file.length(),
@@ -1299,6 +1333,7 @@ final class AppController extends ChangeNotifier {
         await temporary?.delete(recursive: true);
       } finally {
         _downloadingFile = false;
+        _downloadCancellation = null;
       }
     }
   }
@@ -2025,6 +2060,7 @@ final class AppController extends ChangeNotifier {
   }
 
   Future<void> disconnect() async {
+    cancelDownload();
     Diagnostics.record('connection.userDisconnect');
     _expediteReconnect = false;
     _connectionAttempt++;
@@ -2127,6 +2163,7 @@ final class AppController extends ChangeNotifier {
 
   @override
   void dispose() {
+    cancelDownload();
     _network.dispose();
     _connectionAttempt++;
     _cancelHostKeyPrompt();

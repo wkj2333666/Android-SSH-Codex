@@ -8,10 +8,17 @@ const maxDownloadBytes = 100 * 1024 * 1024;
 const downloadChunkBytes = 256 * 1024;
 
 class DownloadProgress {
-  const DownloadProgress(this.received, this.total, {this.saving = false});
+  const DownloadProgress(this.received, this.total,
+      {this.saving = false,
+      this.reconnecting = false,
+      this.verifying = false,
+      this.bytesPerSecond});
   final int received;
   final int? total;
   final bool saving;
+  final bool reconnecting;
+  final bool verifying;
+  final double? bytesPerSecond;
 }
 
 class FileDownloadException implements Exception {
@@ -86,6 +93,11 @@ String _posixShellCommand(String script) {
 }
 
 String _shellQuote(String value) => "'${value.replaceAll("'", "'\\''")}'";
+
+// The bounded producer is shell-isolated; the outer pipeline works with fish
+// and POSIX login shells alike. SFTP metadata and final digest detect changes.
+String fileDownloadDigestCommand(String path) =>
+    '${fileDownloadCommand(path)} | sha256sum';
 
 Future<void> downloadRemoteFile(SSHClient client, String path, File destination,
     {void Function(DownloadProgress)? onProgress}) async {
