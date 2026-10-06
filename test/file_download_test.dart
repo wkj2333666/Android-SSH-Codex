@@ -36,20 +36,22 @@ void main() {
 
   for (final shell in ['/bin/sh', '/bin/bash', '/usr/bin/fish']) {
     test('download command works through $shell with quoted paths', () async {
-      final directory = await Directory.systemTemp.createTemp('download-shell-');
+      final directory =
+          await Directory.systemTemp.createTemp('download-shell-');
       try {
         final file = File('${directory.path}/' r'''a' "$x; & `id`.bin''');
         final bytes = [0, 1, 10, 13, 127, 128, 255];
         await file.writeAsBytes(bytes);
-        final result = await Process.run(shell,
-            ['-c', fileDownloadCommand(file.path)], stdoutEncoding: null);
+        final result = await Process.run(
+            shell, ['-c', fileDownloadCommand(file.path)],
+            stdoutEncoding: null);
         expect(result.exitCode, 0, reason: '${result.stderr}');
         expect(result.stdout, bytes);
-        final missing = await Process.run(shell,
-            ['-c', fileDownloadCommand('${directory.path}/missing')]);
+        final missing = await Process.run(
+            shell, ['-c', fileDownloadCommand('${directory.path}/missing')]);
         expect(missing.exitCode, 44);
-        final folder = await Process.run(shell,
-            ['-c', fileDownloadCommand(directory.path)]);
+        final folder = await Process.run(
+            shell, ['-c', fileDownloadCommand(directory.path)]);
         expect(folder.exitCode, 45);
       } finally {
         await directory.delete(recursive: true);
