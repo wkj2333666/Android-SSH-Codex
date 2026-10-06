@@ -52,7 +52,10 @@ String? remoteFilePath(String value, String cwd) {
 }
 
 String fileDownloadCommand(String path) {
-  if (!path.startsWith('/') || path.contains('\u0000')) {
+  if (!path.startsWith('/') ||
+      path.contains('\u0000') ||
+      path.contains('\n') ||
+      path.contains('\r')) {
     throw ArgumentError('Invalid path');
   }
   final quoted = _shellQuote(path);
@@ -61,7 +64,9 @@ String fileDownloadCommand(String path) {
       'elif ! test -r $quoted; then exit 46; fi; '
       'head -c ${maxDownloadBytes + 1} -- $quoted';
   // SSH exec uses the account's login shell, which may be fish rather than sh.
-  return '/bin/sh -c ${_shellQuote(script)}';
+  final argument = script.replaceAllMapped(
+      RegExp(r'[^a-zA-Z0-9_./-]'), (match) => '\\${match[0]}');
+  return '/bin/sh -c $argument';
 }
 
 String _shellQuote(String value) => "'${value.replaceAll("'", "'\\''")}'";
