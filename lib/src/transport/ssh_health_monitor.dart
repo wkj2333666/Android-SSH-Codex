@@ -4,10 +4,12 @@ import 'dart:async';
 /// as a broken network. The grace window also lets buffered replies run after
 /// Android suspends and resumes the Dart event loop.
 class SshHealthMonitor {
-  SshHealthMonitor({required this.ping, required this.onFailure,
-    this.interval = const Duration(seconds: 15),
-    this.timeout = const Duration(seconds: 8),
-    this.grace = const Duration(seconds: 4)});
+  SshHealthMonitor(
+      {required this.ping,
+      required this.onFailure,
+      this.interval = const Duration(seconds: 15),
+      this.timeout = const Duration(seconds: 8),
+      this.grace = const Duration(seconds: 4)});
   final Future<void> Function() ping;
   final void Function(Object) onFailure;
   final Duration interval;
@@ -19,12 +21,16 @@ class SshHealthMonitor {
 
   void start() {
     if (_disposed) return;
-    _timer ??= Timer.periodic(interval, (_) { unawaited(check()); });
+    _timer ??= Timer.periodic(interval, (_) {
+      unawaited(check());
+    });
   }
 
   Future<bool> check() {
     if (_disposed) return Future.value(false);
-    return _pending ??= _check().whenComplete(() { _pending = null; });
+    return _pending ??= _check().whenComplete(() {
+      _pending = null;
+    });
   }
 
   Future<bool> _check() async {

@@ -19,21 +19,29 @@ class MemorySource implements DownloadSource {
   int peak = 0;
   final offsets = <int>[];
   @override
-  Future<DownloadIdentity> identify() async => DownloadIdentity(bytes.length, sha256.convert(bytes).toString());
+  Future<DownloadIdentity> identify() async =>
+      DownloadIdentity(bytes.length, sha256.convert(bytes).toString());
   @override
   Future<List<int>> read(int offset, int length) async {
     offsets.add(offset);
     peak = ++active > peak ? active : peak;
     try {
       await Future<void>.delayed(const Duration(milliseconds: 1));
-      if (failAt != null && offset >= failAt!) throw TimeoutException('simulated network loss');
+      if (failAt != null && offset >= failAt!) {
+        throw TimeoutException('simulated network loss');
+      }
       final block = bytes.sublist(offset, offset + length);
       if (corrupt && block.isNotEmpty) block[0] ^= 1;
       return block;
-    } finally { active--; }
+    } finally {
+      active--;
+    }
   }
+
   @override
-  Future<void> close() async { closed = true; }
+  Future<void> close() async {
+    closed = true;
+  }
 }
 
 class InterruptingSource implements DownloadSource {
@@ -47,6 +55,7 @@ class InterruptingSource implements DownloadSource {
     if (offset >= 1024 * 1024) client.close();
     return inner.read(offset, length);
   }
+
   @override
   Future<void> close() => inner.close();
 }
@@ -54,21 +63,27 @@ class InterruptingSource implements DownloadSource {
 void main() {
   late Directory directory;
   late File output;
-  final bytes = Uint8List.fromList(List.generate(3 * 1024 * 1024 + 31, (i) => i % 251));
+  final bytes =
+      Uint8List.fromList(List.generate(3 * 1024 * 1024 + 31, (i) => i % 251));
   setUp(() async {
     directory = await Directory.systemTemp.createTemp('resumable-test-');
     output = File('${directory.path}/output');
   });
-  tearDown(() async { await directory.delete(recursive: true); });
+  tearDown(() async {
+    await directory.delete(recursive: true);
+  });
 
-  test('bounded pipeline resumes at committed offset, preserves exact bytes', () async {
+  test('bounded pipeline resumes at committed offset, preserves exact bytes',
+      () async {
     final first = MemorySource(bytes, failAt: 1024 * 1024);
     final second = MemorySource(bytes);
     var opens = 0;
     final retries = <int>[];
     await downloadResumableFile(
       connect: () async => ++opens == 1 ? first : second,
-      destination: output, cancellation: DownloadCancellation(), retryDelay: Duration.zero,
+      destination: output,
+      cancellation: DownloadCancellation(),
+      retryDelay: Duration.zero,
       onRetry: (_, received, __) => retries.add(received),
     );
     expect(retries, [1024 * 1024]);
@@ -82,29 +97,45 @@ void main() {
   test('remote change refuses to splice different files', () async {
     var opens = 0;
     final changed = Uint8List.fromList(bytes)..[0] = 255;
-    await expectLater(downloadResumableFile(
-      connect: () async => ++opens == 1
-          ? MemorySource(bytes, failAt: 1024 * 1024) : MemorySource(changed),
-      destination: output, cancellation: DownloadCancellation(), retryDelay: Duration.zero,
-    ), throwsA(isA<FileDownloadException>().having((e) => e.message, 'message', contains('Remote file changed'))));
+    await expectLater(
+        downloadResumableFile(
+          connect: () async => ++opens == 1
+              ? MemorySource(bytes, failAt: 1024 * 1024)
+              : MemorySource(changed),
+          destination: output,
+          cancellation: DownloadCancellation(),
+          retryDelay: Duration.zero,
+        ),
+        throwsA(isA<FileDownloadException>().having(
+            (e) => e.message, 'message', contains('Remote file changed'))));
     expect(opens, 2);
     expect(await output.length(), 1024 * 1024);
   });
 
   test('same-length corrupted content fails final checksum', () async {
-    await expectLater(downloadResumableFile(
-      connect: () async => MemorySource(bytes, corrupt: true),
-      destination: output, cancellation: DownloadCancellation(),
-    ), throwsA(isA<FileDownloadException>().having((e) => e.message, 'message', contains('checksum mismatch'))));
+    await expectLater(
+        downloadResumableFile(
+          connect: () async => MemorySource(bytes, corrupt: true),
+          destination: output,
+          cancellation: DownloadCancellation(),
+        ),
+        throwsA(isA<FileDownloadException>().having(
+            (e) => e.message, 'message', contains('checksum mismatch'))));
   });
 
   test('cancellation closes the source without subsequent writes', () async {
     final cancellation = DownloadCancellation();
     final source = MemorySource(bytes);
-    await expectLater(downloadResumableFile(
-      connect: () async => source, destination: output, cancellation: cancellation,
-      onProgress: (progress) { if (progress.received > 0) cancellation.cancel(); },
-    ), throwsA(isA<DownloadCancelled>()));
+    await expectLater(
+        downloadResumableFile(
+          connect: () async => source,
+          destination: output,
+          cancellation: cancellation,
+          onProgress: (progress) {
+            if (progress.received > 0) cancellation.cancel();
+          },
+        ),
+        throwsA(isA<DownloadCancelled>()));
     final length = await output.length();
     await Future<void>.delayed(const Duration(milliseconds: 20));
     expect(await output.length(), length);
@@ -116,8 +147,13 @@ void main() {
     final entered = Completer<void>();
     final cancellation = DownloadCancellation();
     final source = MemorySource(bytes);
-    final download = downloadResumableFile(connect: () { entered.complete(); return opening.future; },
-        destination: output, cancellation: cancellation);
+    final download = downloadResumableFile(
+        connect: () {
+          entered.complete();
+          return opening.future;
+        },
+        destination: output,
+        cancellation: cancellation);
     final result = expectLater(download, throwsA(isA<DownloadCancelled>()));
     await entered.future;
     cancellation.cancel();
@@ -127,7 +163,8 @@ void main() {
     expect(source.closed, isTrue);
   });
 
-  test('real SFTP resumes after socket closure and verifies binary content', () async {
+  test('real SFTP resumes after socket closure and verifies binary content',
+      () async {
     final input = File('${directory.path}/' r'''a' "$x; & `id`.bin''');
     await input.writeAsBytes(bytes);
     SSHClient? active;
@@ -137,16 +174,22 @@ void main() {
     await downloadResumableFile(
       connect: () async {
         connections++;
-        final client = SSHClient(await SSHSocket.connect('127.0.0.1', 22229),
+        final client = SSHClient(
+          await SSHSocket.connect('127.0.0.1', 22229),
           username: Platform.environment['USER']!,
-          identities: SSHKeyPair.fromPem(await File(Platform.environment['DOWNLOAD_TEST_KEY']!).readAsString()),
+          identities: SSHKeyPair.fromPem(
+              await File(Platform.environment['DOWNLOAD_TEST_KEY']!)
+                  .readAsString()),
         );
         active = client;
-        final source = await SftpDownloadSource.open(SshConnection(client: client), input.path);
+        final source = await SftpDownloadSource.open(
+            SshConnection(client: client), input.path);
         return connections == 1 ? InterruptingSource(source, client) : source;
       },
-      destination: output, cancellation: DownloadCancellation(),
-      operationTimeout: const Duration(seconds: 5), retryDelay: Duration.zero,
+      destination: output,
+      cancellation: DownloadCancellation(),
+      operationTimeout: const Duration(seconds: 5),
+      retryDelay: Duration.zero,
       onRetry: (_, received, __) => retries.add(received),
     );
     expect(connections, 2);
@@ -154,7 +197,9 @@ void main() {
     expect(await output.readAsBytes(), bytes);
     expect(active!.isClosed, isTrue);
     // Timing is diagnostic only; shared CI runners cannot prove phone speed.
-    print('SFTP resume verified: ${bytes.length} bytes, ${watch.elapsedMilliseconds} ms');
-  }, timeout: const Timeout(Duration(seconds: 90)),
+    print(
+        'SFTP resume verified: ${bytes.length} bytes, ${watch.elapsedMilliseconds} ms');
+  },
+      timeout: const Timeout(Duration(seconds: 90)),
       skip: !Platform.environment.containsKey('DOWNLOAD_TEST_KEY'));
 }

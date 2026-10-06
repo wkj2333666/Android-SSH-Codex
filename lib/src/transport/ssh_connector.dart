@@ -215,17 +215,19 @@ final class SshConnector {
       ident: 'AndroidSSHCodex_0.1',
     );
     _sshDiagnostics[client] = diagnostic;
-    final health = SshHealthMonitor(ping: client.ping, onFailure: (error) {
-      Diagnostics.record('ssh.health.error', {
-        ...diagnostic.fields,
-        'stage': 'keepalive_reply',
-        ...Diagnostics.errorFields(error),
-      });
-      _requestSshClose(client, 'ssh_health_check_failed');
-    });
+    final health = SshHealthMonitor(
+        ping: client.ping,
+        onFailure: (error) {
+          Diagnostics.record('ssh.health.error', {
+            ...diagnostic.fields,
+            'stage': 'keepalive_reply',
+            ...Diagnostics.errorFields(error),
+          });
+          _requestSshClose(client, 'ssh_health_check_failed');
+        });
     _sshHealth[client] = health;
-    unawaited(client.authenticated.then((_) => health.start(),
-        onError: (Object _) {}));
+    unawaited(client.authenticated
+        .then((_) => health.start(), onError: (Object _) {}));
     Diagnostics.record('ssh.open', diagnostic.fields);
     unawaited(client.done.then((_) {
       health.dispose();

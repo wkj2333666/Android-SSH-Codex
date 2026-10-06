@@ -567,7 +567,8 @@ final class AppController extends ChangeNotifier {
     final epoch = _epoch;
     try {
       final sshHealthy = await _ssh?.checkHealth() ?? false;
-      final disconnected = !sshHealthy || await foregroundTransportDisconnected(rpc);
+      final disconnected =
+          !sshHealthy || await foregroundTransportDisconnected(rpc);
       if (!_isCurrentSession(api, attempt, epoch, profile.id)) return;
       if (disconnected) {
         _expediteReconnect = true;
@@ -653,7 +654,8 @@ final class AppController extends ChangeNotifier {
     final epoch = _epoch;
     try {
       final sshHealthy = await _ssh?.checkHealth() ?? false;
-      final disconnected = !sshHealthy || await foregroundTransportDisconnected(rpc);
+      final disconnected =
+          !sshHealthy || await foregroundTransportDisconnected(rpc);
       if (!_isCurrentSession(api, attempt, epoch, profile.id) ||
           _inBackground) {
         return;
@@ -1291,8 +1293,10 @@ final class AppController extends ChangeNotifier {
           return SftpDownloadSource.open(connection, path);
         },
         onProgress: onProgress,
-        onRetry: (retry, received, error) => Diagnostics.record('download.retry', {
-          'retry': retry, 'receivedBytes': received,
+        onRetry: (retry, received, error) =>
+            Diagnostics.record('download.retry', {
+          'retry': retry,
+          'receivedBytes': received,
           ...Diagnostics.errorFields(error),
         }),
       );

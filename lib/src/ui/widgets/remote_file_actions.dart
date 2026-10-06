@@ -72,18 +72,28 @@ Future<void> showRemoteFileDownload(BuildContext context, String path) async {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                LinearProgressIndicator(value: value.saving || value.verifying || value.reconnecting ? null : fraction),
+                LinearProgressIndicator(
+                    value: value.saving || value.verifying || value.reconnecting
+                        ? null
+                        : fraction),
                 const SizedBox(height: 12),
                 Text(value.saving
                     ? 'Choose a location, then saving…'
                     : '${(value.received / 1048576).toStringAsFixed(2)} MiB received'
                         '${fraction == null ? "" : " · ${(fraction * 100).toStringAsFixed(0)}%"}'),
-                if (value.reconnecting) const Text('Connection interrupted. Reconnecting and resuming…'),
+                if (value.reconnecting)
+                  const Text(
+                      'Connection interrupted. Reconnecting and resuming…'),
                 if (value.verifying) const Text('Verifying file integrity…'),
-                if (!value.verifying && !value.reconnecting && value.bytesPerSecond != null)
-                  Text('${(value.bytesPerSecond! / 1048576).toStringAsFixed(2)} MiB/s'),
+                if (!value.verifying &&
+                    !value.reconnecting &&
+                    value.bytesPerSecond != null)
+                  Text(
+                      '${(value.bytesPerSecond! / 1048576).toStringAsFixed(2)} MiB/s'),
                 if (actions.cancelDownload != null && !value.saving)
-                  TextButton(onPressed: actions.cancelDownload, child: const Text('Cancel download')),
+                  TextButton(
+                      onPressed: actions.cancelDownload,
+                      child: const Text('Cancel download')),
               ],
             );
           },

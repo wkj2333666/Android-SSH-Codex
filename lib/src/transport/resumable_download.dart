@@ -16,10 +16,17 @@ class DownloadCancelled implements Exception {
 class DownloadCancellation {
   final _done = Completer<void>();
   bool get isCancelled => _done.isCompleted;
-  void cancel() { if (!isCancelled) _done.complete(); }
-  void check() { if (isCancelled) throw DownloadCancelled(); }
+  void cancel() {
+    if (!isCancelled) _done.complete();
+  }
+
+  void check() {
+    if (isCancelled) throw DownloadCancelled();
+  }
+
   Future<T> wait<T>(Future<T> future) {
-    return Future.any<T>([future, _done.future.then<T>((_) => throw DownloadCancelled())]);
+    return Future.any<T>(
+        [future, _done.future.then<T>((_) => throw DownloadCancelled())]);
   }
 }
 
@@ -27,13 +34,27 @@ class DownloadIdentity {
   const DownloadIdentity(this.size, this.digest);
   final int size;
   final String digest;
-  bool matches(DownloadIdentity other) => size == other.size && digest == other.digest;
+  bool matches(DownloadIdentity other) =>
+      size == other.size && digest == other.digest;
 }
 
 abstract class DownloadSource {
   Future<DownloadIdentity> identify();
   Future<List<int>> read(int offset, int length);
   Future<void> close();
+}
+
+bool _retryable(Object error) {
+  if (error is SSHAuthAbortError) {
+    final cause = error.reason;
+    return cause != null && _retryable(cause);
+  }
+  return error is TimeoutException ||
+      error is SocketException ||
+      error is SSHSocketError ||
+      error is SSHStateError ||
+      error is SftpAbortError ||
+      (error is SSHHandshakeError && error.message == 'Handshake timed out');
 }
 
 /// Owns its entire SSH connection. dartssh2 2.x SftpClient.close alone does not
@@ -46,7 +67,8 @@ class SftpDownloadSource implements DownloadSource {
   final String path;
   bool _closed = false;
 
-  static Future<SftpDownloadSource> open(SshConnection connection, String path) async {
+  static Future<SftpDownloadSource> open(
+      SshConnection connection, String path) async {
     SftpClient? sftp;
     try {
       fileDownloadCommand(path); // Reject malformed paths before any remote IO.
@@ -62,23 +84,32 @@ class SftpDownloadSource implements DownloadSource {
 
   @override
   Future<DownloadIdentity> identify() async {
-    if (connection.client.isClosed) throw SSHStateError('Download connection closed');
+    if (connection.client.isClosed) {
+      throw SSHStateError('Download connection closed');
+    }
     final attrs = await file.stat();
     final size = attrs.size;
     if (!attrs.isFile || size == null || size < 0 || size > maxDownloadBytes) {
-      throw const FileDownloadException('Download requires a regular file of at most 100 MiB.');
+      throw const FileDownloadException(
+          'Download requires a regular file of at most 100 MiB.');
     }
-    final result = await connection.client.runWithResult(fileDownloadDigestCommand(path));
-    final digest = RegExp(r'^([a-fA-F0-9]{64})\s').firstMatch(String.fromCharCodes(result.stdout))?.group(1);
+    final result =
+        await connection.client.runWithResult(fileDownloadDigestCommand(path));
+    final digest = RegExp(r'^([a-fA-F0-9]{64})\s')
+        .firstMatch(String.fromCharCodes(result.stdout))
+        ?.group(1);
     if (result.exitCode != 0 || digest == null) {
-      throw const FileDownloadException('Cannot verify the remote file (sha256sum is required).');
+      throw const FileDownloadException(
+          'Cannot verify the remote file (sha256sum is required).');
     }
     return DownloadIdentity(size, digest.toLowerCase());
   }
 
   @override
   Future<List<int>> read(int offset, int length) async {
-    if (connection.client.isClosed) throw SSHStateError('Download connection closed');
+    if (connection.client.isClosed) {
+      throw SSHStateError('Download connection closed');
+    }
     return file.readBytes(offset: offset, length: length);
   }
 
@@ -86,7 +117,9 @@ class SftpDownloadSource implements DownloadSource {
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
-    try { sftp.close(); } finally {
+    try {
+      sftp.close();
+    } finally {
       await connection.close(reason: 'download_connection_closed');
     }
   }
@@ -127,13 +160,18 @@ Future<void> downloadResumableFile({
         });
         source = await cancellation.wait(opening).timeout(operationTimeout);
         stage = 'identify';
-        onProgress?.call(DownloadProgress(received, identity?.size, verifying: true));
-        final remote = await cancellation.wait(source.identify()).timeout(operationTimeout);
+        onProgress
+            ?.call(DownloadProgress(received, identity?.size, verifying: true));
+        final remote = await cancellation
+            .wait(source.identify())
+            .timeout(operationTimeout);
         if (remote.size < 0 || remote.size > maxDownloadBytes) {
-          throw const FileDownloadException('File exceeds the 100 MiB download limit.');
+          throw const FileDownloadException(
+              'File exceeds the 100 MiB download limit.');
         }
         if (identity != null && !identity.matches(remote)) {
-          throw const FileDownloadException('Remote file changed. Retry the download from the beginning.');
+          throw const FileDownloadException(
+              'Remote file changed. Retry the download from the beginning.');
         }
         identity ??= remote;
         speedStart = received;
@@ -150,52 +188,67 @@ Future<void> downloadResumableFile({
             pending.add(source.read(offset, length));
             offset += length;
           }
-          final blocks = await cancellation.wait(Future.wait(pending, eagerError: true))
+          final blocks = await cancellation
+              .wait(Future.wait(pending, eagerError: true))
               .timeout(operationTimeout);
           for (var i = 0; i < blocks.length; i++) {
             cancellation.check();
             if (blocks[i].length != lengths[i]) {
-              throw const FileDownloadException('Remote file was truncated during download.');
+              throw const FileDownloadException(
+                  'Remote file was truncated during download.');
             }
             stage = 'write';
             await output.writeFrom(blocks[i]);
             received += blocks[i].length;
-            if (updates.elapsedMilliseconds >= 100 || received == identity.size) {
+            if (updates.elapsedMilliseconds >= 100 ||
+                received == identity.size) {
               onProgress?.call(DownloadProgress(received, identity.size,
-                  bytesPerSecond: (received - speedStart) * 1000000 / max(1, speed.elapsedMicroseconds)));
+                  bytesPerSecond: (received - speedStart) *
+                      1000000 /
+                      max(1, speed.elapsedMicroseconds)));
               updates.reset();
             }
           }
         }
         stage = 'verify';
-        onProgress?.call(DownloadProgress(received, identity.size, verifying: true));
-        final finalIdentity = await cancellation.wait(source.identify()).timeout(operationTimeout);
+        onProgress
+            ?.call(DownloadProgress(received, identity.size, verifying: true));
+        final finalIdentity = await cancellation
+            .wait(source.identify())
+            .timeout(operationTimeout);
         if (!identity.matches(finalIdentity)) {
-          throw const FileDownloadException('Remote file changed during download.');
+          throw const FileDownloadException(
+              'Remote file changed during download.');
         }
         await output.flush();
-        final digest = await cancellation.wait(sha256.bind(destination.openRead()).first);
+        final digest =
+            await cancellation.wait(sha256.bind(destination.openRead()).first);
         if (digest.toString() != identity.digest) {
-          throw const FileDownloadException('Download checksum mismatch. The incomplete file was not saved.');
+          throw const FileDownloadException(
+              'Download checksum mismatch. The incomplete file was not saved.');
         }
         cancellation.check();
         onProgress?.call(DownloadProgress(received, identity.size));
         return;
       } catch (error) {
         openingExpired = true;
-        if (cancellation.isCancelled || error is DownloadCancelled) throw DownloadCancelled();
-        final retryable = error is TimeoutException || error is SocketException ||
-            error is SSHSocketError || error is SSHStateError || error is SftpAbortError;
-        if (!retryable || stage == 'write' || retries >= maxRetries) {
-          throw FileDownloadException('Download failed after $received bytes ($stage): $error',
-              received: received, stage: stage, cause: error);
+        if (cancellation.isCancelled || error is DownloadCancelled) {
+          throw DownloadCancelled();
+        }
+        if (!_retryable(error) || stage == 'write' || retries >= maxRetries) {
+          throw FileDownloadException(
+              'Download failed after $received bytes ($stage): $error',
+              received: received,
+              stage: stage,
+              cause: error);
         }
         onRetry?.call(++retries, received, error);
       } finally {
         openingExpired = true;
         await source?.close();
       }
-      onProgress?.call(DownloadProgress(received, identity?.size, reconnecting: true));
+      onProgress?.call(
+          DownloadProgress(received, identity?.size, reconnecting: true));
       await cancellation.wait(Future<void>.delayed(retryDelay * retries));
     }
   } finally {

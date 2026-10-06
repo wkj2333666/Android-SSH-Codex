@@ -8,8 +8,11 @@ const maxDownloadBytes = 100 * 1024 * 1024;
 const downloadChunkBytes = 256 * 1024;
 
 class DownloadProgress {
-  const DownloadProgress(this.received, this.total, {this.saving = false,
-    this.reconnecting = false, this.verifying = false, this.bytesPerSecond});
+  const DownloadProgress(this.received, this.total,
+      {this.saving = false,
+      this.reconnecting = false,
+      this.verifying = false,
+      this.bytesPerSecond});
   final int received;
   final int? total;
   final bool saving;
