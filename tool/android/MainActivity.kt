@@ -109,6 +109,7 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger,
             "android_ssh_codex/connection_service").setMethodCallHandler { call, result ->
             when (call.method) {
+                "status" -> result.success(ConnectionService.active)
                 "start" -> {
                     try {
                         startForegroundService(Intent(this, ConnectionService::class.java))

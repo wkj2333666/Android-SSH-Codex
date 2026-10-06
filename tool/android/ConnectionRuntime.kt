@@ -47,6 +47,7 @@ object ConnectionRuntime {
             .setMethodCallHandler { call, result ->
                 try {
                     when (call.method) {
+                        "status" -> result.success(ConnectionService.active)
                         "start" -> {
                             app.startForegroundService(Intent(app, ConnectionService::class.java))
                             result.success(app.getSystemService(NotificationManager::class.java).areNotificationsEnabled())

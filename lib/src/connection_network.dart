@@ -27,8 +27,10 @@ class ConnectionNetwork {
   }
 
   void accept(Object? value) {
-    if (_disposed || value is! Map || !value.containsKey('networkPresent')) return;
-    final available = value['networkPresent'] == true && value['blocked'] != true;
+    if (_disposed || value is! Map || !value.containsKey('networkPresent'))
+      return;
+    final available =
+        value['networkPresent'] == true && value['blocked'] != true;
     final signature = '${value['activeNetwork']}:$available';
     if (signature == _signature) return;
     _signature = signature;

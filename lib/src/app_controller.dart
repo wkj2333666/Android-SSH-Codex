@@ -492,7 +492,8 @@ final class AppController extends ChangeNotifier {
 
   void _scheduleReconnect(HostProfile profile, int attempt,
       {bool immediate = false}) {
-    if (!_networkAvailable || (_inBackground && !_keepAlive.isEnabled) ||
+    if (!_networkAvailable ||
+        (_inBackground && !_keepAlive.isEnabled) ||
         attempt != _connectionAttempt ||
         _reconnectTimer != null) {
       return;
@@ -552,7 +553,10 @@ final class AppController extends ChangeNotifier {
     }
     final api = _api;
     final rpc = _rpc;
-    if (!isConnected || api == null || rpc == null || _foregroundProbeApi == api) return;
+    if (!isConnected ||
+        api == null ||
+        rpc == null ||
+        _foregroundProbeApi == api) return;
     _foregroundProbeApi = api;
     final attempt = _connectionAttempt;
     final epoch = _epoch;
@@ -567,7 +571,8 @@ final class AppController extends ChangeNotifier {
             attempt: attempt, epoch: epoch, profileId: profile.id);
       }
     } catch (error) {
-      Diagnostics.record('connection.networkRecovery.error', Diagnostics.errorFields(error));
+      Diagnostics.record(
+          'connection.networkRecovery.error', Diagnostics.errorFields(error));
     } finally {
       if (_foregroundProbeApi == api) _foregroundProbeApi = null;
     }
@@ -593,7 +598,7 @@ final class AppController extends ChangeNotifier {
   Future<void> _setKeepAlive(bool enabled) async {
     final attempt = _connectionAttempt;
     try {
-      await _keepAlive.setEnabled(enabled);
+      await _keepAlive.setEnabled(enabled, verifyNative: enabled);
       if (attempt == _connectionAttempt) _keepAliveWarning = null;
     } catch (exception) {
       if (attempt != _connectionAttempt) return;

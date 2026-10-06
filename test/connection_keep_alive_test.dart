@@ -89,4 +89,19 @@ void main() {
     await service.setEnabled(true);
     await service.setEnabled(false);
   });
+
+  test('foreground verification restarts an unexpectedly stopped service',
+      () async {
+    final calls = <String>[];
+    messenger.setMockMethodCallHandler(ConnectionKeepAlive.channel,
+        (call) async {
+      calls.add(call.method);
+      return call.method != 'status';
+    });
+    final service = ConnectionKeepAlive();
+    await service.setEnabled(true);
+    await service.setEnabled(true, verifyNative: true);
+    expect(calls, ['start', 'status', 'start']);
+    expect(service.isEnabled, isTrue);
+  });
 }
