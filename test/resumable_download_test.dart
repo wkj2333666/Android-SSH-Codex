@@ -52,8 +52,9 @@ class InterruptingSource implements DownloadSource {
   Future<DownloadIdentity> identify() => inner.identify();
   @override
   Future<List<int>> read(int offset, int length) {
+    final pending = inner.read(offset, length);
     if (offset >= 1024 * 1024) client.close();
-    return inner.read(offset, length);
+    return pending;
   }
 
   @override
