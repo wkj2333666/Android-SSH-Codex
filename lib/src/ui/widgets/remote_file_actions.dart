@@ -108,12 +108,15 @@ Future<void> showRemoteFileDownload(BuildContext context, String path) async {
 
 String downloadErrorMessage(Object error) {
   if (error is FileDownloadException) return error.message;
-  if (error is TimeoutException)
+  if (error is TimeoutException) {
     return 'Download timed out. Check the connection and retry.';
-  if (error is FileSystemException)
+  }
+  if (error is FileSystemException) {
     return 'Phone temporary storage could not be written. Check free space.';
-  if (error is PlatformException)
+  }
+  if (error is PlatformException) {
     return 'Could not save on the phone (${error.code}). Choose another location.';
+  }
   if (error is StateError) return 'Download failed: ${error.message}';
   return 'Download failed (${error.runtimeType}). Check the SSH connection and retry.';
 }
