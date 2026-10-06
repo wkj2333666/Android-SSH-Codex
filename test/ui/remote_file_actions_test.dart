@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:android_ssh_codex/src/transport/file_download.dart';
 import 'package:android_ssh_codex/src/ui/widgets/markdown_content.dart';
 import 'package:android_ssh_codex/src/ui/widgets/remote_file_actions.dart';
 import 'package:flutter/material.dart';
@@ -67,6 +70,3 @@ void main() {
     expect(web.single.host, 'example.com');
   });
 }
-import 'dart:async';
-
-import 'package:android_ssh_codex/src/transport/file_download.dart';

@@ -1208,17 +1208,20 @@ final class AppController extends ChangeNotifier {
     }
     _downloadingFile = true;
     Directory? temporary;
+    var stage = 'temporary_storage';
     try {
       final cache =
           await Attachments.channel.invokeMethod<String>('downloadDirectory');
       if (cache == null) throw StateError('No download directory');
       temporary = await Directory(cache).createTemp('codex-download-');
       final file = File('${temporary.path}/payload.bin');
+      stage = 'ssh_transfer';
       await downloads.downloadRemoteFile(ssh.client, path, file,
           onProgress: onProgress);
       if (!identical(ssh, _ssh) || attempt != _connectionAttempt) {
         throw StateError('Connection changed');
       }
+      stage = 'phone_save';
       onProgress?.call(downloads.DownloadProgress(
           await file.length(), await file.length(), saving: true));
       return await Attachments.channel.invokeMethod<bool>('saveDownload', {
@@ -1226,6 +1229,12 @@ final class AppController extends ChangeNotifier {
             'name': path.split('/').last,
           }) ??
           false;
+    } catch (error) {
+      Diagnostics.record('download.failed', {
+        'stage': stage,
+        ...Diagnostics.errorFields(error),
+      });
+      rethrow;
     } finally {
       try {
         await temporary?.delete(recursive: true);
