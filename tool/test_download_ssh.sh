@@ -25,5 +25,6 @@ PasswordAuthentication no
 KbdInteractiveAuthentication no
 UsePAM yes
 AllowUsers $(id -un)
+ForceCommand /bin/bash $PWD/tool/test_download_command.sh
 EOF
 DOWNLOAD_TEST_KEY="$fixture/client" flutter test test/file_download_test.dart --reporter expanded

@@ -1238,8 +1238,9 @@ final class AppController extends ChangeNotifier {
           'receivedBytes': error.received,
           'exitCode': error.exitCode,
         },
-        ...Diagnostics.errorFields(
-            error is downloads.FileDownloadException ? error.cause ?? error : error),
+        ...Diagnostics.errorFields(error is downloads.FileDownloadException
+            ? error.cause ?? error
+            : error),
       });
       rethrow;
     } finally {

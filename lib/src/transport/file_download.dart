@@ -108,7 +108,9 @@ Future<void> downloadRemoteFile(SSHClient client, String path, File destination,
     file = await destination.open(mode: FileMode.write);
     await copyDownloadChunks(
       read: (offset) => _readDownloadChunk(client, path, offset),
-      write: (bytes) async { await file!.writeFrom(bytes); },
+      write: (bytes) async {
+        await file!.writeFrom(bytes);
+      },
       total: total,
       onProgress: onProgress,
     );
@@ -148,7 +150,9 @@ Future<void> copyDownloadChunks({
   } catch (error) {
     throw FileDownloadException(
       'Download failed after $received bytes ($stage): $error',
-      cause: error, received: received, stage: stage,
+      cause: error,
+      received: received,
+      stage: stage,
       exitCode: error is FileDownloadException ? error.exitCode : null,
     );
   }
@@ -157,13 +161,13 @@ Future<void> copyDownloadChunks({
 Future<List<int>> _readDownloadChunk(
     SSHClient client, String path, int offset) async {
   var expired = false;
-  final opening = client.execute(fileDownloadCommand(path, offset: offset))
-      .then((session) {
+  final opening =
+      client.execute(fileDownloadCommand(path, offset: offset)).then((session) {
     if (expired) session.channel.destroy();
     return session;
   });
-  final session = await opening.timeout(const Duration(seconds: 15),
-      onTimeout: () {
+  final session =
+      await opening.timeout(const Duration(seconds: 15), onTimeout: () {
     expired = true;
     throw TimeoutException('Download channel open timed out');
   });
@@ -183,15 +187,19 @@ Future<List<int>> _readDownloadChunk(
           [output, session.stdin.close(), session.done]);
       final bytes = results.first! as BytesBuilder;
       if (session.exitCode != 0) {
-        throw FileDownloadException(switch (session.exitCode) {
-          44 => 'File does not exist on the connected SSH host.',
-          45 => 'The link points to a directory, not a file.',
-          46 => 'The SSH account cannot read this file.',
-          _ => 'SSH file transfer failed (exit ${session.exitCode ?? "unknown"}).',
-        }, exitCode: session.exitCode);
+        throw FileDownloadException(
+            switch (session.exitCode) {
+              44 => 'File does not exist on the connected SSH host.',
+              45 => 'The link points to a directory, not a file.',
+              46 => 'The SSH account cannot read this file.',
+              _ =>
+                'SSH file transfer failed (exit ${session.exitCode ?? "unknown"}).',
+            },
+            exitCode: session.exitCode);
       }
       return bytes.takeBytes();
-    })().timeout(const Duration(seconds: 30));
+    })()
+        .timeout(const Duration(seconds: 30));
     return result;
   } finally {
     session.channel.destroy();
