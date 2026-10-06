@@ -72,7 +72,7 @@ class SftpDownloadSource implements DownloadSource {
     SftpClient? sftp;
     try {
       fileDownloadCommand(path); // Reject malformed paths before any remote IO.
-      sftp = await connection.client.sftp();
+      sftp = await connection.client.sftp().timeout(const Duration(seconds: 15));
       final file = await sftp.open(path).timeout(const Duration(seconds: 15));
       return SftpDownloadSource._(connection, sftp, file, path);
     } catch (_) {

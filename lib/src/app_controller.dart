@@ -1254,7 +1254,12 @@ final class AppController extends ChangeNotifier {
   bool _downloadingFile = false;
   DownloadCancellation? _downloadCancellation;
 
-  void cancelDownload() => _downloadCancellation?.cancel();
+  void cancelDownload() {
+    final cancellation = _downloadCancellation;
+    if (cancellation == null || cancellation.isCancelled) return;
+    Diagnostics.record('download.cancelRequested');
+    cancellation.cancel();
+  }
 
   Future<bool> downloadFile(String link,
       {void Function(downloads.DownloadProgress)? onProgress}) async {

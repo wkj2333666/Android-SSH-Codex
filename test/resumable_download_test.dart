@@ -88,8 +88,8 @@ void main() {
     );
     expect(retries, [1024 * 1024]);
     expect(second.offsets.first, 1024 * 1024);
-    expect(first.peak, lessThanOrEqualTo(4));
-    expect(second.peak, lessThanOrEqualTo(4));
+    expect(first.peak, 4);
+    expect(second.peak, 4);
     expect(first.closed && second.closed, isTrue);
     expect(await output.readAsBytes(), bytes);
   });
@@ -197,6 +197,7 @@ void main() {
     expect(await output.readAsBytes(), bytes);
     expect(active!.isClosed, isTrue);
     // Timing is diagnostic only; shared CI runners cannot prove phone speed.
+    // ignore: avoid_print
     print(
         'SFTP resume verified: ${bytes.length} bytes, ${watch.elapsedMilliseconds} ms');
   },
