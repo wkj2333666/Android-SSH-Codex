@@ -13,6 +13,7 @@ void main() {
     );
     lifecycle.didChangeAppLifecycleState(AppLifecycleState.hidden);
     lifecycle.didChangeAppLifecycleState(AppLifecycleState.paused);
+    lifecycle.didChangeAppLifecycleState(AppLifecycleState.detached);
     lifecycle.didChangeAppLifecycleState(AppLifecycleState.inactive);
     lifecycle.didChangeAppLifecycleState(AppLifecycleState.resumed);
     lifecycle.didChangeAppLifecycleState(AppLifecycleState.resumed);

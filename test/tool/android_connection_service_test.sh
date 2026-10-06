@@ -13,7 +13,8 @@ for permission in FOREGROUND_SERVICE FOREGROUND_SERVICE_SPECIAL_USE POST_NOTIFIC
   grep -Fq "android.permission.$permission\"" "$fixture/first.xml"
 done
 grep -Fq 'android:exported="false"' "$fixture/first.xml"
-grep -Fq 'android:stopWithTask="true"' "$fixture/first.xml"
+grep -Fq 'android:stopWithTask="false"' "$fixture/first.xml"
+cmp "$repo_root/tool/android/ConnectionRuntime.kt" "$fixture/app/src/main/kotlin/io/github/wkj2333666/android_ssh_codex/ConnectionRuntime.kt"
 grep -Fq 'PROPERTY_SPECIAL_USE_FGS_SUBTYPE' "$fixture/first.xml"
 cmp "$repo_root/tool/android/MainActivity.kt" "$fixture/app/src/main/kotlin/io/github/wkj2333666/android_ssh_codex/MainActivity.kt"
 cmp "$repo_root/tool/android/ConnectionService.kt" "$fixture/app/src/main/kotlin/io/github/wkj2333666/android_ssh_codex/ConnectionService.kt"

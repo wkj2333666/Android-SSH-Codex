@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import 'connection_keep_alive.dart';
+import 'connection_network.dart';
 import 'attachments.dart';
 import 'diagnostics.dart';
 import 'profiles/host_profile.dart';
@@ -121,6 +122,8 @@ final class AppController extends ChangeNotifier {
   final ProfileStore _store;
   final SshConnector _connector;
   final ConnectionKeepAlive _keepAlive = ConnectionKeepAlive();
+  late final ConnectionNetwork _network = ConnectionNetwork(_networkChanged);
+  bool _networkAvailable = true;
   String? _keepAliveWarning;
   final TaskReducer _taskReducer = TaskReducer();
   late final TaskEventBatcher _agentDeltaBatcher = TaskEventBatcher(
@@ -240,6 +243,7 @@ final class AppController extends ChangeNotifier {
       Set.unmodifiable(_inFlightQueuedMessageIds[taskId] ?? const <String>{});
 
   Future<void> initialize() async {
+    await _network.start();
     HostProfile? autoConnectProfile;
     try {
       _profiles = await _store.readProfiles();
@@ -488,7 +492,7 @@ final class AppController extends ChangeNotifier {
 
   void _scheduleReconnect(HostProfile profile, int attempt,
       {bool immediate = false}) {
-    if ((_inBackground && !_keepAlive.isEnabled) ||
+    if (!_networkAvailable || (_inBackground && !_keepAlive.isEnabled) ||
         attempt != _connectionAttempt ||
         _reconnectTimer != null) {
       return;
@@ -528,6 +532,45 @@ final class AppController extends ChangeNotifier {
       const Duration(seconds: 10),
       (_) => unawaited(refreshTasks()),
     );
+  }
+
+  Future<void> _networkChanged(bool available) async {
+    _networkAvailable = available;
+    Diagnostics.record('connection.networkChanged', {'available': available});
+    if (!available) {
+      _reconnectTimer?.cancel();
+      _reconnectTimer = null;
+      return;
+    }
+    final profile = _profiles.where((p) => p.id == _selectedHostId).firstOrNull;
+    if (profile == null || _openingAttempt != null) return;
+    if (_connectionPhase == RemoteConnectionPhase.reconnecting) {
+      _reconnectTimer?.cancel();
+      _reconnectTimer = null;
+      _scheduleReconnect(profile, _connectionAttempt, immediate: true);
+      return;
+    }
+    final api = _api;
+    final rpc = _rpc;
+    if (!isConnected || api == null || rpc == null || _foregroundProbeApi == api) return;
+    _foregroundProbeApi = api;
+    final attempt = _connectionAttempt;
+    final epoch = _epoch;
+    try {
+      final disconnected = await foregroundTransportDisconnected(rpc);
+      if (!_isCurrentSession(api, attempt, epoch, profile.id)) return;
+      if (disconnected) {
+        _expediteReconnect = true;
+        await _handleTransportLoss(attempt, profile);
+      } else if (available) {
+        await _recoverSelectedTaskAfterReconnect(api,
+            attempt: attempt, epoch: epoch, profileId: profile.id);
+      }
+    } catch (error) {
+      Diagnostics.record('connection.networkRecovery.error', Diagnostics.errorFields(error));
+    } finally {
+      if (_foregroundProbeApi == api) _foregroundProbeApi = null;
+    }
   }
 
   void enterBackground() {
@@ -2076,6 +2119,7 @@ final class AppController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _network.dispose();
     _connectionAttempt++;
     _cancelHostKeyPrompt();
     _reconnectTimer?.cancel();
