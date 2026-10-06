@@ -156,6 +156,7 @@ class _TaskViewState extends State<TaskView> {
             child: RemoteFileActions(
                 download: widget.controller.downloadFile,
                 downloadWithProgress: widget.controller.downloadFile,
+                cancelDownload: widget.controller.cancelDownload,
                 child: timeline)),
         if (widget.controller.userInputRequests
             .any((r) => r.threadId == task.id))

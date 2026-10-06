@@ -6,6 +6,7 @@ import 'package:dartssh2/dartssh2.dart';
 import '../diagnostics.dart';
 import '../profiles/host_profile.dart';
 import '../profiles/profile_store.dart';
+import 'ssh_health_monitor.dart';
 
 final class HostKeyChallenge {
   const HostKeyChallenge({
@@ -55,6 +56,7 @@ List<SSHKeyPair>? parsePrivateKeyIdentities(
 typedef HostKeyPrompt = Future<bool> Function(HostKeyChallenge challenge);
 
 final _sshDiagnostics = Expando<_SshDiagnostic>();
+final _sshHealth = Expando<SshHealthMonitor>();
 int _nextSshDiagnosticId = 0;
 
 final class _SshDiagnostic {
@@ -74,6 +76,7 @@ final class _SshDiagnostic {
 }
 
 void _requestSshClose(SSHClient client, String reason) {
+  _sshHealth[client]?.dispose();
   final diagnostic = _sshDiagnostics[client];
   if (diagnostic != null) diagnostic.localClose = true;
   Diagnostics.record('ssh.closeRequested', {
@@ -88,6 +91,9 @@ final class SshConnection {
 
   final SSHClient client;
   final SSHClient? jumpClient;
+
+  Future<bool> checkHealth() async =>
+      await _sshHealth[client]?.check() ?? !client.isClosed;
 
   Future<void> close({String reason = 'transport_cleanup'}) async {
     _requestSshClose(client, reason);
@@ -107,6 +113,7 @@ final class SshConnector {
     HostSecret secret, {
     required HostKeyPrompt prompt,
     int? diagnosticAttempt,
+    String diagnosticRole = 'target',
   }) async {
     SSHClient? jumpClient;
     SSHClient? targetClient;
@@ -143,7 +150,7 @@ final class SshConnector {
       }
 
       targetClient = _client(
-        diagnostic: _SshDiagnostic('target', diagnosticAttempt),
+        diagnostic: _SshDiagnostic(diagnosticRole, diagnosticAttempt),
         socket: unownedSocket,
         profileId: profile.id,
         label: profile.label,
@@ -202,19 +209,32 @@ final class SshConnector {
         }
         return accepted;
       },
-      keepAliveInterval: const Duration(seconds: 15),
+      keepAliveInterval: null,
       handshakeTimeout: const Duration(seconds: 15),
       authTimeout: const Duration(seconds: 20),
       ident: 'AndroidSSHCodex_0.1',
     );
     _sshDiagnostics[client] = diagnostic;
+    final health = SshHealthMonitor(ping: client.ping, onFailure: (error) {
+      Diagnostics.record('ssh.health.error', {
+        ...diagnostic.fields,
+        'stage': 'keepalive_reply',
+        ...Diagnostics.errorFields(error),
+      });
+      _requestSshClose(client, 'ssh_health_check_failed');
+    });
+    _sshHealth[client] = health;
+    unawaited(client.authenticated.then((_) => health.start(),
+        onError: (Object _) {}));
     Diagnostics.record('ssh.open', diagnostic.fields);
     unawaited(client.done.then((_) {
+      health.dispose();
       Diagnostics.record('ssh.done', {
         ...diagnostic.fields,
         'reason': diagnostic.localClose ? 'local_close' : 'eof_without_reason',
       });
     }, onError: (Object error, StackTrace stackTrace) {
+      health.dispose();
       Diagnostics.record('ssh.error', {
         ...diagnostic.fields,
         ...Diagnostics.errorFields(error),

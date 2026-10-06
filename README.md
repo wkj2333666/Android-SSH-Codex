@@ -19,12 +19,28 @@ notification. A foreground service and CPU wake lock help keep the SSH connectio
 alive when switching apps or turning off the screen. Allow notification permission
 when prompted. Tap the notification to return to the app; use **Disconnect** to
 stop the service and release its wake lock. Removing the app from recent tasks
-also stops protection. It does not restart itself after force-stop or reboot.
+does not intentionally disconnect an active session. It does not restart itself
+after force-stop or reboot.
 
 This uses additional battery. Network changes, Android power-saving modes and
 manufacturer restrictions can still interrupt the connection; automatic recovery
 remains available. If Android denies service startup or notification permission,
 the app displays a warning. OpenHarmony behavior is unchanged.
+
+Battery-optimization exemption and unrestricted background data are separate
+settings. Neither guarantees that a VPN or changing mobile network stays alive.
+SSH reply timeouts detect unresponsive transports without depending on model
+response time; a timeout is not proof of which network component failed.
+
+### File downloads
+
+Android downloads use a dedicated SSH/SFTP connection with bounded parallel
+reads, a 100 MiB size limit, speed/progress display, and cancellation. Downloads
+retry transient failures up to three times within the current operation and
+resume from written bytes only when the remote SHA-256 still matches. Completed
+content is verified before opening the phone save picker. Resuming after app
+process death is not supported. Missing SFTP support or checksum tools produces
+an error rather than silently falling back to slow per-block shell commands.
 
 The Android service declares the `specialUse` type for interactive SSH sessions,
 not media playback or periodic data sync. Google Play distribution requires the
@@ -77,6 +93,7 @@ an SSH exec channel and renders the resulting tasks and events.
 
 - A reachable SSH server that allows session and exec channels.
 - `/bin/sh`, `base64`, and a writable home directory.
+- For file downloads: an enabled SFTP subsystem, `head`, and `sha256sum`.
 - Codex CLI installed and authenticated on that machine.
 - Codex CLI 0.146.0 or newer for automatic **Shared** mode startup. Use a current
   release whenever possible.

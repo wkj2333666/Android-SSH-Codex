@@ -5,14 +5,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../transport/file_download.dart';
+import '../../transport/resumable_download.dart';
 
 class RemoteFileActions extends InheritedWidget {
   const RemoteFileActions(
       {required this.download,
       this.downloadWithProgress,
+      this.cancelDownload,
       required super.child,
       super.key});
   final Future<bool> Function(String) download;
+  final VoidCallback? cancelDownload;
   final Future<bool> Function(String,
       {void Function(DownloadProgress)? onProgress})? downloadWithProgress;
 
@@ -22,7 +25,8 @@ class RemoteFileActions extends InheritedWidget {
   @override
   bool updateShouldNotify(RemoteFileActions oldWidget) =>
       download != oldWidget.download ||
-      downloadWithProgress != oldWidget.downloadWithProgress;
+      downloadWithProgress != oldWidget.downloadWithProgress ||
+      cancelDownload != oldWidget.cancelDownload;
 }
 
 Future<void> showRemoteFileDownload(BuildContext context, String path) async {
@@ -68,12 +72,18 @@ Future<void> showRemoteFileDownload(BuildContext context, String path) async {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                LinearProgressIndicator(value: value.saving ? null : fraction),
+                LinearProgressIndicator(value: value.saving || value.verifying || value.reconnecting ? null : fraction),
                 const SizedBox(height: 12),
                 Text(value.saving
                     ? 'Choose a location, then saving…'
                     : '${(value.received / 1048576).toStringAsFixed(2)} MiB received'
                         '${fraction == null ? "" : " · ${(fraction * 100).toStringAsFixed(0)}%"}'),
+                if (value.reconnecting) const Text('Connection interrupted. Reconnecting and resuming…'),
+                if (value.verifying) const Text('Verifying file integrity…'),
+                if (!value.verifying && !value.reconnecting && value.bytesPerSecond != null)
+                  Text('${(value.bytesPerSecond! / 1048576).toStringAsFixed(2)} MiB/s'),
+                if (actions.cancelDownload != null && !value.saving)
+                  TextButton(onPressed: actions.cancelDownload, child: const Text('Cancel download')),
               ],
             );
           },
@@ -107,6 +117,7 @@ Future<void> showRemoteFileDownload(BuildContext context, String path) async {
 }
 
 String downloadErrorMessage(Object error) {
+  if (error is DownloadCancelled) return 'Download cancelled.';
   if (error is FileDownloadException) return error.message;
   if (error is TimeoutException) {
     return 'Download timed out. Check the connection and retry.';
