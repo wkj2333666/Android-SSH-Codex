@@ -556,7 +556,9 @@ final class AppController extends ChangeNotifier {
     if (!isConnected ||
         api == null ||
         rpc == null ||
-        _foregroundProbeApi == api) return;
+        _foregroundProbeApi == api) {
+      return;
+    }
     _foregroundProbeApi = api;
     final attempt = _connectionAttempt;
     final epoch = _epoch;
