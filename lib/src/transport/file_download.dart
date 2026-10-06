@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:dartssh2/dartssh2.dart';
 
 const maxDownloadBytes = 100 * 1024 * 1024;
+const downloadChunkBytes = 256 * 1024;
 
 class DownloadProgress {
   const DownloadProgress(this.received, this.total, {this.saving = false});
@@ -13,8 +15,13 @@ class DownloadProgress {
 }
 
 class FileDownloadException implements Exception {
-  const FileDownloadException(this.message);
+  const FileDownloadException(this.message,
+      {this.cause, this.received = 0, this.stage, this.exitCode});
   final String message;
+  final Object? cause;
+  final int received;
+  final String? stage;
+  final int? exitCode;
   @override
   String toString() => message;
 }
@@ -51,7 +58,7 @@ String? remoteFilePath(String value, String cwd) {
   }
 }
 
-String fileDownloadCommand(String path) {
+String fileDownloadCommand(String path, {int? offset}) {
   if (!path.startsWith('/') ||
       path.contains('\u0000') ||
       path.contains('\n') ||
@@ -59,10 +66,15 @@ String fileDownloadCommand(String path) {
     throw ArgumentError('Invalid path');
   }
   final quoted = _shellQuote(path);
+  if (offset != null && (offset < 0 || offset % downloadChunkBytes != 0)) {
+    throw ArgumentError('Invalid download offset');
+  }
+  final read = offset == null
+      ? 'head -c ${maxDownloadBytes + 1} -- $quoted'
+      : 'dd if=$quoted bs=65536 skip=${offset ~/ 65536} count=4 status=none';
   final script = 'if ! test -e $quoted; then exit 44; '
       'elif ! test -f $quoted; then exit 45; '
-      'elif ! test -r $quoted; then exit 46; fi; '
-      'head -c ${maxDownloadBytes + 1} -- $quoted';
+      'elif ! test -r $quoted; then exit 46; fi; $read';
   // SSH exec uses the account's login shell, which may be fish rather than sh.
   return _posixShellCommand(script);
 }
@@ -77,7 +89,7 @@ String _shellQuote(String value) => "'${value.replaceAll("'", "'\\''")}'";
 
 Future<void> downloadRemoteFile(SSHClient client, String path, File destination,
     {void Function(DownloadProgress)? onProgress}) async {
-  final command = fileDownloadCommand(path);
+  fileDownloadCommand(path); // Validate before opening any channels.
   int? total;
   final quoted = "'${path.replaceAll("'", "'\\''")}'";
   // Size is advisory: transfer limits still apply if the file changes.
@@ -91,54 +103,107 @@ Future<void> downloadRemoteFile(SSHClient client, String path, File destination,
         'File exceeds the 100 MiB download limit.');
   }
   onProgress?.call(DownloadProgress(0, total));
-  var timedOut = false;
-  final opening = client.execute(command).then((session) {
-    if (timedOut) session.close();
+  RandomAccessFile? file;
+  try {
+    file = await destination.open(mode: FileMode.write);
+    await copyDownloadChunks(
+      read: (offset) => _readDownloadChunk(client, path, offset),
+      write: (bytes) async {
+        await file!.writeFrom(bytes);
+      },
+      total: total,
+      onProgress: onProgress,
+    );
+  } finally {
+    await file?.close();
+  }
+}
+
+/// Pull one bounded block at a time. Disk backpressure never pauses a large
+/// SSH stdout stream (dartssh2 2.x cannot recover an exhausted paused window).
+Future<void> copyDownloadChunks({
+  required Future<List<int>> Function(int offset) read,
+  required Future<void> Function(List<int>) write,
+  int? total,
+  void Function(DownloadProgress)? onProgress,
+}) async {
+  var received = 0;
+  var stage = 'read';
+  try {
+    while (true) {
+      stage = 'read';
+      final bytes = await read(received);
+      if (bytes.length > downloadChunkBytes ||
+          received + bytes.length > maxDownloadBytes) {
+        throw const FileDownloadException('File exceeds the download limit.');
+      }
+      stage = 'write';
+      await write(bytes);
+      received += bytes.length;
+      onProgress?.call(DownloadProgress(received, total));
+      if (bytes.length < downloadChunkBytes) break;
+    }
+    if (total != null && received != total) {
+      throw const FileDownloadException(
+          'Remote file changed or transfer was incomplete. Please retry.');
+    }
+  } catch (error) {
+    throw FileDownloadException(
+      'Download failed after $received bytes ($stage): $error',
+      cause: error,
+      received: received,
+      stage: stage,
+      exitCode: error is FileDownloadException ? error.exitCode : null,
+    );
+  }
+}
+
+Future<List<int>> _readDownloadChunk(
+    SSHClient client, String path, int offset) async {
+  var expired = false;
+  final opening =
+      client.execute(fileDownloadCommand(path, offset: offset)).then((session) {
+    if (expired) session.channel.destroy();
     return session;
   });
   final session =
       await opening.timeout(const Duration(seconds: 15), onTimeout: () {
-    timedOut = true;
-    throw TimeoutException('Download channel timed out');
+    expired = true;
+    throw TimeoutException('Download channel open timed out');
   });
   final stderr = session.stderr.listen((_) {}, onError: (Object _) {});
-  RandomAccessFile? file;
-  var length = 0;
-  final updates = Stopwatch()..start();
   try {
-    file = await destination.open(mode: FileMode.write);
-    await (() async {
-      await session.stdin.close();
-      await for (final chunk in session.stdout) {
-        length += chunk.length;
-        if (length > maxDownloadBytes) {
-          throw const FileDownloadException(
-              'File exceeds the 100 MiB download limit.');
-        }
-        await file!.writeFrom(chunk);
-        if (updates.elapsedMilliseconds >= 100) {
-          onProgress?.call(DownloadProgress(length, total));
-          updates.reset();
-        }
+    // Collection has no async disk writes, and each channel is capped well
+    // below the 2 MiB receive window even if stream scheduling pauses it.
+    final output = session.stdout.fold<BytesBuilder>(BytesBuilder(copy: false),
+        (buffer, bytes) {
+      if (buffer.length + bytes.length > downloadChunkBytes) {
+        throw const FileDownloadException('Invalid download block size.');
       }
-      await session.done;
+      return buffer..add(bytes);
+    });
+    final result = await (() async {
+      final results = await Future.wait<Object?>(
+          [output, session.stdin.close(), session.done]);
+      final bytes = results.first! as BytesBuilder;
       if (session.exitCode != 0) {
-        throw FileDownloadException(switch (session.exitCode) {
-          44 =>
-            'File does not exist on the connected SSH host. A sandbox link may refer to a different machine.',
-          45 => 'The link points to a directory, not a file.',
-          46 => 'The SSH account cannot read this file.',
-          _ =>
-            'SSH file transfer failed (exit ${session.exitCode ?? "unknown"}).',
-        });
+        throw FileDownloadException(
+            switch (session.exitCode) {
+              44 => 'File does not exist on the connected SSH host.',
+              45 => 'The link points to a directory, not a file.',
+              46 => 'The SSH account cannot read this file.',
+              _ =>
+                'SSH file transfer failed (exit ${session.exitCode ?? "unknown"}).',
+            },
+            exitCode: session.exitCode);
       }
-      onProgress?.call(DownloadProgress(length, total));
+      return bytes.takeBytes();
     })()
-        .timeout(const Duration(minutes: 2));
+        .timeout(const Duration(seconds: 30));
+    return result;
   } finally {
-    session.close();
+    session.channel.destroy();
     await stderr.cancel();
-    await file?.close();
   }
 }
 
@@ -147,7 +212,7 @@ Future<int?> _fileSize(SSHClient client, String quoted) async {
   final opening = client
       .execute(_posixShellCommand('stat -Lc %s -- $quoted'))
       .then((session) {
-    if (expired) session.close();
+    if (expired) session.channel.destroy();
     return session;
   });
   final session =
@@ -171,7 +236,7 @@ Future<int?> _fileSize(SSHClient client, String quoted) async {
     })()
         .timeout(const Duration(seconds: 15));
   } finally {
-    session.close();
+    session.channel.destroy();
     await stderr.cancel();
   }
 }
