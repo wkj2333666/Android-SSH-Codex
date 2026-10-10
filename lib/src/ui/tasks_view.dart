@@ -458,16 +458,20 @@ class _TaskListPaneState extends State<TaskListPane> {
                 Expanded(
                   child: DropdownButtonFormField<String>(
                     key: ValueKey(project?.id),
+                    isExpanded: true,
                     initialValue: project?.id,
                     decoration: const InputDecoration(
                       labelText: 'Project',
                       prefixIcon: Icon(Icons.folder_outlined),
                     ),
-                    hint: const Text('No project selected'),
+                    hint: const Text('No project selected',
+                        maxLines: 1, overflow: TextOverflow.ellipsis),
                     items: [
                       for (final item in model.projects)
                         DropdownMenuItem(
-                            value: item.id, child: Text(item.name)),
+                            value: item.id,
+                            child: Text(item.name,
+                                maxLines: 1, overflow: TextOverflow.ellipsis)),
                     ],
                     onChanged:
                         model.connected ? widget.onProjectSelected : null,

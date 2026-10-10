@@ -1340,6 +1340,7 @@ final class AppController extends ChangeNotifier {
 
   Future<TaskMessageDisposition> sendPrompt(
     String prompt, {
+    TaskSendMode mode = TaskSendMode.auto,
     RemoteSkill? skill,
     String? model,
     String? effort,
@@ -1371,23 +1372,32 @@ final class AppController extends ChangeNotifier {
       imagePaths: List.unmodifiable(
           uploaded.where((file) => file.isImage).map((file) => file.path)),
     );
-    if (_messageQueue.hasPending(task.id)) {
+    if (mode == TaskSendMode.queue ||
+        (mode == TaskSendMode.auto && _messageQueue.hasPending(task.id))) {
       _enqueuePrompt(task.id, pending);
       return TaskMessageDisposition.queued;
     }
 
     var activeTurnId = _activeTurnIds[task.id];
-    if (activeTurnId == null &&
-        (task.status == TaskStatus.running ||
-            task.status == TaskStatus.queued)) {
+    if (mode == TaskSendMode.steer ||
+        (activeTurnId == null &&
+            (task.status == TaskStatus.running ||
+                task.status == TaskStatus.queued))) {
       activeTurnId = await api.readActiveTurnId(task.id);
       _ensureCurrentSession(api, attempt, epoch, profileId);
-      if (activeTurnId != null) _activeTurnIds[task.id] = activeTurnId;
+      if (activeTurnId != null) {
+        _activeTurnIds[task.id] = activeTurnId;
+      } else {
+        _activeTurnIds.remove(task.id);
+      }
     }
-    switch (chooseTaskMessageRoute(
-      task.status,
-      activeTurnId: activeTurnId,
-    )) {
+    final route = mode == TaskSendMode.auto
+        ? chooseTaskMessageRoute(
+            task.status,
+            activeTurnId: activeTurnId,
+          )
+        : chooseExplicitMessageRoute(mode, activeTurnId: activeTurnId);
+    switch (route) {
       case TaskMessageRoute.steer:
         return _steerPrompt(
           task,
@@ -1397,6 +1407,7 @@ final class AppController extends ChangeNotifier {
           attempt: attempt,
           epoch: epoch,
           profileId: profileId,
+          queueIfFinished: mode != TaskSendMode.steer,
         );
       case TaskMessageRoute.queue:
         _enqueuePrompt(task.id, pending);
@@ -1415,6 +1426,7 @@ final class AppController extends ChangeNotifier {
     required int attempt,
     required int epoch,
     required String profileId,
+    bool queueIfFinished = true,
   }) async {
     _setLocalUserMessageStatus(task.id, pending, 'sending', epoch: epoch);
     var steerRequested = false;
@@ -1441,6 +1453,10 @@ final class AppController extends ChangeNotifier {
         _ensureCurrentSession(api, attempt, epoch, profileId);
         if (refreshedTurnId == null) {
           _activeTurnIds.remove(task.id);
+          if (!queueIfFinished) {
+            throw StateError('The turn finished before Steer was accepted. '
+                'Use Auto to start a new turn.');
+          }
           _setLocalUserMessageStatus(
             task.id,
             pending,

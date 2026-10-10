@@ -4,6 +4,20 @@ import 'package:android_ssh_codex/src/tasks/task_reducer.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('explicit steer requires a live turn; queue never becomes steer', () {
+    expect(
+        chooseExplicitMessageRoute(TaskSendMode.steer, activeTurnId: 'active'),
+        TaskMessageRoute.steer);
+    expect(
+        () =>
+            chooseExplicitMessageRoute(TaskSendMode.steer, activeTurnId: null),
+        throwsStateError);
+    expect(
+        chooseExplicitMessageRoute(TaskSendMode.queue, activeTurnId: 'active'),
+        TaskMessageRoute.queue);
+    expect(chooseExplicitMessageRoute(TaskSendMode.queue, activeTurnId: null),
+        TaskMessageRoute.queue);
+  });
   test('pending messages remain FIFO and isolated per task', () {
     final queue = TaskMessageQueue<String>();
 

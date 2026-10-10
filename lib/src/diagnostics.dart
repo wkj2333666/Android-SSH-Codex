@@ -90,4 +90,6 @@ abstract final class Diagnostics {
 
   static Future<bool> export() async =>
       await channel.invokeMethod<bool>('export') ?? false;
+
+  static Future<void> clear() => channel.invokeMethod<void>('clear');
 }

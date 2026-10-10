@@ -67,6 +67,7 @@ class _TaskViewState extends State<TaskView> {
   final _composer = TextEditingController();
   final _timelineCache = TaskTimelineRenderCache<Widget>();
   var _sending = false;
+  TaskSendMode _sendMode = TaskSendMode.auto;
   var _commandBusy = false;
   var _queueActionBusy = false;
   var _lastCommandSucceeded = true;
@@ -95,6 +96,7 @@ class _TaskViewState extends State<TaskView> {
       _availableSkills = null;
       _completions = const [];
       _sending = false;
+      _sendMode = TaskSendMode.auto;
       _commandBusy = false;
       _queueActionBusy = false;
       _attachments = [];
@@ -273,6 +275,8 @@ class _TaskViewState extends State<TaskView> {
           loadingCompletions: _loadingSkills,
           onCompletion: _selectCompletion,
           onSend: _send,
+          sendMode: _sendMode,
+          onSendModeChanged: (mode) => setState(() => _sendMode = mode),
           onAttach: Attachments.supported &&
                   !_sending &&
                   !_pickingAttachment &&
@@ -314,6 +318,7 @@ class _TaskViewState extends State<TaskView> {
     try {
       final disposition = await widget.controller.sendPrompt(
         text,
+        mode: _sendMode,
         skill: submittedSkill,
         model: settings.model,
         effort: settings.effort,
@@ -753,11 +758,15 @@ class QueuedMessagePanel extends StatelessWidget {
                             ),
                           ),
                         ),
-                        IconButton(
-                          tooltip: 'Steer queued message',
-                          onPressed:
-                              enabled ? () async => onSteer(message.id) : null,
-                          icon: const Icon(Icons.redo),
+                        Tooltip(
+                          message: 'Steer queued message',
+                          child: TextButton.icon(
+                            onPressed: enabled
+                                ? () async => onSteer(message.id)
+                                : null,
+                            icon: const Icon(Icons.redo, size: 18),
+                            label: const Text('Steer'),
+                          ),
                         ),
                         IconButton(
                           tooltip: 'Remove queued message',
@@ -1247,6 +1256,8 @@ class _Composer extends StatelessWidget {
     required this.loadingCompletions,
     required this.onCompletion,
     required this.onSend,
+    required this.sendMode,
+    required this.onSendModeChanged,
     this.onAttach,
   });
 
@@ -1257,6 +1268,8 @@ class _Composer extends StatelessWidget {
   final bool loadingCompletions;
   final ValueChanged<ComposerCompletion> onCompletion;
   final VoidCallback onSend;
+  final TaskSendMode sendMode;
+  final ValueChanged<TaskSendMode> onSendModeChanged;
   final ValueChanged<bool>? onAttach;
 
   @override
@@ -1267,6 +1280,14 @@ class _Composer extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: SendModePicker(
+                  value: sendMode,
+                  enabled: sendEnabled,
+                  onChanged: onSendModeChanged,
+                ),
+              ),
               if (completions.isNotEmpty || loadingCompletions)
                 _CompletionPicker(
                   completions: completions,
@@ -1302,14 +1323,61 @@ class _Composer extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   IconButton.filled(
-                    tooltip: 'Send message',
+                    tooltip: switch (sendMode) {
+                      TaskSendMode.auto => 'Send message',
+                      TaskSendMode.steer => 'Steer current turn',
+                      TaskSendMode.queue => 'Queue message',
+                    },
                     onPressed: sendEnabled ? onSend : null,
-                    icon: const Icon(Icons.arrow_upward),
+                    icon: Icon(switch (sendMode) {
+                      TaskSendMode.auto => Icons.arrow_upward,
+                      TaskSendMode.steer => Icons.redo,
+                      TaskSendMode.queue => Icons.schedule,
+                    }),
                   ),
                 ],
               ),
             ],
           ),
+        ),
+      );
+}
+
+class SendModePicker extends StatelessWidget {
+  const SendModePicker(
+      {required this.value,
+      required this.enabled,
+      required this.onChanged,
+      super.key});
+  final TaskSendMode value;
+  final bool enabled;
+  final ValueChanged<TaskSendMode> onChanged;
+
+  @override
+  Widget build(BuildContext context) => PopupMenuButton<TaskSendMode>(
+        tooltip: 'Message delivery mode',
+        enabled: enabled,
+        initialValue: value,
+        onSelected: onChanged,
+        itemBuilder: (_) => const [
+          PopupMenuItem(
+              value: TaskSendMode.auto, child: Text('Auto — start or steer')),
+          PopupMenuItem(
+              value: TaskSendMode.steer,
+              child: Text('Steer — guide the current turn')),
+          PopupMenuItem(
+              value: TaskSendMode.queue, child: Text('Queue — send when idle')),
+        ],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Text(switch (value) {
+              TaskSendMode.auto => 'Auto',
+              TaskSendMode.steer => 'Steer current turn',
+              TaskSendMode.queue => 'Queue for next turn',
+            }),
+            const Icon(Icons.arrow_drop_down, size: 20),
+          ]),
         ),
       );
 }
