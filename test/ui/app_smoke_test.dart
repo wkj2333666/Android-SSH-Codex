@@ -128,6 +128,7 @@ void main() {
     await tester.tap(find.text('Clear logs'));
     await tester.pumpAndSettle();
     expect(find.text('Could not clear logs. Try again.'), findsOneWidget);
+    debugDefaultTargetPlatformOverride = null;
   });
 
   testWidgets('narrow host cards keep long names above their actions', (
