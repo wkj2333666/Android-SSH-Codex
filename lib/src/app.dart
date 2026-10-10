@@ -149,51 +149,40 @@ class _DesktopNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SizedBox(
-        width: 232,
+        key: const Key('compact-navigation'),
+        width: 72,
         child: SafeArea(
+          child: SingleChildScrollView(
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Padding(
-                padding: EdgeInsets.fromLTRB(20, 20, 16, 18),
-                child: Row(
-                  children: [
-                    Icon(Icons.terminal, size: 22),
-                    SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'Remote Codex',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ],
+              const SizedBox(height: 12),
+              const Tooltip(
+                message: 'Remote Codex',
+                child: Padding(
+                  padding: EdgeInsets.all(12),
+                  child: Icon(Icons.terminal, size: 22),
                 ),
               ),
-              _NavItem(
-                icon: Icons.dns_outlined,
-                label: 'Hosts',
-                selected: controller.section == AppSection.hosts,
-                onTap: () => controller.selectSection(AppSection.hosts),
+              IconButton(
+                tooltip: 'Hosts',
+                icon: const Icon(Icons.dns_outlined),
+                selectedIcon: const Icon(Icons.dns),
+                isSelected: controller.section == AppSection.hosts,
+                onPressed: () => controller.selectSection(AppSection.hosts),
               ),
-              _NavItem(
-                icon: Icons.forum_outlined,
-                label: 'Tasks',
-                selected: controller.section == AppSection.tasks,
-                onTap: () => controller.selectSection(AppSection.tasks),
+              IconButton(
+                tooltip: 'Tasks',
+                icon: const Icon(Icons.forum_outlined),
+                selectedIcon: const Icon(Icons.forum),
+                isSelected: controller.section == AppSection.tasks,
+                onPressed: () => controller.selectSection(AppSection.tasks),
               ),
-              const Spacer(),
+              const Divider(indent: 12, endIndent: 12),
               if (Diagnostics.supported) const _DiagnosticExport(),
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child:
-                    _ConnectionAction(controller: controller, expanded: true),
-              ),
+              _ConnectionAction(controller: controller),
+              const SizedBox(height: 12),
             ],
+          ),
           ),
         ),
       );
@@ -208,6 +197,42 @@ class _DiagnosticExport extends StatefulWidget {
 
 class _DiagnosticExportState extends State<_DiagnosticExport> {
   bool _busy = false;
+
+  Future<void> _clear() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear connection logs?'),
+        content: const Text('Delete diagnostic logs stored in this app. '
+            'Chats, queued messages, hosts and exported files are not affected. '
+            'New events will continue to be recorded.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, true),
+              child: const Text('Clear logs')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      await Diagnostics.clear();
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Connection logs cleared')));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not clear logs. Try again.')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 
   Future<void> _export() async {
     setState(() => _busy = true);
@@ -231,36 +256,15 @@ class _DiagnosticExportState extends State<_DiagnosticExport> {
   }
 
   @override
-  Widget build(BuildContext context) => IconButton(
-        tooltip: 'Export connection diagnostics',
-        onPressed: _busy ? null : _export,
+  Widget build(BuildContext context) => PopupMenuButton<String>(
+        tooltip: 'Connection diagnostics',
+        enabled: !_busy,
+        onSelected: (action) => action == 'clear' ? _clear() : _export(),
         icon: const Icon(Icons.bug_report_outlined),
-      );
-}
-
-class _NavItem extends StatelessWidget {
-  const _NavItem({
-    required this.icon,
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-        child: ListTile(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-          selected: selected,
-          leading: Icon(icon),
-          title: Text(label),
-          onTap: onTap,
-        ),
+        itemBuilder: (_) => const [
+          PopupMenuItem(value: 'export', child: Text('Export connection diagnostics')),
+          PopupMenuItem(value: 'clear', child: Text('Clear connection logs')),
+        ],
       );
 }
 

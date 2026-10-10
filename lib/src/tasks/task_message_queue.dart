@@ -2,6 +2,17 @@ import 'task_reducer.dart';
 
 enum TaskMessageRoute { start, steer, queue }
 
+enum TaskSendMode { auto, steer, queue }
+
+TaskMessageRoute chooseExplicitMessageRoute(TaskSendMode mode,
+    {required String? activeTurnId}) {
+  if (mode == TaskSendMode.queue) return TaskMessageRoute.queue;
+  if (mode == TaskSendMode.steer && activeTurnId != null) {
+    return TaskMessageRoute.steer;
+  }
+  throw StateError('No active turn to steer. Use Auto to start a new turn.');
+}
+
 enum TaskMessageDisposition { started, steered, queued }
 
 enum QueuedPromptAction { start, wait }

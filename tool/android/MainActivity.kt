@@ -78,6 +78,21 @@ class MainActivity : FlutterActivity() {
                         fields.entries.associate { it.key.toString() to it.value } + snapshot)
                     result.success(null)
                 }
+                "clear" -> {
+                    if (exportResult != null) {
+                        result.error("BUSY", "Close the export before clearing diagnostics", null)
+                    } else {
+                        val accepted = DiagnosticLog.submit {
+                            try {
+                                DiagnosticLog.clear(applicationContext)
+                                runOnUiThread { result.success(null) }
+                            } catch (_: Exception) {
+                                runOnUiThread { result.error("CLEAR_FAILED", "Cannot clear diagnostics", null) }
+                            }
+                        }
+                        if (!accepted) result.error("BUSY", "Diagnostics queue is busy", null)
+                    }
+                }
                 "export" -> {
                     if (exportResult != null) {
                         result.error("BUSY", "An export is already open", null)

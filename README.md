@@ -59,6 +59,10 @@ not imply Play approval.
 - Choose a server-advertised model and reasoning effort for new turns.
 - Send follow-up instructions to a working agent; messages are steered to the
   active turn or queued when the turn is changing state.
+  The composer delivery menu offers **Auto**, **Steer** (guide the current turn
+  immediately, bypassing queued messages), and **Queue** (send when idle).
+  Queued messages also have a visible **Steer** button. Explicit Steer requires
+  an active turn and does not silently start a new one.
 - Use `/goal`, `/compact`, `/skills`, `/interrupt`, and remote skill completion.
 - Open very long conversations without loading the entire history at once.
 - Reconnect automatically to the last host unless you explicitly disconnect.
@@ -281,7 +285,13 @@ on disconnect, so an old prompt cannot answer a new connection's request.
 
 ### Collect Android logs
 
-For background disconnects, use the **Export connection diagnostics** bug icon
+The bug icon opens **Connection diagnostics**, with **Export connection diagnostics**
+and **Clear connection logs** actions. Clearing requires confirmation and removes
+only the app's current and rotated diagnostic logs, not chats, hosts or exported
+files. New events continue to be recorded. Tablet/wide layouts use a compact
+72 dp navigation strip to leave more space for conversations.
+
+For background disconnects, use **Export connection diagnostics** in that menu
 in the app's top bar (sidebar on wide screens). Logging is automatic on Android:
 unplug USB, reproduce the issue, return to the app, and export to a text file
 using the system document picker. Export works while disconnected too.

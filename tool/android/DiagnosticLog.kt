@@ -39,6 +39,14 @@ object DiagnosticLog {
         }
     }
 
+    // Call on the same worker as record/snapshot, never race file rotation.
+    fun clear(context: Context) {
+        for (name in listOf("connection-diagnostics.previous.jsonl", "connection-diagnostics.jsonl")) {
+            val file = File(context.noBackupFilesDir, name)
+            if (file.exists() && !file.delete()) throw java.io.IOException("Cannot clear diagnostics")
+        }
+    }
+
     // Call on worker, after earlier log writes, to freeze export before opening picker.
     fun snapshot(context: Context): String = buildString {
         for (name in listOf("connection-diagnostics.previous.jsonl", "connection-diagnostics.jsonl")) {
