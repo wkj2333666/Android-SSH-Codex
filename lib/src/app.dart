@@ -272,10 +272,9 @@ class _DiagnosticExportState extends State<_DiagnosticExport> {
 }
 
 class _ConnectionAction extends StatelessWidget {
-  const _ConnectionAction({required this.controller, this.expanded = false});
+  const _ConnectionAction({required this.controller});
 
   final AppController controller;
-  final bool expanded;
 
   @override
   Widget build(BuildContext context) {
@@ -306,13 +305,6 @@ class _ConnectionAction extends StatelessWidget {
             : controller.selectedHost == null
                 ? null
                 : () => controller.connectHost(controller.selectedHost!);
-    if (expanded) {
-      return OutlinedButton.icon(
-        onPressed: action,
-        icon: icon,
-        label: Text(label, overflow: TextOverflow.ellipsis),
-      );
-    }
     return Tooltip(
       message: connected ? 'Disconnect from $label' : label,
       child: IconButton(
