@@ -46,7 +46,11 @@ void main() {
     expect(find.byTooltip('Reconnect Lab'), findsOneWidget);
   });
 
-  for (final size in [const Size(360, 800), const Size(1200, 800), const Size(1000, 400)]) {
+  for (final size in [
+    const Size(360, 800),
+    const Size(1200, 800),
+    const Size(1000, 400)
+  ]) {
     testWidgets('workspace has no layout exception at ${size.width}px', (
       tester,
     ) async {
@@ -62,7 +66,9 @@ void main() {
 
       expect(tester.takeException(), isNull);
       if (size.width >= 800) {
-        expect(tester.getSize(find.byKey(const Key('compact-navigation'))).width, 72);
+        expect(
+            tester.getSize(find.byKey(const Key('compact-navigation'))).width,
+            72);
         await tester.tap(find.byTooltip('Tasks'));
         await tester.pumpAndSettle();
         expect(find.text('Workspace'), findsOneWidget);
@@ -71,9 +77,11 @@ void main() {
     });
   }
 
-  testWidgets('clear diagnostics requires confirmation and preserves hosts', (tester) async {
+  testWidgets('clear diagnostics requires confirmation and preserves hosts',
+      (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
-    final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
     final calls = <String>[];
     messenger.setMockMethodCallHandler(Diagnostics.channel, (call) async {
       calls.add(call.method);
@@ -84,8 +92,14 @@ void main() {
       messenger.setMockMethodCallHandler(Diagnostics.channel, null);
     });
     final controller = AppController.memory();
-    await controller.saveProfile(HostProfile(id: 'lab', label: 'Lab',
-      hostName: 'lab.example', user: 'user', port: 22), const HostSecret());
+    await controller.saveProfile(
+        HostProfile(
+            id: 'lab',
+            label: 'Lab',
+            hostName: 'lab.example',
+            user: 'user',
+            port: 22),
+        const HostSecret());
     await tester.pumpWidget(AndroidSshCodexApp(controller: controller));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Connection diagnostics'));

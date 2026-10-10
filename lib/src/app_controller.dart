@@ -1381,8 +1381,8 @@ final class AppController extends ChangeNotifier {
     var activeTurnId = _activeTurnIds[task.id];
     if (mode == TaskSendMode.steer ||
         (activeTurnId == null &&
-        (task.status == TaskStatus.running ||
-            task.status == TaskStatus.queued))) {
+            (task.status == TaskStatus.running ||
+                task.status == TaskStatus.queued))) {
       activeTurnId = await api.readActiveTurnId(task.id);
       _ensureCurrentSession(api, attempt, epoch, profileId);
       if (activeTurnId != null) {
@@ -1391,10 +1391,12 @@ final class AppController extends ChangeNotifier {
         _activeTurnIds.remove(task.id);
       }
     }
-    final route = mode == TaskSendMode.auto ? chooseTaskMessageRoute(
-      task.status,
-      activeTurnId: activeTurnId,
-    ) : chooseExplicitMessageRoute(mode, activeTurnId: activeTurnId);
+    final route = mode == TaskSendMode.auto
+        ? chooseTaskMessageRoute(
+            task.status,
+            activeTurnId: activeTurnId,
+          )
+        : chooseExplicitMessageRoute(mode, activeTurnId: activeTurnId);
     switch (route) {
       case TaskMessageRoute.steer:
         return _steerPrompt(

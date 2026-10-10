@@ -153,36 +153,36 @@ class _DesktopNavigation extends StatelessWidget {
         width: 72,
         child: SafeArea(
           child: SingleChildScrollView(
-          child: Column(
-            children: [
-              const SizedBox(height: 12),
-              const Tooltip(
-                message: 'Remote Codex',
-                child: Padding(
-                  padding: EdgeInsets.all(12),
-                  child: Icon(Icons.terminal, size: 22),
+            child: Column(
+              children: [
+                const SizedBox(height: 12),
+                const Tooltip(
+                  message: 'Remote Codex',
+                  child: Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Icon(Icons.terminal, size: 22),
+                  ),
                 ),
-              ),
-              IconButton(
-                tooltip: 'Hosts',
-                icon: const Icon(Icons.dns_outlined),
-                selectedIcon: const Icon(Icons.dns),
-                isSelected: controller.section == AppSection.hosts,
-                onPressed: () => controller.selectSection(AppSection.hosts),
-              ),
-              IconButton(
-                tooltip: 'Tasks',
-                icon: const Icon(Icons.forum_outlined),
-                selectedIcon: const Icon(Icons.forum),
-                isSelected: controller.section == AppSection.tasks,
-                onPressed: () => controller.selectSection(AppSection.tasks),
-              ),
-              const Divider(indent: 12, endIndent: 12),
-              if (Diagnostics.supported) const _DiagnosticExport(),
-              _ConnectionAction(controller: controller),
-              const SizedBox(height: 12),
-            ],
-          ),
+                IconButton(
+                  tooltip: 'Hosts',
+                  icon: const Icon(Icons.dns_outlined),
+                  selectedIcon: const Icon(Icons.dns),
+                  isSelected: controller.section == AppSection.hosts,
+                  onPressed: () => controller.selectSection(AppSection.hosts),
+                ),
+                IconButton(
+                  tooltip: 'Tasks',
+                  icon: const Icon(Icons.forum_outlined),
+                  selectedIcon: const Icon(Icons.forum),
+                  isSelected: controller.section == AppSection.tasks,
+                  onPressed: () => controller.selectSection(AppSection.tasks),
+                ),
+                const Divider(indent: 12, endIndent: 12),
+                if (Diagnostics.supported) const _DiagnosticExport(),
+                _ConnectionAction(controller: controller),
+                const SizedBox(height: 12),
+              ],
+            ),
           ),
         ),
       );
@@ -207,9 +207,11 @@ class _DiagnosticExportState extends State<_DiagnosticExport> {
             'Chats, queued messages, hosts and exported files are not affected. '
             'New events will continue to be recorded.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false),
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
               child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
               child: const Text('Clear logs')),
         ],
       ),
@@ -221,13 +223,13 @@ class _DiagnosticExportState extends State<_DiagnosticExport> {
       if (mounted) {
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Connection logs cleared')));
+            const SnackBar(content: Text('Connection logs cleared')));
       }
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not clear logs. Try again.')));
+            const SnackBar(content: Text('Could not clear logs. Try again.')));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -262,7 +264,8 @@ class _DiagnosticExportState extends State<_DiagnosticExport> {
         onSelected: (action) => action == 'clear' ? _clear() : _export(),
         icon: const Icon(Icons.bug_report_outlined),
         itemBuilder: (_) => const [
-          PopupMenuItem(value: 'export', child: Text('Export connection diagnostics')),
+          PopupMenuItem(
+              value: 'export', child: Text('Export connection diagnostics')),
           PopupMenuItem(value: 'clear', child: Text('Clear connection logs')),
         ],
       );
