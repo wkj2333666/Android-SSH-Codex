@@ -170,13 +170,16 @@ void main() {
     expect(server.requests.last['params'].containsKey('cwd'), isFalse);
   });
 
-  test('migration traverses every page with stable creation ordering', () async {
+  test('migration traverses every page with stable creation ordering',
+      () async {
     await store.writeProject(legacy);
     server.threadPageSize = 2;
-    server.threads.addAll(List.generate(5, (i) => {
-          'id': 'task-$i',
-          'cwd': '/srv/app',
-        }));
+    server.threads.addAll(List.generate(
+        5,
+        (i) => {
+              'id': 'task-$i',
+              'cwd': '/srv/app',
+            }));
     await sync.synchronize();
     expect(server.threads.every((t) => t['projectId'] == 'shared'), isTrue);
     final reads = server.requests.where((r) => r['method'] == 'thread/list');

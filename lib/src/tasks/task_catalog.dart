@@ -195,7 +195,8 @@ final class TaskCatalog {
     ));
     if (selectedProjectId == null) return;
     _projectTaskIds = List.unmodifiable(_projectTaskIds.where(
-      (id) => !membership.containsKey(id) || membership[id] == selectedProjectId,
+      (id) =>
+          !membership.containsKey(id) || membership[id] == selectedProjectId,
     ));
   }
 
