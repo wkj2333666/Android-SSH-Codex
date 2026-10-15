@@ -15,6 +15,7 @@ final class _Server implements RpcTransport {
   final projects = <Map<String, dynamic>>[];
   final threads = <Map<String, dynamic>>[];
   bool failAssignment = false;
+  int threadPageSize = 100;
 
   @override
   Stream<String> get messages => incoming.stream;
@@ -37,7 +38,12 @@ final class _Server implements RpcTransport {
         projects.add(project);
         result = {'project': project};
       case 'thread/list':
-        result = {'data': threads, 'nextCursor': null};
+        final offset = int.parse(params['cursor'] as String? ?? '0');
+        final next = offset + threadPageSize;
+        result = {
+          'data': threads.skip(offset).take(threadPageSize).toList(),
+          'nextCursor': next < threads.length ? '$next' : null,
+        };
       case 'thread/metadata/update':
         if (failAssignment) {
           incoming.add(jsonEncode({
@@ -156,11 +162,25 @@ void main() {
   test('new tasks and project pagination use project identity, not just cwd',
       () async {
     await api.startThread(cwd: '/srv/app', projectId: 'shared');
-    await api.readTaskPage(projectId: 'shared', cursor: 'next');
+    await api.readTaskPage(projectId: 'shared', cursor: '20');
     expect(server.requests.first['params'],
         {'cwd': '/srv/app', 'projectId': 'shared'});
     expect(server.requests.last['params']['projectId'], 'shared');
-    expect(server.requests.last['params']['cursor'], 'next');
+    expect(server.requests.last['params']['cursor'], '20');
     expect(server.requests.last['params'].containsKey('cwd'), isFalse);
+  });
+
+  test('migration traverses every page with stable creation ordering', () async {
+    await store.writeProject(legacy);
+    server.threadPageSize = 2;
+    server.threads.addAll(List.generate(5, (i) => {
+          'id': 'task-$i',
+          'cwd': '/srv/app',
+        }));
+    await sync.synchronize();
+    expect(server.threads.every((t) => t['projectId'] == 'shared'), isTrue);
+    final reads = server.requests.where((r) => r['method'] == 'thread/list');
+    expect(reads.map((r) => r['params']['cursor']), [null, '2', '4']);
+    expect(reads.every((r) => r['params']['sortKey'] == 'created_at'), isTrue);
   });
 }

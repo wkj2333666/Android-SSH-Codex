@@ -812,6 +812,10 @@ final class AppController extends ChangeNotifier {
             nextCursor: unassignedPage.nextCursor,
           );
         }
+        _taskCatalog.reconcileSharedMembership(
+          snapshots.values,
+          project?.remoteId,
+        );
         notifyListeners();
         if (isConnected) _flushReadyQueuedPrompts();
         final queuedResetPages = operation.takeQueuedResetPages();
