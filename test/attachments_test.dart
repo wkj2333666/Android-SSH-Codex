@@ -59,7 +59,7 @@ void main() {
         r'../../$(touch injected);"file.png');
     expect(command, isNot(contains(r'$(')));
     expect(command, isNot(contains('../')));
-    expect(command, contains('umask 077'));
+    expect(command, contains(r'umask\ 077'));
     expect(command, startsWith('/bin/sh -c '));
     expect(command, contains('trap'));
     expect(
