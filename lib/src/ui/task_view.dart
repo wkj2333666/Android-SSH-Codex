@@ -334,7 +334,8 @@ class _TaskViewState extends State<TaskView> {
       _uploadedAttachmentBytes = submittedAttachments.isEmpty ? null : 0;
       _totalAttachmentBytes = submittedAttachments.isEmpty
           ? null
-          : submittedAttachments.fold(0, (sum, file) => sum + file.size);
+          : submittedAttachments.fold<int>(
+              0, (sum, file) => sum + file.size);
     });
     _composer.clear();
     try {

@@ -143,7 +143,7 @@ Future<RemoteAttachment> uploadAttachment(
 
 /// Reads an attachment with disk backpressure and validates that it did not
 /// change after selection. At most one file-system chunk is held by this layer.
-Stream<List<int>> attachmentFileStream(File source,
+Stream<Uint8List> attachmentFileStream(File source,
     {required int expectedSize, void Function(int sent)? onProgress}) async* {
   var sent = 0;
   final updates = Stopwatch()..start();
@@ -152,7 +152,7 @@ Stream<List<int>> attachmentFileStream(File source,
     if (sent > Attachments.maxFileBytes || sent > expectedSize) {
       throw StateError('Selected attachment changed during upload.');
     }
-    yield chunk;
+    yield chunk is Uint8List ? chunk : Uint8List.fromList(chunk);
     if (updates.elapsedMilliseconds >= 100 || sent == expectedSize) {
       onProgress?.call(sent);
       updates.reset();
