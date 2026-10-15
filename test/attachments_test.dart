@@ -32,8 +32,8 @@ void main() {
   });
 
   test('attachment count and 1 GiB per-file limits apply before upload', () {
-    const empty =
-        LocalAttachment(name: 'file', path: '/cache/a', size: 0, isImage: false);
+    const empty = LocalAttachment(
+        name: 'file', path: '/cache/a', size: 0, isImage: false);
     expect(
         () => Attachments.validate(List.filled(5, empty)), throwsArgumentError);
     const large = LocalAttachment(
@@ -49,7 +49,8 @@ void main() {
         isImage: false);
     expect(
         () => Attachments.validate([allowed, allowed, empty]), returnsNormally);
-    expect(() => Attachments.validate(List.filled(4, allowed)), returnsNormally);
+    expect(
+        () => Attachments.validate(List.filled(4, allowed)), returnsNormally);
   });
 
   test('remote upload command never interpolates shell syntax from filename',

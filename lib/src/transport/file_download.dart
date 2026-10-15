@@ -111,8 +111,7 @@ Future<void> downloadRemoteFile(SSHClient client, String path, File destination,
     // Hosts without stat still support byte-count progress.
   }
   if (total != null && total > maxDownloadBytes) {
-    throw const FileDownloadException(
-        'File exceeds the 1 GiB download limit.');
+    throw const FileDownloadException('File exceeds the 1 GiB download limit.');
   }
   onProgress?.call(DownloadProgress(0, total));
   RandomAccessFile? file;
