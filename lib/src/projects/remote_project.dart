@@ -4,6 +4,8 @@ final class RemoteProject {
     required this.hostId,
     required this.name,
     required this.cwd,
+    this.remoteId,
+    this.additionalRoots = const [],
   });
 
   factory RemoteProject.fromJson(Map<String, dynamic> json) => RemoteProject(
@@ -11,24 +13,39 @@ final class RemoteProject {
         hostId: json['hostId'] as String,
         name: json['name'] as String,
         cwd: json['cwd'] as String,
+        remoteId: json['remoteId'] as String?,
+        additionalRoots: (json['additionalRoots'] as List<dynamic>? ?? const [])
+            .cast<String>(),
       );
 
   final String id;
   final String hostId;
   final String name;
   final String cwd;
+  final String? remoteId;
+  final List<String> additionalRoots;
+
+  Iterable<String> get roots => [cwd, ...additionalRoots];
+
+  bool containsCwd(String path) => roots.any(
+        (root) => normalizeRemoteCwd(root) == normalizeRemoteCwd(path),
+      );
 
   RemoteProject copyWith({
     String? id,
     String? hostId,
     String? name,
     String? cwd,
+    String? remoteId,
+    List<String>? additionalRoots,
   }) =>
       RemoteProject(
         id: id ?? this.id,
         hostId: hostId ?? this.hostId,
         name: name ?? this.name,
         cwd: cwd ?? this.cwd,
+        remoteId: remoteId ?? this.remoteId,
+        additionalRoots: additionalRoots ?? this.additionalRoots,
       );
 
   Map<String, dynamic> toJson() => {
@@ -36,6 +53,8 @@ final class RemoteProject {
         'hostId': hostId,
         'name': name,
         'cwd': cwd,
+        if (remoteId != null) 'remoteId': remoteId,
+        if (additionalRoots.isNotEmpty) 'additionalRoots': additionalRoots,
       };
 
   @override
@@ -44,11 +63,18 @@ final class RemoteProject {
       other.id == id &&
       other.hostId == hostId &&
       other.name == name &&
-      other.cwd == cwd;
+      other.cwd == cwd &&
+      other.remoteId == remoteId &&
+      _sameRoots(other.additionalRoots, additionalRoots);
 
   @override
-  int get hashCode => Object.hash(id, hostId, name, cwd);
+  int get hashCode => Object.hash(
+      id, hostId, name, cwd, remoteId, Object.hashAll(additionalRoots));
 }
+
+bool _sameRoots(List<String> a, List<String> b) =>
+    a.length == b.length &&
+    List.generate(a.length, (index) => a[index] == b[index]).every((v) => v);
 
 List<RemoteProject> mergeRemoteProjects({
   required String hostId,
@@ -69,15 +95,18 @@ List<RemoteProject> mergeRemoteProjects({
   for (final project in existing) {
     if (project.hostId != hostId) continue;
     final cwd = normalizeRemoteCwd(project.cwd);
-    if (cwd.isEmpty) continue;
+    if (cwd.isEmpty && project.remoteId == null) continue;
     projectsByCwd.putIfAbsent(
-      cwd,
+      project.remoteId == null ? cwd : 'remote:${project.remoteId}',
       () => project.copyWith(cwd: cwd),
     );
   }
   for (final rawCwd in discoveredCwds) {
     final cwd = normalizeRemoteCwd(rawCwd);
-    if (cwd.isEmpty || projectsByCwd.containsKey(cwd)) continue;
+    if (cwd.isEmpty ||
+        projectsByCwd.values.any((project) => project.containsCwd(cwd))) {
+      continue;
+    }
     projectsByCwd[cwd] = RemoteProject(
       id: _automaticProjectId(hostId, cwd),
       hostId: hostId,

@@ -157,6 +157,27 @@ HarmonyOS devices with Android compatibility can use the Android APK instead.
 The app remembers an intentional connection and reconnects after restart or a
 temporary network failure. Using **Disconnect** clears that intent.
 
+### Shared projects
+
+Projects are stored on the connected Codex server using its project APIs.
+Android reads the shared list on connection, manual refresh, and the foreground
+refresh cycle. Creating, renaming, changing a project's directory, or deleting
+a shared project updates the same records used by compatible Desktop clients.
+Both clients must connect to the same host and Codex data store; a Desktop
+version that only uses its own local folder list cannot display this registry.
+
+Tasks started inside a project carry its shared project ID. The **Tasks** view
+also shows tasks outside projects. On the first connection after upgrading,
+manually saved Android projects are imported, matching an existing shared
+project by directory when unambiguous. Unassigned, non-archived tasks in that
+exact directory are attached; tasks already assigned elsewhere are preserved.
+Automatically discovered directory groups are not bulk-imported: those tasks
+remain available in **Tasks** and **Unassigned** until you add their project.
+
+Deleting a shared project removes the project for all connected clients, but
+keeps its files and tasks. Older servers without project APIs can still show
+task history; update remote Codex to create or edit shared projects.
+
 ## App-server modes
 
 Every saved host has an explicit app-server mode:

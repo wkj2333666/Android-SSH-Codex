@@ -356,9 +356,12 @@ List<TaskSnapshot> _unassigned(
   List<RemoteProject> projects,
 ) {
   final projectCwds =
-      projects.map((project) => normalizeRemoteCwd(project.cwd)).toSet();
+      projects.where((project) => project.remoteId == null)
+          .expand((project) => project.roots)
+          .map(normalizeRemoteCwd).toSet();
   return tasks
-      .where((task) => !projectCwds.contains(normalizeRemoteCwd(task.cwd)))
+      .where((task) => task.projectId == null &&
+          !projectCwds.contains(normalizeRemoteCwd(task.cwd)))
       .toList(growable: false);
 }
 

@@ -61,6 +61,7 @@ final class TaskSnapshot {
     required this.cwd,
     required this.updatedAt,
     required this.items,
+    this.projectId,
     this.model,
     this.reasoningEffort,
   });
@@ -71,6 +72,7 @@ final class TaskSnapshot {
   final String cwd;
   final DateTime updatedAt;
   final List<TaskItem> items;
+  final String? projectId;
   final String? model;
   final String? reasoningEffort;
 }
