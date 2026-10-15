@@ -225,8 +225,11 @@ In an existing task, tap the paperclip beside the message box and choose **Image
 or **File**. Images have a preview; tap a chip to enlarge an image, or its remove
 button to discard it. You can send attachments with or without accompanying text.
 Limits: 4 attachments per message and 1 GiB per file. Selection is streamed to
-an app cache file and then streamed into SSH, so large files are not retained in
-Dart or Kotlin memory. PNG, JPEG, WebP and GIF are accepted as images (up to 64
+an app cache file and immediately uploaded over a dedicated SSH/SFTP connection,
+so large files are not retained in Dart or Kotlin memory. The attachment chip
+shows upload progress; an interrupted upload reconnects and resumes from the
+remote acknowledged offset. Tap a failed attachment to retry from that offset.
+PNG, JPEG, WebP and GIF are accepted as images (up to 64
 megapixels and 16,384 pixels per side); other formats can be sent
 as files. Queued messages and steering preserve image attachments.
 
@@ -235,12 +238,14 @@ thumbnail to zoom; if loading fails, use Retry. Only mounted timeline images
 are requested, and inline remote previews remain capped at 10 MiB.
 Question prompts and answer options support Markdown formatting.
 
-Selecting a file does not upload it. Sending copies it over SSH into a private,
-randomly named directory under `~/.local/share/android-ssh-codex/attachments/` on
-the selected host. Images are sent as native image inputs; other files are provided
+Selecting a file uploads it into a private, randomly named directory under
+`~/.local/share/android-ssh-codex/attachments/` on the selected host. Sending the
+message reuses that completed upload without transferring the file again. Images
+are sent as native image inputs; other files are provided
 to the agent by remote path, subject to its file-access and format support.
 Uploads are retained for conversation references; remove them manually when no
-longer needed. Failed or interrupted sends may leave unused uploads there.
+longer needed. Removing an attachment after upload may leave an unused remote
+copy there.
 This version does not add camera capture or an OpenHarmony
 file picker. Attachment names and contents are excluded from diagnostic logs.
 

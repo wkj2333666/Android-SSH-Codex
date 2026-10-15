@@ -1251,6 +1251,53 @@ final class AppController extends ChangeNotifier {
     return bytes;
   }
 
+  Future<RemoteAttachment> uploadAttachmentNow(
+    LocalAttachment attachment,
+    AttachmentUploadTarget target,
+    AttachmentUploadCancellation cancellation, {
+    void Function(int acknowledged, int total)? onProgress,
+  }) async {
+    final profile = selectedHost;
+    if (profile == null) throw StateError('Select an SSH host first.');
+    final profileId = profile.id;
+    final secret = await _store.readSecret(profileId);
+    final result = await uploadAttachmentResumable(
+      attachment: attachment,
+      target: target,
+      cancellation: cancellation,
+      onProgress: onProgress,
+      onRetry: (retry, acknowledged, error) =>
+          Diagnostics.record('attachment.uploadRetry', {
+        'retry': retry,
+        'acknowledgedBytes': acknowledged,
+        ...Diagnostics.errorFields(error),
+      }),
+      connect: () async {
+        cancellation.check();
+        if (_selectedHostId != profileId) {
+          throw StateError('Selected host changed during attachment upload.');
+        }
+        final connection = await _connector.connect(
+          profile,
+          secret,
+          prompt: (_) async => false,
+          diagnosticAttempt: _connectionAttempt,
+          diagnosticRole: 'attachment-upload',
+        );
+        if (cancellation.isCancelled || _selectedHostId != profileId) {
+          await connection.close(reason: 'attachment_upload_cancelled');
+          cancellation.check();
+          throw StateError('Selected host changed during attachment upload.');
+        }
+        return SftpAttachmentUploadSession.open(connection, target);
+      },
+    );
+    if (_selectedHostId != profileId) {
+      throw StateError('Selected host changed during attachment upload.');
+    }
+    return result;
+  }
+
   bool _downloadingFile = false;
   DownloadCancellation? _downloadCancellation;
 
@@ -1344,8 +1391,7 @@ final class AppController extends ChangeNotifier {
     RemoteSkill? skill,
     String? model,
     String? effort,
-    List<LocalAttachment> attachments = const [],
-    void Function(int sent, int total)? onUploadProgress,
+    List<RemoteAttachment> attachments = const [],
   }) async {
     final api = _requireApi();
     final attempt = _connectionAttempt;
@@ -1353,27 +1399,8 @@ final class AppController extends ChangeNotifier {
     final profileId = _selectedHostId!;
     var task = selectedTask;
     if (task == null) throw StateError('Select or create a task first.');
-    Attachments.validate(attachments);
-    final uploaded = <RemoteAttachment>[];
-    final ssh = _ssh;
-    final totalUploadBytes =
-        attachments.fold<int>(0, (sum, file) => sum + file.size);
-    var completedUploadBytes = 0;
-    for (final attachment in attachments) {
-      if (ssh == null) throw StateError('SSH is disconnected.');
-      uploaded.add(await uploadAttachment(
-        ssh.client,
-        attachment,
-        onProgress: (sent) => onUploadProgress?.call(
-          completedUploadBytes + sent,
-          totalUploadBytes,
-        ),
-      ));
-      completedUploadBytes += attachment.size;
-      _ensureCurrentSession(api, attempt, epoch, profileId);
-    }
     task = _taskReducer.state.tasks[task.id] ?? task;
-    final normalized = attachmentPrompt(prompt, uploaded);
+    final normalized = attachmentPrompt(prompt, attachments);
     if (normalized.isEmpty) throw ArgumentError('Message is required.');
     final pending = QueuedTaskMessage(
       id: 'queued-${_nextQueuedMessageId++}',
@@ -1382,7 +1409,7 @@ final class AppController extends ChangeNotifier {
       model: model,
       effort: effort,
       imagePaths: List.unmodifiable(
-          uploaded.where((file) => file.isImage).map((file) => file.path)),
+          attachments.where((file) => file.isImage).map((file) => file.path)),
     );
     if (mode == TaskSendMode.queue ||
         (mode == TaskSendMode.auto && _messageQueue.hasPending(task.id))) {
