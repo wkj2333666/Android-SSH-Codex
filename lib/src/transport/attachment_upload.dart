@@ -75,7 +75,8 @@ final class AttachmentUploadTarget {
   factory AttachmentUploadTarget.forAttachment(LocalAttachment attachment) {
     final random = Random.secure();
     final token = List.generate(
-        16, (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0')).join();
+            16, (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0'))
+        .join();
     return AttachmentUploadTarget._(token, attachment.name);
   }
 
@@ -162,9 +163,9 @@ final class SftpAttachmentUploadSession implements AttachmentUploadSession {
 
   @override
   Future<int> length() async {
-    final size = (await _untilUploadConnectionCloses(
-            connection.client, file.stat()))
-        .size;
+    final size =
+        (await _untilUploadConnectionCloses(connection.client, file.stat()))
+            .size;
     if (size == null || size < 0) {
       throw StateError('Cannot read remote attachment size.');
     }
@@ -245,9 +246,8 @@ Future<RemoteAttachment> uploadAttachmentResumable({
         return value;
       });
       session = await cancellation.wait(opening).timeout(operationTimeout);
-      acknowledged = await cancellation
-          .wait(session.length())
-          .timeout(operationTimeout);
+      acknowledged =
+          await cancellation.wait(session.length()).timeout(operationTimeout);
       if (acknowledged > attachment.size) {
         throw StateError('Remote attachment is larger than the selected file.');
       }
@@ -256,14 +256,13 @@ Future<RemoteAttachment> uploadAttachmentResumable({
         final resumeOffset = acknowledged;
         final stream = attachmentFileStream(source,
             expectedSize: attachment.size, offset: resumeOffset);
-        await cancellation.wait(session.write(stream, resumeOffset,
-            onProgress: (written) {
+        await cancellation
+            .wait(session.write(stream, resumeOffset, onProgress: (written) {
           onProgress?.call(resumeOffset + written, attachment.size);
         }));
       }
-      acknowledged = await cancellation
-          .wait(session.length())
-          .timeout(operationTimeout);
+      acknowledged =
+          await cancellation.wait(session.length()).timeout(operationTimeout);
       if (acknowledged != attachment.size) {
         throw SSHStateError('Attachment upload was incomplete');
       }
@@ -280,10 +279,11 @@ Future<RemoteAttachment> uploadAttachmentResumable({
       openingExpired = true;
       await session?.close();
     }
-    await cancellation.wait(Future<void>.delayed(
-        retryDelay * min(retries, 10)));
+    await cancellation
+        .wait(Future<void>.delayed(retryDelay * min(retries, 10)));
   }
 }
+
 /// Reads an attachment with disk backpressure and validates that it did not
 /// change after selection. At most one file-system chunk is held by this layer.
 Stream<Uint8List> attachmentFileStream(File source,

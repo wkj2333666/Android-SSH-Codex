@@ -332,8 +332,8 @@ class _TaskViewState extends State<TaskView> {
     final text = submittedText.trim();
     if (text.isEmpty && _attachments.isEmpty) return;
     if (_attachments.any((attachment) => !attachment.ready)) {
-      _showError(_attachments.any(
-              (attachment) => attachment.state == _AttachmentState.failed)
+      _showError(_attachments
+              .any((attachment) => attachment.state == _AttachmentState.failed)
           ? 'Retry failed attachments before sending.'
           : 'Wait for attachments to finish uploading.');
       return;
@@ -457,7 +457,8 @@ class _TaskViewState extends State<TaskView> {
               fit: StackFit.expand,
               children: [
                 ClipOval(
-                    child: Opacity(opacity: uploading ? 0.7 : 1, child: avatar)),
+                    child:
+                        Opacity(opacity: uploading ? 0.7 : 1, child: avatar)),
                 if (uploading)
                   CustomPaint(
                     painter: _SectorProgressPainter(
@@ -489,8 +490,7 @@ class _TaskViewState extends State<TaskView> {
           ),
           label: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 160),
-            child: Text(attachment.local.name,
-                overflow: TextOverflow.ellipsis),
+            child: Text(attachment.local.name, overflow: TextOverflow.ellipsis),
           ),
           onPressed: failed
               ? () => _retryAttachment(attachment)
@@ -520,11 +520,11 @@ class _TaskViewState extends State<TaskView> {
               widget.task.id != taskId) {
             return;
           }
-          if (updates.elapsedMilliseconds < 100 && acknowledged != total) return;
+          if (updates.elapsedMilliseconds < 100 && acknowledged != total)
+            return;
           updates.reset();
-          setState(() => attachment.progress = total == 0
-              ? 1
-              : (acknowledged / total).clamp(0.0, 1.0));
+          setState(() => attachment.progress =
+              total == 0 ? 1 : (acknowledged / total).clamp(0.0, 1.0));
         },
       );
       if (!mounted ||
