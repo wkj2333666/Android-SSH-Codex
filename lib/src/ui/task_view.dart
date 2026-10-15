@@ -520,8 +520,9 @@ class _TaskViewState extends State<TaskView> {
               widget.task.id != taskId) {
             return;
           }
-          if (updates.elapsedMilliseconds < 100 && acknowledged != total)
+          if (updates.elapsedMilliseconds < 100 && acknowledged != total) {
             return;
+          }
           updates.reset();
           setState(() => attachment.progress =
               total == 0 ? 1 : (acknowledged / total).clamp(0.0, 1.0));

@@ -146,13 +146,16 @@ final class SftpAttachmentUploadSession implements AttachmentUploadSession {
           path.contains('\r')) {
         throw StateError('Cannot prepare the remote attachment.');
       }
-      sftp = await _untilUploadConnectionCloses(
+      final openedSftp = await _untilUploadConnectionCloses(
           connection.client, connection.client.sftp());
-      file = await _untilUploadConnectionCloses(
+      sftp = openedSftp;
+      final openedFile = await _untilUploadConnectionCloses(
           connection.client,
-          sftp.open(path,
+          openedSftp.open(path,
               mode: SftpFileOpenMode.create | SftpFileOpenMode.write));
-      return SftpAttachmentUploadSession._(connection, sftp, file, path);
+      file = openedFile;
+      return SftpAttachmentUploadSession._(
+          connection, openedSftp, openedFile, path);
     } catch (_) {
       await file?.close().catchError((_) {});
       sftp?.close();
