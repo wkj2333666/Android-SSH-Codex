@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
@@ -10,6 +11,7 @@ import '../attachments.dart';
 import '../protocol/codex_remote_api.dart';
 import '../tasks/task_message_queue.dart';
 import '../tasks/task_reducer.dart';
+import '../transport/attachment_upload.dart';
 import 'composer_completion.dart';
 import 'task_timeline_render_cache.dart';
 import 'timeline_entries.dart';
@@ -66,6 +68,50 @@ class TaskView extends StatefulWidget {
   State<TaskView> createState() => _TaskViewState();
 }
 
+enum _AttachmentState { uploading, uploaded, failed }
+
+final class _SectorProgressPainter extends CustomPainter {
+  const _SectorProgressPainter(this.progress, this.color);
+
+  final double progress;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (progress <= 0) return;
+    final rect = Offset.zero & size;
+    canvas.drawArc(
+      rect,
+      -math.pi / 2,
+      math.pi * 2 * progress.clamp(0.0, 1.0),
+      true,
+      Paint()..color = color,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_SectorProgressPainter oldDelegate) =>
+      progress != oldDelegate.progress || color != oldDelegate.color;
+}
+
+final class _AttachmentTransfer {
+  _AttachmentTransfer(this.local)
+      : target = AttachmentUploadTarget.forAttachment(local),
+        cancellation = AttachmentUploadCancellation();
+
+  final LocalAttachment local;
+  final AttachmentUploadTarget target;
+  AttachmentUploadCancellation cancellation;
+  _AttachmentState state = _AttachmentState.uploading;
+  RemoteAttachment? remote;
+  double progress = 0;
+  int generation = 0;
+  bool active = false;
+  bool discarded = false;
+
+  bool get ready => state == _AttachmentState.uploaded && remote != null;
+}
+
 class _TaskViewState extends State<TaskView> {
   final _composer = TextEditingController();
   final _timelineCache = TaskTimelineRenderCache<Widget>();
@@ -80,9 +126,7 @@ class _TaskViewState extends State<TaskView> {
   List<ComposerCompletion> _completions = const [];
   var _loadingSkills = false;
   var _pickingAttachment = false;
-  List<LocalAttachment> _attachments = [];
-  int? _uploadedAttachmentBytes;
-  int? _totalAttachmentBytes;
+  List<_AttachmentTransfer> _attachments = [];
 
   @override
   void initState() {
@@ -94,7 +138,7 @@ class _TaskViewState extends State<TaskView> {
   void didUpdateWidget(covariant TaskView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.task.id != widget.task.id) {
-      unawaited(Attachments.releaseAll(_attachments));
+      _discardAllAttachments();
       _timelineCache.clear();
       _composer.clear();
       _selectedSkill = null;
@@ -106,14 +150,12 @@ class _TaskViewState extends State<TaskView> {
       _commandBusy = false;
       _queueActionBusy = false;
       _attachments = [];
-      _uploadedAttachmentBytes = null;
-      _totalAttachmentBytes = null;
     }
   }
 
   @override
   void dispose() {
-    unawaited(Attachments.releaseAll(_attachments));
+    _discardAllAttachments();
     _composer
       ..removeListener(_updateCompletions)
       ..dispose();
@@ -242,42 +284,13 @@ class _TaskViewState extends State<TaskView> {
                 for (final attachment in _attachments)
                   Padding(
                     padding: const EdgeInsets.only(right: 8),
-                    child: InputChip(
-                      avatar: attachment.isImage
-                          ? Image.file(File(attachment.path),
-                              width: 32,
-                              height: 32,
-                              cacheWidth: 64,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) =>
-                                  const Icon(Icons.broken_image))
-                          : const Icon(Icons.insert_drive_file_outlined),
-                      label: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 160),
-                        child: Text(attachment.name,
-                            overflow: TextOverflow.ellipsis),
-                      ),
-                      onPressed: attachment.isImage
-                          ? () => _previewAttachment(attachment)
-                          : null,
-                      onDeleted: () {
-                        setState(() => _attachments.remove(attachment));
-                        unawaited(Attachments.release(attachment));
-                      },
-                    ),
+                    child: _attachmentChip(attachment),
                   ),
               ],
             ),
           ),
         if (_sending || _pickingAttachment)
-          LinearProgressIndicator(
-            minHeight: 2,
-            value: _uploadedAttachmentBytes != null &&
-                    _totalAttachmentBytes != null &&
-                    _totalAttachmentBytes! > 0
-                ? _uploadedAttachmentBytes! / _totalAttachmentBytes!
-                : null,
-          ),
+          const LinearProgressIndicator(minHeight: 2),
         _Composer(
           controller: _composer,
           inputEnabled: isTaskComposerInputEnabled(
@@ -287,7 +300,7 @@ class _TaskViewState extends State<TaskView> {
           sendEnabled: isTaskComposerSendEnabled(
             task: task,
             connected: widget.controller.isConnected,
-            sending: _sending,
+            sending: _sending || _attachments.any((file) => !file.ready),
           ),
           completions: _completions,
           loadingCompletions: _loadingSkills,
@@ -318,8 +331,15 @@ class _TaskViewState extends State<TaskView> {
     final submittedText = _composer.text;
     final text = submittedText.trim();
     if (text.isEmpty && _attachments.isEmpty) return;
+    if (_attachments.any((attachment) => !attachment.ready)) {
+      _showError(_attachments.any(
+              (attachment) => attachment.state == _AttachmentState.failed)
+          ? 'Retry failed attachments before sending.'
+          : 'Wait for attachments to finish uploading.');
+      return;
+    }
     final taskId = widget.task.id;
-    final submittedAttachments = List<LocalAttachment>.of(_attachments);
+    final submittedAttachments = List<_AttachmentTransfer>.of(_attachments);
     final submittedSkill = _selectedSkill;
     final settings = resolveTurnSettings(
         widget.controller.models, _turnSettings,
@@ -331,10 +351,6 @@ class _TaskViewState extends State<TaskView> {
       _selectedSkill = null;
       _completions = const [];
       _attachments = [];
-      _uploadedAttachmentBytes = submittedAttachments.isEmpty ? null : 0;
-      _totalAttachmentBytes = submittedAttachments.isEmpty
-          ? null
-          : submittedAttachments.fold<int>(0, (sum, file) => sum + file.size);
     });
     _composer.clear();
     try {
@@ -344,16 +360,10 @@ class _TaskViewState extends State<TaskView> {
         skill: submittedSkill,
         model: settings.model,
         effort: settings.effort,
-        attachments: submittedAttachments,
-        onUploadProgress: (sent, total) {
-          if (!mounted || widget.task.id != taskId) return;
-          setState(() {
-            _uploadedAttachmentBytes = sent;
-            _totalAttachmentBytes = total;
-          });
-        },
+        attachments: submittedAttachments.map((file) => file.remote!).toList(),
       );
-      await Attachments.releaseAll(submittedAttachments);
+      await Attachments.releaseAll(
+          submittedAttachments.map((file) => file.local));
       if (!mounted || widget.task.id != taskId) return;
       if (disposition == TaskMessageDisposition.queued) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -377,16 +387,13 @@ class _TaskViewState extends State<TaskView> {
           setState(() => _selectedSkill = submittedSkill);
         }
       } else {
-        await Attachments.releaseAll(submittedAttachments);
+        await Attachments.releaseAll(
+            submittedAttachments.map((file) => file.local));
       }
       if (mounted && widget.task.id == taskId) _showError(exception);
     } finally {
       if (mounted && widget.task.id == taskId) {
-        setState(() {
-          _sending = false;
-          _uploadedAttachmentBytes = null;
-          _totalAttachmentBytes = null;
-        });
+        setState(() => _sending = false);
       }
     }
   }
@@ -406,15 +413,181 @@ class _TaskViewState extends State<TaskView> {
         await Attachments.release(picked);
         return;
       }
-      final files = [..._attachments, picked];
+      final files = [..._attachments.map((file) => file.local), picked];
       Attachments.validate(files);
-      setState(() => _attachments = files);
+      final transfer = _AttachmentTransfer(picked);
+      setState(() => _attachments = [..._attachments, transfer]);
       picked = null;
+      unawaited(_uploadAttachment(transfer));
     } catch (error) {
       if (picked != null) await Attachments.release(picked);
       if (mounted && widget.task.id == taskId) _showError(error);
     } finally {
       if (mounted) setState(() => _pickingAttachment = false);
+    }
+  }
+
+  Widget _attachmentChip(_AttachmentTransfer attachment) {
+    final uploading = attachment.state == _AttachmentState.uploading;
+    final failed = attachment.state == _AttachmentState.failed;
+    final theme = Theme.of(context);
+    final avatar = attachment.local.isImage
+        ? Image.file(File(attachment.local.path),
+            width: 32,
+            height: 32,
+            cacheWidth: 64,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => const Icon(Icons.broken_image))
+        : const Icon(Icons.insert_drive_file_outlined);
+    final message = failed
+        ? 'Upload failed. Tap to resume.'
+        : uploading
+            ? 'Uploading ${(attachment.progress * 100).toStringAsFixed(0)}%'
+            : 'Uploaded';
+    return Tooltip(
+      message: message,
+      child: Material(
+        elevation: uploading ? 7 : 0,
+        shadowColor: theme.colorScheme.primary.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(24),
+        child: InputChip(
+          avatar: SizedBox.square(
+            dimension: 32,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                ClipOval(
+                    child: Opacity(opacity: uploading ? 0.7 : 1, child: avatar)),
+                if (uploading)
+                  CustomPaint(
+                    painter: _SectorProgressPainter(
+                      attachment.progress,
+                      theme.colorScheme.primary.withValues(alpha: 0.5),
+                    ),
+                  ),
+                if (failed)
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: theme.colorScheme.error.withValues(alpha: 0.82)),
+                    child: Icon(Icons.refresh,
+                        size: 19, color: theme.colorScheme.onError),
+                  ),
+                if (attachment.ready)
+                  Align(
+                    alignment: Alignment.bottomRight,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: theme.colorScheme.primary),
+                      child: Icon(Icons.check,
+                          size: 13, color: theme.colorScheme.onPrimary),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          label: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 160),
+            child: Text(attachment.local.name,
+                overflow: TextOverflow.ellipsis),
+          ),
+          onPressed: failed
+              ? () => _retryAttachment(attachment)
+              : attachment.local.isImage
+                  ? () => _previewAttachment(attachment.local)
+                  : null,
+          onDeleted: () => _discardAttachment(attachment),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _uploadAttachment(_AttachmentTransfer attachment) async {
+    final taskId = widget.task.id;
+    final generation = ++attachment.generation;
+    attachment.active = true;
+    final updates = Stopwatch()..start();
+    try {
+      final remote = await widget.controller.uploadAttachmentNow(
+        attachment.local,
+        attachment.target,
+        attachment.cancellation,
+        onProgress: (acknowledged, total) {
+          if (!mounted ||
+              attachment.discarded ||
+              attachment.generation != generation ||
+              widget.task.id != taskId) {
+            return;
+          }
+          if (updates.elapsedMilliseconds < 100 && acknowledged != total) return;
+          updates.reset();
+          setState(() => attachment.progress = total == 0
+              ? 1
+              : (acknowledged / total).clamp(0.0, 1.0));
+        },
+      );
+      if (!mounted ||
+          attachment.discarded ||
+          attachment.generation != generation ||
+          widget.task.id != taskId) {
+        return;
+      }
+      setState(() {
+        attachment
+          ..remote = remote
+          ..progress = 1
+          ..state = _AttachmentState.uploaded;
+      });
+    } on AttachmentUploadCancelled {
+      // Removing an attachment or leaving the task intentionally cancels it.
+    } catch (_) {
+      if (!mounted ||
+          attachment.discarded ||
+          attachment.generation != generation ||
+          widget.task.id != taskId) {
+        return;
+      }
+      setState(() {
+        attachment.state = _AttachmentState.failed;
+      });
+    } finally {
+      if (attachment.generation == generation) attachment.active = false;
+      if (attachment.discarded) {
+        await Attachments.release(attachment.local);
+      }
+    }
+  }
+
+  void _retryAttachment(_AttachmentTransfer attachment) {
+    if (attachment.active || attachment.discarded) return;
+    setState(() {
+      attachment
+        ..cancellation = AttachmentUploadCancellation()
+        ..state = _AttachmentState.uploading;
+    });
+    unawaited(_uploadAttachment(attachment));
+  }
+
+  void _discardAttachment(_AttachmentTransfer attachment) {
+    if (attachment.discarded) return;
+    attachment
+      ..discarded = true
+      ..cancellation.cancel();
+    if (mounted) setState(() => _attachments.remove(attachment));
+    if (!attachment.active) unawaited(Attachments.release(attachment.local));
+  }
+
+  void _discardAllAttachments() {
+    final attachments = List<_AttachmentTransfer>.of(_attachments);
+    _attachments = [];
+    for (final attachment in attachments) {
+      attachment
+        ..discarded = true
+        ..cancellation.cancel();
+      if (!attachment.active) {
+        unawaited(Attachments.release(attachment.local));
+      }
     }
   }
 

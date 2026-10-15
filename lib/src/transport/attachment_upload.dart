@@ -7,6 +7,7 @@ import 'dart:typed_data';
 import 'package:dartssh2/dartssh2.dart';
 
 import '../attachments.dart';
+import 'ssh_connector.dart';
 
 /// Bounded image reads for lazily mounted timeline thumbnails and previews.
 Future<Uint8List> readAttachmentImage(SSHClient client, String path) async {
@@ -61,105 +62,244 @@ String attachmentUploadCommand(String token, String name) {
   final script = 'umask 077; '
       'base="\$HOME/$relative"; dir="\$base/$token"; '
       'file="\$dir/file-$fileName"; '
-      'mkdir -p "\$base" && mkdir "\$dir" || exit 1; '
-      'cleanup() { rm -f "\$file"; rmdir "\$dir" 2>/dev/null || true; }; '
-      'trap cleanup EXIT HUP INT TERM; '
-      'cat > "\$file" || exit 1; '
-      'trap - EXIT HUP INT TERM; printf "%s" "\$file"';
+      'mkdir -p "\$base" "\$dir" && touch "\$file" || exit 1; '
+      'printf "%s" "\$file"';
   final argument = script.replaceAllMapped(
       RegExp(r'[^a-zA-Z0-9_./-]'), (match) => '\\${match[0]}');
   return '/bin/sh -c $argument';
 }
 
-Future<RemoteAttachment> uploadAttachment(
-    SSHClient client, LocalAttachment attachment,
-    {void Function(int sent)? onProgress}) async {
+final class AttachmentUploadTarget {
+  AttachmentUploadTarget._(this.token, this.name);
+
+  factory AttachmentUploadTarget.forAttachment(LocalAttachment attachment) {
+    final random = Random.secure();
+    final token = List.generate(
+        16, (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0')).join();
+    return AttachmentUploadTarget._(token, attachment.name);
+  }
+
+  final String token;
+  final String name;
+}
+
+final class AttachmentUploadCancellation {
+  final _cancelled = Completer<void>();
+
+  bool get isCancelled => _cancelled.isCompleted;
+
+  void cancel() {
+    if (!isCancelled) _cancelled.complete();
+  }
+
+  void check() {
+    if (isCancelled) throw const AttachmentUploadCancelled();
+  }
+
+  Future<T> wait<T>(Future<T> future) => Future.any([
+        future,
+        _cancelled.future
+            .then<T>((_) => throw const AttachmentUploadCancelled()),
+      ]);
+}
+
+final class AttachmentUploadCancelled implements Exception {
+  const AttachmentUploadCancelled();
+
+  @override
+  String toString() => 'Attachment upload cancelled';
+}
+
+abstract interface class AttachmentUploadSession {
+  String get path;
+  Future<int> length();
+  Future<void> write(Stream<Uint8List> bytes, int offset,
+      {void Function(int acknowledged)? onProgress});
+  Future<void> close();
+}
+
+final class SftpAttachmentUploadSession implements AttachmentUploadSession {
+  SftpAttachmentUploadSession._(
+      this.connection, this.sftp, this.file, this.path);
+
+  final SshConnection connection;
+  final SftpClient sftp;
+  final SftpFile file;
+
+  @override
+  final String path;
+
+  static Future<SftpAttachmentUploadSession> open(
+      SshConnection connection, AttachmentUploadTarget target) async {
+    SftpClient? sftp;
+    SftpFile? file;
+    try {
+      final result = await _untilUploadConnectionCloses(
+          connection.client,
+          connection.client.runWithResult(
+              attachmentUploadCommand(target.token, target.name)));
+      final path = utf8.decode(result.stdout);
+      if (result.exitCode != 0 ||
+          !path.startsWith('/') ||
+          path.contains('\n') ||
+          path.contains('\r')) {
+        throw StateError('Cannot prepare the remote attachment.');
+      }
+      sftp = await _untilUploadConnectionCloses(
+          connection.client, connection.client.sftp());
+      file = await _untilUploadConnectionCloses(
+          connection.client,
+          sftp.open(path,
+              mode: SftpFileOpenMode.create | SftpFileOpenMode.write));
+      return SftpAttachmentUploadSession._(connection, sftp, file, path);
+    } catch (_) {
+      await file?.close().catchError((_) {});
+      sftp?.close();
+      await connection.close(reason: 'attachment_upload_open_failed');
+      rethrow;
+    }
+  }
+
+  @override
+  Future<int> length() async {
+    final size = (await _untilUploadConnectionCloses(
+            connection.client, file.stat()))
+        .size;
+    if (size == null || size < 0) {
+      throw StateError('Cannot read remote attachment size.');
+    }
+    return size;
+  }
+
+  @override
+  Future<void> write(Stream<Uint8List> bytes, int offset,
+      {void Function(int acknowledged)? onProgress}) async {
+    var acknowledged = 0;
+    await for (final chunk in bytes) {
+      await _untilUploadConnectionCloses(
+          connection.client, file.writeBytes(chunk, offset: offset));
+      offset += chunk.length;
+      acknowledged += chunk.length;
+      onProgress?.call(acknowledged);
+    }
+  }
+
+  @override
+  Future<void> close() async {
+    try {
+      await file.close().catchError((_) {});
+      sftp.close();
+    } finally {
+      await connection.close(reason: 'attachment_upload_connection_closed');
+    }
+  }
+}
+
+Future<T> _untilUploadConnectionCloses<T>(
+        SSHClient client, Future<T> operation) =>
+    Future.any([
+      operation,
+      client.done.then<T>(
+          (_) => throw SSHStateError('Attachment upload connection closed')),
+    ]);
+
+bool _retryableUploadError(Object error) {
+  if (error is SSHAuthAbortError) {
+    final reason = error.reason;
+    return reason != null && _retryableUploadError(reason);
+  }
+  return error is TimeoutException ||
+      error is SocketException ||
+      error is SSHSocketError ||
+      error is SSHStateError ||
+      error is SftpAbortError ||
+      (error is SSHHandshakeError && error.message == 'Handshake timed out');
+}
+
+Future<RemoteAttachment> uploadAttachmentResumable({
+  required LocalAttachment attachment,
+  required AttachmentUploadTarget target,
+  required Future<AttachmentUploadSession> Function() connect,
+  required AttachmentUploadCancellation cancellation,
+  void Function(int acknowledged, int total)? onProgress,
+  void Function(int attempt, int acknowledged, Object error)? onRetry,
+  int maxRetries = 8,
+  Duration operationTimeout = const Duration(seconds: 30),
+  Duration retryDelay = const Duration(seconds: 1),
+}) async {
   Attachments.validate([attachment]);
   final source = File(attachment.path);
   final actualSize = await source.length();
   if (actualSize != attachment.size || actualSize > Attachments.maxFileBytes) {
     throw StateError('Selected attachment changed before upload.');
   }
-  final random = Random.secure();
-  final token = List.generate(
-      16, (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0')).join();
-  var openingTimedOut = false;
-  final opening = client
-      .execute(attachmentUploadCommand(token, attachment.name))
-      .then((session) {
-    if (openingTimedOut) session.close();
-    return session;
-  });
-  final session =
-      await opening.timeout(const Duration(seconds: 15), onTimeout: () {
-    openingTimedOut = true;
-    throw TimeoutException('Attachment channel timed out');
-  });
-  StreamSubscription<Uint8List>? stdout;
-  StreamSubscription<Uint8List>? stderr;
-  final output = BytesBuilder(copy: false);
-  var outputLength = 0;
-  final stdoutDone = Completer<void>();
-  Object? readError;
-  try {
-    stdout = session.stdout.listen(
-        (chunk) {
-          if (outputLength + chunk.length <= 8192) output.add(chunk);
-          outputLength += chunk.length;
-        },
-        onDone: stdoutDone.complete,
-        onError: (Object error) {
-          readError = error;
-          if (!stdoutDone.isCompleted) stdoutDone.complete();
-        },
-        cancelOnError: true);
-    stderr = session.stderr.listen((_) {}, onError: (Object _) {});
-    await Future.wait<void>([
-      (() async {
-        await session.stdin.addStream(attachmentFileStream(
-          source,
-          expectedSize: attachment.size,
-          onProgress: onProgress,
-        ));
-        await session.stdin.close();
-      })(),
-      session.done,
-      stdoutDone.future,
-    ], eagerError: true);
-    if (readError != null || session.exitCode != 0 || outputLength > 8192) {
-      throw StateError('Attachment upload failed.');
+  var retries = 0;
+  var acknowledged = 0;
+  while (true) {
+    cancellation.check();
+    AttachmentUploadSession? session;
+    var openingExpired = false;
+    try {
+      final opening = connect().then((value) async {
+        if (openingExpired || cancellation.isCancelled) await value.close();
+        return value;
+      });
+      session = await cancellation.wait(opening).timeout(operationTimeout);
+      acknowledged = await cancellation
+          .wait(session.length())
+          .timeout(operationTimeout);
+      if (acknowledged > attachment.size) {
+        throw StateError('Remote attachment is larger than the selected file.');
+      }
+      onProgress?.call(acknowledged, attachment.size);
+      if (acknowledged < attachment.size) {
+        final resumeOffset = acknowledged;
+        final stream = attachmentFileStream(source,
+            expectedSize: attachment.size, offset: resumeOffset);
+        await cancellation.wait(session.write(stream, resumeOffset,
+            onProgress: (written) {
+          onProgress?.call(resumeOffset + written, attachment.size);
+        }));
+      }
+      acknowledged = await cancellation
+          .wait(session.length())
+          .timeout(operationTimeout);
+      if (acknowledged != attachment.size) {
+        throw SSHStateError('Attachment upload was incomplete');
+      }
+      onProgress?.call(acknowledged, attachment.size);
+      return RemoteAttachment(path: session.path, isImage: attachment.isImage);
+    } catch (error) {
+      openingExpired = true;
+      if (error is AttachmentUploadCancelled || cancellation.isCancelled) {
+        throw const AttachmentUploadCancelled();
+      }
+      if (!_retryableUploadError(error) || retries >= maxRetries) rethrow;
+      onRetry?.call(++retries, acknowledged, error);
+    } finally {
+      openingExpired = true;
+      await session?.close();
     }
-    final path = utf8.decode(output.takeBytes());
-    if (!path.startsWith('/') || path.contains('\n') || path.contains('\r')) {
-      throw StateError('Invalid remote attachment path.');
-    }
-    return RemoteAttachment(path: path, isImage: attachment.isImage);
-  } finally {
-    session.close();
-    await stdout?.cancel();
-    await stderr?.cancel();
+    await cancellation.wait(Future<void>.delayed(
+        retryDelay * min(retries, 10)));
   }
 }
-
 /// Reads an attachment with disk backpressure and validates that it did not
 /// change after selection. At most one file-system chunk is held by this layer.
 Stream<Uint8List> attachmentFileStream(File source,
-    {required int expectedSize, void Function(int sent)? onProgress}) async* {
-  var sent = 0;
-  final updates = Stopwatch()..start();
-  await for (final chunk in source.openRead()) {
+    {required int expectedSize, int offset = 0}) async* {
+  if (offset < 0 || offset > expectedSize) {
+    throw ArgumentError.value(offset, 'offset');
+  }
+  var sent = offset;
+  await for (final chunk in source.openRead(offset, expectedSize)) {
     sent += chunk.length;
     if (sent > Attachments.maxFileBytes || sent > expectedSize) {
       throw StateError('Selected attachment changed during upload.');
     }
     yield chunk is Uint8List ? chunk : Uint8List.fromList(chunk);
-    if (updates.elapsedMilliseconds >= 100 || sent == expectedSize) {
-      onProgress?.call(sent);
-      updates.reset();
-    }
   }
   if (sent != expectedSize) {
     throw StateError('Selected attachment changed during upload.');
   }
-  onProgress?.call(sent);
 }

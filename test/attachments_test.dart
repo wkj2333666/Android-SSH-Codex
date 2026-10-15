@@ -1,10 +1,55 @@
+import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:android_ssh_codex/src/attachments.dart';
 import 'package:android_ssh_codex/src/app_controller.dart';
 import 'package:android_ssh_codex/src/tasks/task_message_queue.dart';
 import 'package:android_ssh_codex/src/transport/attachment_upload.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+final class _UploadBuffer {
+  final bytes = <int>[];
+}
+
+final class _FakeUploadSession implements AttachmentUploadSession {
+  _FakeUploadSession(this.buffer,
+      {required this.failAfterFirstChunk, required this.offsets});
+
+  final _UploadBuffer buffer;
+  final bool failAfterFirstChunk;
+  final List<int> offsets;
+
+  @override
+  String get path => '/remote/file.bin';
+
+  @override
+  Future<int> length() async => buffer.bytes.length;
+
+  @override
+  Future<void> write(Stream<Uint8List> bytes, int offset,
+      {void Function(int acknowledged)? onProgress}) async {
+    offsets.add(offset);
+    var written = 0;
+    await for (final chunk in bytes) {
+      final accepted = failAfterFirstChunk
+          ? Uint8List.sublistView(chunk, 0, chunk.length ~/ 2)
+          : chunk;
+      if (offset == buffer.bytes.length) {
+        buffer.bytes.addAll(accepted);
+      } else {
+        buffer.bytes.replaceRange(offset, offset + accepted.length, accepted);
+      }
+      offset += accepted.length;
+      written += accepted.length;
+      onProgress?.call(written);
+      if (failAfterFirstChunk) throw TimeoutException('simulated disconnect');
+    }
+  }
+
+  @override
+  Future<void> close() async {}
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -61,7 +106,7 @@ void main() {
     expect(command, isNot(contains('../')));
     expect(command, contains(r'umask\ 077'));
     expect(command, startsWith('/bin/sh -c '));
-    expect(command, contains('trap'));
+    expect(command, contains(r'touch\ '));
     expect(
         () => attachmentUploadCommand('../bad', 'file'), throwsArgumentError);
   });
@@ -72,16 +117,43 @@ void main() {
     final file = File('${directory.path}/payload');
     addTearDown(() => directory.delete(recursive: true));
     await file.writeAsBytes(List.generate(200000, (index) => index % 251));
-    final progress = <int>[];
-    final chunks = await attachmentFileStream(file,
-            expectedSize: 200000, onProgress: progress.add)
-        .toList();
+    final chunks =
+        await attachmentFileStream(file, expectedSize: 200000).toList();
     expect(chunks.length, greaterThan(1));
     expect(chunks.fold<int>(0, (sum, chunk) => sum + chunk.length), 200000);
-    expect(progress.last, 200000);
     await expectLater(
-        attachmentFileStream(file, expectedSize: 199999).drain<void>(),
+        attachmentFileStream(file, expectedSize: 200001).drain<void>(),
         throwsStateError);
+  });
+
+  test('resumable upload continues from the acknowledged remote offset',
+      () async {
+    final directory = await Directory.systemTemp.createTemp('upload-resume-');
+    final file = File('${directory.path}/payload');
+    addTearDown(() => directory.delete(recursive: true));
+    final contents = List.generate(200000, (index) => index % 251);
+    await file.writeAsBytes(contents);
+    final attachment = LocalAttachment(
+        name: 'payload.bin',
+        path: file.path,
+        size: contents.length,
+        isImage: false);
+    final buffer = _UploadBuffer();
+    final offsets = <int>[];
+    var connections = 0;
+    final remote = await uploadAttachmentResumable(
+      attachment: attachment,
+      target: AttachmentUploadTarget.forAttachment(attachment),
+      cancellation: AttachmentUploadCancellation(),
+      retryDelay: Duration.zero,
+      connect: () async => _FakeUploadSession(buffer,
+          failAfterFirstChunk: ++connections == 1, offsets: offsets),
+    );
+    expect(connections, 2);
+    expect(offsets.first, 0);
+    expect(offsets.last, greaterThan(0));
+    expect(buffer.bytes, contents);
+    expect(remote.path, '/remote/file.bin');
   });
 
   test('attachment-only message and queued steer preserve image paths', () {
