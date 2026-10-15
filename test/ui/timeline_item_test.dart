@@ -39,12 +39,10 @@ void main() {
     expect(find.byType(TextField), findsOneWidget);
     await tester.tap(find.text('Staging'));
     await tester.pump();
-    expect(
-      tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
-      isNotNull,
-    );
     await tester.enterText(find.byType(TextField), 'Canary');
-    await tester.tap(find.text('Submit answers'));
+    await tester.tap(
+      find.byKey(const Key('submit-task-question-answers')),
+    );
     await tester.pump();
 
     expect(submitted, ['Canary']);

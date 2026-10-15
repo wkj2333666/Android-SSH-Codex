@@ -154,6 +154,7 @@ class _TaskQuestionPanelState extends State<TaskQuestionPanel> {
                 Align(
                   alignment: Alignment.centerRight,
                   child: FilledButton.icon(
+                    key: const Key('submit-task-question-answers'),
                     onPressed: enabled && _complete ? _submit : null,
                     icon: _submitting
                         ? const SizedBox.square(
