@@ -68,6 +68,55 @@ void main() {
     expect(catalog.unassignedExpanded, isTrue);
   });
 
+  test('shared membership overrides directory grouping', () {
+    final catalog = TaskCatalog();
+    catalog.replaceUnassignedPage(
+      [
+        snapshot('unassigned-same-root', '/repo'),
+        TaskSnapshot(
+          id: 'assigned-elsewhere',
+          title: 'Assigned',
+          status: TaskStatus.completed,
+          cwd: '/other',
+          updatedAt: DateTime.utc(2026),
+          items: const [],
+          projectId: 'shared',
+        ),
+      ],
+      projects: const [
+        RemoteProject(
+          id: 'remote:shared',
+          remoteId: 'shared',
+          hostId: 'pi',
+          name: 'Project',
+          cwd: '/repo',
+        )
+      ],
+      nextCursor: null,
+    );
+    expect(catalog.unassignedTaskIds, ['unassigned-same-root']);
+  });
+
+  test('a remote move removes stale project and unassigned entries', () {
+    final catalog = TaskCatalog();
+    final old = snapshot('moved', '/repo');
+    catalog.replaceProjectPage([old], nextCursor: null);
+    catalog.replaceUnassignedPage([old], projects: const [], nextCursor: null);
+    catalog.reconcileSharedMembership([
+      TaskSnapshot(
+        id: 'moved',
+        title: 'Moved',
+        status: TaskStatus.completed,
+        cwd: '/repo',
+        updatedAt: DateTime.utc(2026),
+        items: const [],
+        projectId: 'destination',
+      ),
+    ], 'source');
+    expect(catalog.projectTaskIds, isEmpty);
+    expect(catalog.unassignedTaskIds, isEmpty);
+  });
+
   test('refreshing the project head keeps explicitly loaded older tasks', () {
     final catalog = TaskCatalog();
     catalog.replaceProjectPage(

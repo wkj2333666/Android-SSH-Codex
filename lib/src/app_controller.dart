@@ -10,6 +10,7 @@ import 'diagnostics.dart';
 import 'profiles/host_profile.dart';
 import 'profiles/profile_store.dart';
 import 'projects/remote_project.dart';
+import 'projects/shared_project_sync.dart';
 import 'protocol/codex_remote_api.dart';
 import 'protocol/user_input_request.dart';
 import 'protocol/foreground_probe.dart';
@@ -160,6 +161,10 @@ final class AppController extends ChangeNotifier {
   JsonRpcClient? _rpc;
   CodexRemoteApi? _api;
   CodexRemoteApi? _projectDiscoveryApi;
+  CodexRemoteApi? _sharedProjectsApi;
+  CodexRemoteApi? _unsupportedProjectsApi;
+  CodexRemoteApi? _projectOperationApi;
+  Future<void> _projectOperation = Future.value();
   StreamSubscription<RpcNotification>? _notificationSubscription;
   StreamSubscription<RpcServerRequest>? _requestSubscription;
   Timer? _refreshTimer;
@@ -735,12 +740,14 @@ final class AppController extends ChangeNotifier {
       while (true) {
         final shouldResetPages = resetNext;
         resetNext = false;
+        await _syncSharedProjects(api, epoch);
+        if (api != _api || epoch != _epoch) return;
         final initialProject = selectedProject;
         final token = _taskReducer.beginRefresh(epoch);
         final unassignedFuture = api.readTaskPage();
         final initialProjectFuture = initialProject == null
             ? Future<RemoteTaskPage?>.value()
-            : api.readTaskPage(cwd: initialProject.cwd);
+            : _readProjectTasks(api, initialProject);
         final unassignedPage = await unassignedFuture;
         if (api != _api || epoch != _epoch) return;
         _discoverProjects(unassignedPage.tasks);
@@ -750,7 +757,7 @@ final class AppController extends ChangeNotifier {
             ? null
             : initialProject?.id == project.id
                 ? await initialProjectFuture
-                : await api.readTaskPage(cwd: project.cwd);
+                : await _readProjectTasks(api, project);
         if (api != _api || epoch != _epoch) return;
         if (selectedProjectId != _selectedProjectId) {
           resetNext = true;
@@ -805,6 +812,10 @@ final class AppController extends ChangeNotifier {
             nextCursor: unassignedPage.nextCursor,
           );
         }
+        _taskCatalog.reconcileSharedMembership(
+          snapshots.values,
+          project?.remoteId,
+        );
         notifyListeners();
         if (isConnected) _flushReadyQueuedPrompts();
         final queuedResetPages = operation.takeQueuedResetPages();
@@ -907,7 +918,7 @@ final class AppController extends ChangeNotifier {
     _loadingProjectPage = true;
     notifyListeners();
     try {
-      final page = await api.readTaskPage(cwd: project.cwd);
+      final page = await _readProjectTasks(api, project);
       if (api != _api ||
           epoch != _epoch ||
           generation != _projectPageGeneration ||
@@ -940,6 +951,76 @@ final class AppController extends ChangeNotifier {
     }
   }
 
+  Future<RemoteTaskPage> _readProjectTasks(
+    CodexRemoteApi api,
+    RemoteProject project, {
+    String? cursor,
+  }) =>
+      api.readTaskPage(
+        projectId: project.remoteId,
+        cwd: project.remoteId == null ? project.cwd : null,
+        cursor: cursor,
+      );
+
+  Future<T> _withProjectSync<T>(
+    CodexRemoteApi api,
+    int epoch,
+    Future<T> Function(SharedProjectSync sync) action,
+  ) {
+    final hostId = _selectedHostId!;
+    final attempt = _connectionAttempt;
+    void check() => _ensureCurrentSession(api, attempt, epoch, hostId);
+    if (_projectOperationApi != api) {
+      _projectOperationApi = api;
+      _projectOperation = Future.value();
+    }
+    final result = _projectOperation.then((_) async {
+      check();
+      final value = await action(SharedProjectSync(api, _store, hostId, check));
+      check();
+      return value;
+    });
+    _projectOperation =
+        result.then<void>((_) {}, onError: (Object _, StackTrace __) {});
+    return result;
+  }
+
+  void _replaceSharedProjects(List<RemoteProject> projects) {
+    final previous = selectedProject;
+    _projects = List.unmodifiable(projects);
+    if (!_projects.any((project) => project.id == _selectedProjectId)) {
+      _selectedProjectId = _projects
+              .where((project) =>
+                  previous != null && project.containsCwd(previous.cwd))
+              .firstOrNull
+              ?.id ??
+          _projects.firstOrNull?.id;
+      _taskCatalog.clearProjectPage();
+    }
+  }
+
+  Future<void> _syncSharedProjects(CodexRemoteApi api, int epoch) async {
+    if (_unsupportedProjectsApi == api) return;
+    try {
+      await _withProjectSync<void>(api, epoch, (sync) async {
+        final projects = await sync.synchronize();
+        sync.checkSession();
+        _sharedProjectsApi = api;
+        _replaceSharedProjects(projects);
+      });
+    } on RpcRemoteException catch (error) {
+      if (api != _api || epoch != _epoch) return;
+      if (error.code == -32601) {
+        _unsupportedProjectsApi = api;
+      } else {
+        _error = 'Project sync failed: ${_friendlyError(error)}';
+      }
+    } catch (error) {
+      if (api != _api || epoch != _epoch) return;
+      _error = 'Project sync failed: ${_friendlyError(error)}';
+    }
+  }
+
   Future<void> saveProject({
     String? projectId,
     required String name,
@@ -952,27 +1033,60 @@ final class AppController extends ChangeNotifier {
     if (normalizedName.isEmpty || normalizedCwd.isEmpty) {
       throw ArgumentError('Project name and remote directory are required.');
     }
-    final matchingCwd = _projects
-        .where((project) => normalizeRemoteCwd(project.cwd) == normalizedCwd)
-        .firstOrNull;
-    final id = projectId ??
-        matchingCwd?.id ??
-        '$hostId-${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}';
-    await _store.writeProject(
-      RemoteProject(
-        id: id,
-        hostId: hostId,
-        name: normalizedName,
-        cwd: normalizedCwd,
-      ),
-    );
-    _projects = mergeRemoteProjects(
-      hostId: hostId,
-      existing: await _store.readProjects(hostId),
-      discoveredCwds: _taskReducer.state.tasks.values.map((task) => task.cwd),
-      activityByCwd: _projectActivityByCwd,
-    );
-    _selectedProjectId = id;
+    if (!normalizedCwd.startsWith('/')) {
+      throw ArgumentError('Use an absolute remote directory path.');
+    }
+    final api = _requireApi();
+    final epoch = _epoch;
+    if (_unsupportedProjectsApi == api) {
+      throw StateError('Update remote Codex to enable shared projects.');
+    }
+    final previous =
+        _projects.where((project) => project.id == projectId).firstOrNull;
+    await _withProjectSync<void>(api, epoch, (sync) async {
+      final shared = await sync.synchronize();
+      sync.checkSession();
+      final byId =
+          shared.where((project) => project.id == projectId).firstOrNull;
+      if (previous?.remoteId != null && byId == null) {
+        throw StateError(
+            'This project was deleted on another client. Refresh the list.');
+      }
+      final byPath = shared
+          .where((project) => project.containsCwd(normalizedCwd))
+          .toList();
+      final existing = byId ?? (byPath.length == 1 ? byPath.single : null);
+      final draft =
+          existing?.copyWith(name: normalizedName, cwd: normalizedCwd) ??
+              RemoteProject(
+                id: previous?.id ??
+                    '$hostId-${DateTime.now().microsecondsSinceEpoch}',
+                hostId: hostId,
+                name: normalizedName,
+                cwd: normalizedCwd,
+              );
+      // Persist an unsynced draft first so a lost create response can be retried.
+      if (existing == null) await _store.writeProject(draft);
+      sync.checkSession();
+      final saved = existing == null
+          ? await api.createProject(draft)
+          : await api.updateProject(draft);
+      sync.checkSession();
+      if (existing == null) {
+        await sync.adoptUnassignedTasks(saved, cwd: normalizedCwd);
+      }
+      await _store.writeProject(saved);
+      sync.checkSession();
+      if (draft.remoteId == null) await _store.deleteProject(hostId, draft.id);
+      sync.checkSession();
+      _sharedProjectsApi = api;
+      _replaceSharedProjects([
+        for (final project in shared)
+          if (project.remoteId != saved.remoteId) project,
+        saved,
+      ]);
+      _selectedProjectId = saved.id;
+    });
     _selectedTaskId = null;
     _historyLoadState.clear();
     _taskCatalog.clearProjectPage();
@@ -983,13 +1097,16 @@ final class AppController extends ChangeNotifier {
   Future<void> deleteProject(String projectId) async {
     final hostId = _selectedHostId;
     if (hostId == null) return;
-    await _store.deleteProject(hostId, projectId);
-    _projects = mergeRemoteProjects(
-      hostId: hostId,
-      existing: await _store.readProjects(hostId),
-      discoveredCwds: _taskReducer.state.tasks.values.map((task) => task.cwd),
-      activityByCwd: _projectActivityByCwd,
-    );
+    final api = _requireApi();
+    await _withProjectSync<void>(api, _epoch, (sync) async {
+      final project = _projects.where((p) => p.id == projectId).firstOrNull;
+      if (project == null) return;
+      if (project.remoteId != null) await api.deleteProject(project.remoteId!);
+      sync.checkSession();
+      await _store.deleteProject(hostId, projectId);
+      sync.checkSession();
+      _projects = _projects.where((p) => p.id != projectId).toList();
+    });
     if (_selectedProjectId == projectId) {
       _selectedProjectId = _projects.firstOrNull?.id;
       _selectedTaskId = null;
@@ -1022,8 +1139,9 @@ final class AppController extends ChangeNotifier {
     _loadingProjectPage = true;
     notifyListeners();
     try {
-      final page = await api.readTaskPage(
-        cwd: project.cwd,
+      final page = await _readProjectTasks(
+        api,
+        project,
         cursor: continuation.cursor,
       );
       if (api != _api ||
@@ -1150,6 +1268,7 @@ final class AppController extends ChangeNotifier {
   }
 
   bool _discoverProjectCwds(Iterable<String> cwds) {
+    if (_sharedProjectsApi == _api && _api != null) return false;
     final hostId = _selectedHostId;
     if (hostId == null) return false;
     final projects = mergeRemoteProjects(
@@ -1174,6 +1293,7 @@ final class AppController extends ChangeNotifier {
     required int epoch,
     required String profileId,
   }) {
+    if (_sharedProjectsApi == api) return;
     if (identical(_projectDiscoveryApi, api)) return;
     _projectDiscoveryApi = api;
     unawaited(_discoverAllProjects(
@@ -1213,6 +1333,7 @@ final class AppController extends ChangeNotifier {
   Future<void> startNewTask({
     required String cwd,
     required String prompt,
+    String? projectId,
     String? model,
     String? effort,
   }) async {
@@ -1220,7 +1341,12 @@ final class AppController extends ChangeNotifier {
     final attempt = _connectionAttempt;
     final epoch = _epoch;
     final profileId = _selectedHostId!;
-    final threadId = await api.startThread(cwd: cwd);
+    final project = _projects.where((p) => p.id == projectId).firstOrNull;
+    if (projectId != null && project == null) {
+      throw StateError('The project was removed. Refresh the project list.');
+    }
+    final threadId =
+        await api.startThread(cwd: cwd, projectId: project?.remoteId);
     if (!_isCurrentSession(api, attempt, epoch, profileId)) return;
     _subscribedThreadIds = {..._subscribedThreadIds, threadId};
     _selectedTaskId = threadId;

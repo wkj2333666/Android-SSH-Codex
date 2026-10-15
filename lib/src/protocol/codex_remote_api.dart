@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import '../tasks/task_reducer.dart';
 import '../tasks/message_attachments.dart';
+import '../projects/remote_project.dart';
 import 'json_rpc_client.dart';
 
 final class RemoteTaskBatch {
@@ -130,13 +131,19 @@ final class CodexRemoteApi {
     return RemoteTaskBatch(tasks: page.tasks, loadedThreadIds: loaded);
   }
 
-  Future<RemoteTaskPage> readTaskPage({String? cwd, String? cursor}) async {
+  Future<RemoteTaskPage> readTaskPage({
+    String? cwd,
+    String? projectId,
+    String? cursor,
+    String sortKey = 'recency_at',
+  }) async {
     final result = _map(await _rpc.request('thread/list', {
       'limit': 20,
       'archived': false,
-      'sortKey': 'recency_at',
+      'sortKey': sortKey,
       'sortDirection': 'desc',
       if (cwd != null) 'cwd': cwd,
+      if (projectId != null) 'projectId': projectId,
       if (cursor != null) 'cursor': cursor,
     }));
     final data = result['data'] as List<dynamic>? ?? const [];
@@ -145,6 +152,79 @@ final class CodexRemoteApi {
         data.map((item) => parseThread(_map(item))),
       ),
       nextCursor: result['nextCursor'] as String?,
+    );
+  }
+
+  Future<List<RemoteProject>> readProjects(String hostId) async {
+    final projects = <RemoteProject>[];
+    final cursors = <String>{};
+    String? cursor;
+    do {
+      final result = _map(await _rpc.request('project/list', {
+        'limit': 100,
+        'sortKey': 'recencyAt',
+        if (cursor != null) 'cursor': cursor,
+      }));
+      for (final project in result['data'] as List<dynamic>? ?? const []) {
+        projects.add(_parseProject(_map(project), hostId));
+      }
+      cursor = result['nextCursor'] as String?;
+      if (cursor != null && !cursors.add(cursor)) {
+        throw StateError('Project pagination repeated a cursor.');
+      }
+    } while (cursor != null);
+    return projects;
+  }
+
+  Future<RemoteProject> createProject(RemoteProject project) async {
+    final result = _map(await _rpc.request('project/create', {
+      'name': project.name,
+      'roots': [
+        for (final path in project.roots)
+          if (path.isNotEmpty) {'path': path}
+      ],
+      'idempotencyKey': 'android-ssh-codex:${project.id}',
+    }));
+    return _parseProject(_map(result['project']), project.hostId);
+  }
+
+  Future<RemoteProject> updateProject(RemoteProject project) async {
+    final result = _map(await _rpc.request('project/update', {
+      'projectId': project.remoteId,
+      'name': project.name,
+      'roots': [
+        for (final path in project.roots)
+          if (path.isNotEmpty) {'path': path}
+      ],
+    }));
+    return _parseProject(_map(result['project']), project.hostId);
+  }
+
+  Future<void> deleteProject(String projectId) async {
+    await _rpc.request('project/delete', {'projectId': projectId});
+  }
+
+  Future<void> assignThreadProject(String threadId, String projectId) async {
+    await _rpc.request('thread/metadata/update', {
+      'threadId': threadId,
+      'projectId': projectId,
+    });
+  }
+
+  static RemoteProject _parseProject(
+      Map<String, dynamic> value, String hostId) {
+    final roots = (value['roots'] as List<dynamic>? ?? const [])
+        .map((root) => _map(root)['path'])
+        .whereType<String>()
+        .toList();
+    final id = value['id'] as String;
+    return RemoteProject(
+      id: 'remote:$id',
+      remoteId: id,
+      hostId: hostId,
+      name: value['name'] as String,
+      cwd: roots.firstOrNull ?? '',
+      additionalRoots: List.unmodifiable(roots.skip(1)),
     );
   }
 
@@ -239,9 +319,10 @@ final class CodexRemoteApi {
     return null;
   }
 
-  Future<String> startThread({required String cwd}) async {
+  Future<String> startThread({required String cwd, String? projectId}) async {
     final result = _map(await _rpc.request('thread/start', {
       'cwd': cwd,
+      if (projectId != null) 'projectId': projectId,
     }));
     return _map(result['thread'])['id'] as String;
   }
@@ -414,6 +495,7 @@ final class CodexRemoteApi {
       title: title,
       status: _parseStatus(thread['status']),
       cwd: thread['cwd'] as String? ?? '',
+      projectId: thread['projectId'] as String?,
       updatedAt: _parseTime(
         thread['updatedAt'] ?? thread['createdAt'] ?? thread['updated_at'],
       ),

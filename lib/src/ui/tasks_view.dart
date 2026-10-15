@@ -176,12 +176,21 @@ class _TaskList extends StatelessWidget {
     if (accepted == true &&
         cwd.text.trim().isNotEmpty &&
         prompt.text.trim().isNotEmpty) {
-      await controller.startNewTask(
-        cwd: cwd.text.trim(),
-        prompt: prompt.text.trim(),
-        model: turnSettings.model,
-        effort: turnSettings.effort,
-      );
+      try {
+        await controller.startNewTask(
+          cwd: cwd.text.trim(),
+          prompt: prompt.text.trim(),
+          projectId: project?.id,
+          model: turnSettings.model,
+          effort: turnSettings.effort,
+        );
+      } catch (error) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not start task: $error')),
+          );
+        }
+      }
     }
     cwd.dispose();
     prompt.dispose();
@@ -236,11 +245,19 @@ class _TaskList extends StatelessWidget {
     if (accepted == true &&
         name.text.trim().isNotEmpty &&
         cwd.text.trim().isNotEmpty) {
-      await controller.saveProject(
-        projectId: project?.id,
-        name: name.text,
-        cwd: cwd.text,
-      );
+      try {
+        await controller.saveProject(
+          projectId: project?.id,
+          name: name.text,
+          cwd: cwd.text,
+        );
+      } catch (error) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not sync project: $error')),
+          );
+        }
+      }
     }
     name.dispose();
     cwd.dispose();
@@ -254,7 +271,10 @@ class _TaskList extends StatelessWidget {
       builder: (context) => AlertDialog(
         title: const Text('Delete project?'),
         content: Text(
-          'Remove ${project.name} from this app? Remote files and tasks are not deleted.',
+          project.remoteId == null
+              ? 'Remove ${project.name} from this app? Files and tasks are kept.'
+              : 'Delete shared project ${project.name} on all connected clients? '
+                  'Files and tasks are kept; tasks become unassigned.',
         ),
         actions: [
           TextButton(
@@ -268,7 +288,17 @@ class _TaskList extends StatelessWidget {
         ],
       ),
     );
-    if (accepted == true) await controller.deleteProject(project.id);
+    if (accepted == true) {
+      try {
+        await controller.deleteProject(project.id);
+      } catch (error) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not delete project: $error')),
+          );
+        }
+      }
+    }
   }
 }
 

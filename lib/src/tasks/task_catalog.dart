@@ -185,6 +185,21 @@ final class TaskCatalog {
     _unassignedExpanded = !_unassignedExpanded;
   }
 
+  void reconcileSharedMembership(
+    Iterable<TaskSnapshot> tasks,
+    String? selectedProjectId,
+  ) {
+    final membership = {for (final task in tasks) task.id: task.projectId};
+    _unassignedTaskIds = List.unmodifiable(_unassignedTaskIds.where(
+      (id) => !membership.containsKey(id) || membership[id] == null,
+    ));
+    if (selectedProjectId == null) return;
+    _projectTaskIds = List.unmodifiable(_projectTaskIds.where(
+      (id) =>
+          !membership.containsKey(id) || membership[id] == selectedProjectId,
+    ));
+  }
+
   void clearProjectPage() {
     _projectGeneration++;
     _projectTaskIds = const [];
@@ -355,10 +370,15 @@ List<TaskSnapshot> _unassigned(
   List<TaskSnapshot> tasks,
   List<RemoteProject> projects,
 ) {
-  final projectCwds =
-      projects.map((project) => normalizeRemoteCwd(project.cwd)).toSet();
+  final projectCwds = projects
+      .where((project) => project.remoteId == null)
+      .expand((project) => project.roots)
+      .map(normalizeRemoteCwd)
+      .toSet();
   return tasks
-      .where((task) => !projectCwds.contains(normalizeRemoteCwd(task.cwd)))
+      .where((task) =>
+          task.projectId == null &&
+          !projectCwds.contains(normalizeRemoteCwd(task.cwd)))
       .toList(growable: false);
 }
 
