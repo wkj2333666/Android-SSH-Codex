@@ -30,7 +30,9 @@ final class _Server implements RpcTransport {
         result = {'data': projects, 'nextCursor': null};
       case 'project/create':
         final project = {
-          'id': 'shared', 'name': params['name'], 'roots': params['roots'],
+          'id': 'shared',
+          'name': params['name'],
+          'roots': params['roots'],
         };
         projects.add(project);
         result = {'project': project};
@@ -48,7 +50,9 @@ final class _Server implements RpcTransport {
             params['projectId'];
         result = <String, dynamic>{};
       case 'thread/start':
-        result = {'thread': {'id': 'new-thread'}};
+        result = {
+          'thread': {'id': 'new-thread'}
+        };
       default:
         throw StateError('Unexpected request ${request['method']}');
     }
@@ -61,7 +65,10 @@ final class _Server implements RpcTransport {
 
 void main() {
   const legacy = RemoteProject(
-    id: 'local-project', hostId: 'pi', name: 'Phone project', cwd: '/srv/app',
+    id: 'local-project',
+    hostId: 'pi',
+    name: 'Phone project',
+    cwd: '/srv/app',
   );
   late _Server server;
   late JsonRpcClient rpc;
@@ -77,7 +84,8 @@ void main() {
   });
   tearDown(() => rpc.close());
 
-  test('imports local project and unassigned tasks without stealing membership', () async {
+  test('imports local project and unassigned tasks without stealing membership',
+      () async {
     await store.writeProject(legacy);
     server.threads.addAll([
       {'id': 'old', 'cwd': '/srv/app'},
@@ -88,8 +96,10 @@ void main() {
     expect(server.threads.first['projectId'], 'shared');
     expect(server.threads.last['projectId'], 'other');
     expect((await store.readProjects('pi')).single.remoteId, 'shared');
-    final creates = server.requests.where((r) => r['method'] == 'project/create');
-    expect(creates.single['params']['idempotencyKey'], 'android-ssh-codex:local-project');
+    final creates =
+        server.requests.where((r) => r['method'] == 'project/create');
+    expect(creates.single['params']['idempotencyKey'],
+        'android-ssh-codex:local-project');
     await sync.synchronize();
     expect(creates, hasLength(1));
   });
@@ -97,24 +107,32 @@ void main() {
   test('matches Desktop project by any root and preserves its name', () async {
     await store.writeProject(legacy);
     server.projects.add({
-      'id': 'desktop', 'name': 'Desktop name',
-      'roots': [{'path': '/srv/other'}, {'path': '/srv/app'}],
+      'id': 'desktop',
+      'name': 'Desktop name',
+      'roots': [
+        {'path': '/srv/other'},
+        {'path': '/srv/app'}
+      ],
     });
     final projects = await sync.synchronize();
     expect(projects.single.name, 'Desktop name');
     expect(projects.single.additionalRoots, ['/srv/app']);
-    expect(server.requests.where((r) => r['method'] == 'project/create'), isEmpty);
+    expect(
+        server.requests.where((r) => r['method'] == 'project/create'), isEmpty);
     expect(RemoteProject.fromJson(projects.single.toJson()), projects.single);
   });
 
-  test('remote deletion removes cache without recreating the project', () async {
-    await store.writeProject(legacy.copyWith(id: 'remote:deleted', remoteId: 'deleted'));
+  test('remote deletion removes cache without recreating the project',
+      () async {
+    await store.writeProject(
+        legacy.copyWith(id: 'remote:deleted', remoteId: 'deleted'));
     expect(await sync.synchronize(), isEmpty);
     expect(await store.readProjects('pi'), isEmpty);
     expect(server.requests.map((r) => r['method']), ['project/list']);
   });
 
-  test('failed migration retries assignment without duplicating the project', () async {
+  test('failed migration retries assignment without duplicating the project',
+      () async {
     await store.writeProject(legacy);
     server.threads.add({'id': 'old', 'cwd': '/srv/app'});
     server.failAssignment = true;
@@ -128,16 +146,19 @@ void main() {
 
   test('session change aborts before writes to another connection', () async {
     await store.writeProject(legacy);
-    final stale = SharedProjectSync(api, store, 'pi', () => throw StateError('stale'));
+    final stale =
+        SharedProjectSync(api, store, 'pi', () => throw StateError('stale'));
     await expectLater(stale.synchronize(), throwsStateError);
     expect(server.requests.map((r) => r['method']), ['project/list']);
     expect((await store.readProjects('pi')).single.remoteId, isNull);
   });
 
-  test('new tasks and project pagination use project identity, not just cwd', () async {
+  test('new tasks and project pagination use project identity, not just cwd',
+      () async {
     await api.startThread(cwd: '/srv/app', projectId: 'shared');
     await api.readTaskPage(projectId: 'shared', cursor: 'next');
-    expect(server.requests.first['params'], {'cwd': '/srv/app', 'projectId': 'shared'});
+    expect(server.requests.first['params'],
+        {'cwd': '/srv/app', 'projectId': 'shared'});
     expect(server.requests.last['params']['projectId'], 'shared');
     expect(server.requests.last['params']['cursor'], 'next');
     expect(server.requests.last['params'].containsKey('cwd'), isFalse);

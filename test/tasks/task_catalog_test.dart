@@ -74,15 +74,24 @@ void main() {
       [
         snapshot('unassigned-same-root', '/repo'),
         TaskSnapshot(
-          id: 'assigned-elsewhere', title: 'Assigned',
-          status: TaskStatus.completed, cwd: '/other',
-          updatedAt: DateTime.utc(2026), items: const [], projectId: 'shared',
+          id: 'assigned-elsewhere',
+          title: 'Assigned',
+          status: TaskStatus.completed,
+          cwd: '/other',
+          updatedAt: DateTime.utc(2026),
+          items: const [],
+          projectId: 'shared',
         ),
       ],
-      projects: const [RemoteProject(
-        id: 'remote:shared', remoteId: 'shared', hostId: 'pi',
-        name: 'Project', cwd: '/repo',
-      )],
+      projects: const [
+        RemoteProject(
+          id: 'remote:shared',
+          remoteId: 'shared',
+          hostId: 'pi',
+          name: 'Project',
+          cwd: '/repo',
+        )
+      ],
       nextCursor: null,
     );
     expect(catalog.unassignedTaskIds, ['unassigned-same-root']);

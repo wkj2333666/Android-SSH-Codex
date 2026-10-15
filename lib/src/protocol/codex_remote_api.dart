@@ -179,7 +179,10 @@ final class CodexRemoteApi {
   Future<RemoteProject> createProject(RemoteProject project) async {
     final result = _map(await _rpc.request('project/create', {
       'name': project.name,
-      'roots': [for (final path in project.roots) if (path.isNotEmpty) {'path': path}],
+      'roots': [
+        for (final path in project.roots)
+          if (path.isNotEmpty) {'path': path}
+      ],
       'idempotencyKey': 'android-ssh-codex:${project.id}',
     }));
     return _parseProject(_map(result['project']), project.hostId);
@@ -189,7 +192,10 @@ final class CodexRemoteApi {
     final result = _map(await _rpc.request('project/update', {
       'projectId': project.remoteId,
       'name': project.name,
-      'roots': [for (final path in project.roots) if (path.isNotEmpty) {'path': path}],
+      'roots': [
+        for (final path in project.roots)
+          if (path.isNotEmpty) {'path': path}
+      ],
     }));
     return _parseProject(_map(result['project']), project.hostId);
   }
@@ -205,7 +211,8 @@ final class CodexRemoteApi {
     });
   }
 
-  static RemoteProject _parseProject(Map<String, dynamic> value, String hostId) {
+  static RemoteProject _parseProject(
+      Map<String, dynamic> value, String hostId) {
     final roots = (value['roots'] as List<dynamic>? ?? const [])
         .map((root) => _map(root)['path'])
         .whereType<String>()

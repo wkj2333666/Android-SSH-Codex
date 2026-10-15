@@ -20,11 +20,12 @@ final class SharedProjectSync {
     for (final local in cached.where((project) => project.remoteId == null)) {
       final matches = remote.where((p) => p.containsCwd(local.cwd)).toList();
       // Do not guess between two shared projects that use the same directory.
-      final project = matches.length == 1
-          ? matches.single
-          : await api.createProject(local);
+      final project =
+          matches.length == 1 ? matches.single : await api.createProject(local);
       checkSession();
-      if (!remote.any((p) => p.remoteId == project.remoteId)) remote.add(project);
+      if (!remote.any((p) => p.remoteId == project.remoteId)) {
+        remote.add(project);
+      }
       await adoptUnassignedTasks(project, cwd: local.cwd);
       checkSession();
       // Remove the legacy record only after both the server and cache succeeded.
@@ -46,13 +47,16 @@ final class SharedProjectSync {
     return remote;
   }
 
-  Future<void> adoptUnassignedTasks(RemoteProject project, {required String cwd}) async {
+  Future<void> adoptUnassignedTasks(RemoteProject project,
+      {required String cwd}) async {
     final cursors = <String>{};
     String? cursor;
     do {
       checkSession();
       final page = await api.readTaskPage(
-        cwd: cwd, cursor: cursor, sortKey: 'created_at',
+        cwd: cwd,
+        cursor: cursor,
+        sortKey: 'created_at',
       );
       checkSession();
       for (final task in page.tasks) {
@@ -62,7 +66,8 @@ final class SharedProjectSync {
       }
       cursor = page.nextCursor;
       if (cursor != null && !cursors.add(cursor)) {
-        throw StateError('Task pagination repeated a cursor during project migration.');
+        throw StateError(
+            'Task pagination repeated a cursor during project migration.');
       }
     } while (cursor != null);
   }

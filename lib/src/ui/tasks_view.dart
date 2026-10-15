@@ -176,13 +176,21 @@ class _TaskList extends StatelessWidget {
     if (accepted == true &&
         cwd.text.trim().isNotEmpty &&
         prompt.text.trim().isNotEmpty) {
-      await controller.startNewTask(
-        cwd: cwd.text.trim(),
-        prompt: prompt.text.trim(),
-        projectId: project?.id,
-        model: turnSettings.model,
-        effort: turnSettings.effort,
-      );
+      try {
+        await controller.startNewTask(
+          cwd: cwd.text.trim(),
+          prompt: prompt.text.trim(),
+          projectId: project?.id,
+          model: turnSettings.model,
+          effort: turnSettings.effort,
+        );
+      } catch (error) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not start task: $error')),
+          );
+        }
+      }
     }
     cwd.dispose();
     prompt.dispose();

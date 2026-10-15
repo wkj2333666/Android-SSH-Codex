@@ -951,7 +951,8 @@ final class AppController extends ChangeNotifier {
     CodexRemoteApi api,
     RemoteProject project, {
     String? cursor,
-  }) => api.readTaskPage(
+  }) =>
+      api.readTaskPage(
         projectId: project.remoteId,
         cwd: project.remoteId == null ? project.cwd : null,
         cursor: cursor,
@@ -975,7 +976,8 @@ final class AppController extends ChangeNotifier {
       check();
       return value;
     });
-    _projectOperation = result.then<void>((_) {}, onError: (Object _, StackTrace __) {});
+    _projectOperation =
+        result.then<void>((_) {}, onError: (Object _, StackTrace __) {});
     return result;
   }
 
@@ -984,8 +986,11 @@ final class AppController extends ChangeNotifier {
     _projects = List.unmodifiable(projects);
     if (!_projects.any((project) => project.id == _selectedProjectId)) {
       _selectedProjectId = _projects
-          .where((project) => previous != null && project.containsCwd(previous.cwd))
-          .firstOrNull?.id ?? _projects.firstOrNull?.id;
+              .where((project) =>
+                  previous != null && project.containsCwd(previous.cwd))
+              .firstOrNull
+              ?.id ??
+          _projects.firstOrNull?.id;
       _taskCatalog.clearProjectPage();
     }
   }
@@ -1032,23 +1037,30 @@ final class AppController extends ChangeNotifier {
     if (_unsupportedProjectsApi == api) {
       throw StateError('Update remote Codex to enable shared projects.');
     }
-    final previous = _projects.where((project) => project.id == projectId).firstOrNull;
+    final previous =
+        _projects.where((project) => project.id == projectId).firstOrNull;
     await _withProjectSync<void>(api, epoch, (sync) async {
       final shared = await sync.synchronize();
       sync.checkSession();
-      final byId = shared.where((project) => project.id == projectId).firstOrNull;
+      final byId =
+          shared.where((project) => project.id == projectId).firstOrNull;
       if (previous?.remoteId != null && byId == null) {
-        throw StateError('This project was deleted on another client. Refresh the list.');
+        throw StateError(
+            'This project was deleted on another client. Refresh the list.');
       }
-      final byPath = shared.where((project) => project.containsCwd(normalizedCwd)).toList();
+      final byPath = shared
+          .where((project) => project.containsCwd(normalizedCwd))
+          .toList();
       final existing = byId ?? (byPath.length == 1 ? byPath.single : null);
-      final draft = existing?.copyWith(name: normalizedName, cwd: normalizedCwd) ??
-          RemoteProject(
-            id: previous?.id ?? '$hostId-${DateTime.now().microsecondsSinceEpoch}',
-            hostId: hostId,
-            name: normalizedName,
-            cwd: normalizedCwd,
-          );
+      final draft =
+          existing?.copyWith(name: normalizedName, cwd: normalizedCwd) ??
+              RemoteProject(
+                id: previous?.id ??
+                    '$hostId-${DateTime.now().microsecondsSinceEpoch}',
+                hostId: hostId,
+                name: normalizedName,
+                cwd: normalizedCwd,
+              );
       // Persist an unsynced draft first so a lost create response can be retried.
       if (existing == null) await _store.writeProject(draft);
       sync.checkSession();
@@ -1065,7 +1077,8 @@ final class AppController extends ChangeNotifier {
       sync.checkSession();
       _sharedProjectsApi = api;
       _replaceSharedProjects([
-        for (final project in shared) if (project.remoteId != saved.remoteId) project,
+        for (final project in shared)
+          if (project.remoteId != saved.remoteId) project,
         saved,
       ]);
       _selectedProjectId = saved.id;
@@ -1328,7 +1341,8 @@ final class AppController extends ChangeNotifier {
     if (projectId != null && project == null) {
       throw StateError('The project was removed. Refresh the project list.');
     }
-    final threadId = await api.startThread(cwd: cwd, projectId: project?.remoteId);
+    final threadId =
+        await api.startThread(cwd: cwd, projectId: project?.remoteId);
     if (!_isCurrentSession(api, attempt, epoch, profileId)) return;
     _subscribedThreadIds = {..._subscribedThreadIds, threadId};
     _selectedTaskId = threadId;
