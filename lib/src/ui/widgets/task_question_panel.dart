@@ -109,9 +109,7 @@ class _TaskQuestionPanelState extends State<TaskQuestionPanel> {
                 style: Theme.of(context).textTheme.titleSmall,
               ),
               const SizedBox(height: 8),
-              for (var index = 0;
-                  index < widget.questions.length;
-                  index++) ...[
+              for (var index = 0; index < widget.questions.length; index++) ...[
                 Text(widget.questions[index].title),
                 if (widget.questions[index].options.isNotEmpty) ...[
                   const SizedBox(height: 6),
@@ -126,8 +124,7 @@ class _TaskQuestionPanelState extends State<TaskQuestionPanel> {
                           onSelected: enabled
                               ? (selected) {
                                   if (!selected) return;
-                                  setState(() =>
-                                      _answers[index].text = option);
+                                  setState(() => _answers[index].text = option);
                                 }
                               : null,
                         ),

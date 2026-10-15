@@ -1401,8 +1401,7 @@ class _TaskTimelineState extends State<TaskTimeline>
                     );
                   }
                   return switch (entries[entries.length - index - 1]) {
-                    TimelineMessageEntry(:final item) =>
-                      TimelineItemView(
+                    TimelineMessageEntry(:final item) => TimelineItemView(
                         item: item,
                         loadImage: widget.loadImage,
                         onAnswerQuestions: item.id == openQuestionItemId &&
