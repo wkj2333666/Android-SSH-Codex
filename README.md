@@ -35,7 +35,7 @@ response time; a timeout is not proof of which network component failed.
 ### File downloads
 
 Android downloads use a dedicated SSH/SFTP connection with bounded parallel
-reads, a 100 MiB size limit, speed/progress display, and cancellation. Downloads
+reads, a 1 GiB size limit, speed/progress display, and cancellation. Downloads
 retry transient failures up to three times within the current operation and
 resume from written bytes only when the remote SHA-256 still matches. Completed
 content is verified before opening the phone save picker. Resuming after app
@@ -224,13 +224,15 @@ app-server traffic in public issues.
 In an existing task, tap the paperclip beside the message box and choose **Image**
 or **File**. Images have a preview; tap a chip to enlarge an image, or its remove
 button to discard it. You can send attachments with or without accompanying text.
-Limits: 4 attachments per message, 10 MiB per file, 20 MiB total. PNG, JPEG, WebP
-and GIF are accepted as images (up to 64 megapixels and 16,384 pixels per side); other formats can be sent
+Limits: 4 attachments per message and 1 GiB per file. Selection is streamed to
+an app cache file and then streamed into SSH, so large files are not retained in
+Dart or Kotlin memory. PNG, JPEG, WebP and GIF are accepted as images (up to 64
+megapixels and 16,384 pixels per side); other formats can be sent
 as files. Queued messages and steering preserve image attachments.
 
 Sent images appear as bounded inline thumbnails in the conversation. Tap a
 thumbnail to zoom; if loading fails, use Retry. Only mounted timeline images
-are requested, with the same 10 MiB and dimension limits as uploads.
+are requested, and inline remote previews remain capped at 10 MiB.
 Question prompts and answer options support Markdown formatting.
 
 Selecting a file does not upload it. Sending copies it over SSH into a private,
@@ -271,8 +273,8 @@ stage without recording file paths or contents.
 On Android, tap a file link in an agent reply (absolute remote paths,
 `sandbox:/…`, `file:///…`, or project-relative paths), confirm the download,
 then choose a save location in the system picker. Attachment cards also have a
-Download action. Files are streamed over the existing SSH connection, with a
-100 MiB limit and a two-minute transfer timeout; temporary copies are removed
+Download action. Files use a dedicated resumable SSH/SFTP connection, with a
+1 GiB limit; temporary copies are removed
 after saving, cancelling or failure. HTTP/HTTPS links still open in your browser.
 Remote files must exist on the connected SSH host; links to a different sandbox
 cannot be downloaded through this connection.

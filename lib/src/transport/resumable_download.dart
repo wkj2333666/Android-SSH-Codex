@@ -99,7 +99,7 @@ class SftpDownloadSource implements DownloadSource {
     final size = attrs.size;
     if (!attrs.isFile || size == null || size < 0 || size > maxDownloadBytes) {
       throw const FileDownloadException(
-          'Download requires a regular file of at most 100 MiB.');
+          'Download requires a regular file of at most 1 GiB.');
     }
     final result = await _untilClosed(connection.client,
         connection.client.runWithResult(fileDownloadDigestCommand(path)));
@@ -146,6 +146,7 @@ Future<void> downloadResumableFile({
   void Function(int attempt, int received, Object error)? onRetry,
   int maxRetries = 3,
   Duration operationTimeout = const Duration(seconds: 30),
+  Duration verificationTimeout = const Duration(minutes: 30),
   Duration retryDelay = const Duration(seconds: 1),
 }) async {
   final output = await destination.open(mode: FileMode.write);
@@ -173,10 +174,10 @@ Future<void> downloadResumableFile({
             ?.call(DownloadProgress(received, identity?.size, verifying: true));
         final remote = await cancellation
             .wait(source.identify())
-            .timeout(operationTimeout);
+            .timeout(verificationTimeout);
         if (remote.size < 0 || remote.size > maxDownloadBytes) {
           throw const FileDownloadException(
-              'File exceeds the 100 MiB download limit.');
+              'File exceeds the 1 GiB download limit.');
         }
         if (identity != null && !identity.matches(remote)) {
           throw const FileDownloadException(
@@ -224,7 +225,7 @@ Future<void> downloadResumableFile({
             ?.call(DownloadProgress(received, identity.size, verifying: true));
         final finalIdentity = await cancellation
             .wait(source.identify())
-            .timeout(operationTimeout);
+            .timeout(verificationTimeout);
         if (!identity.matches(finalIdentity)) {
           throw const FileDownloadException(
               'Remote file changed during download.');
