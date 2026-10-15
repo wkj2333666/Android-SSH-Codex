@@ -1,4 +1,4 @@
-import 'dart:typed_data';
+import 'dart:io';
 
 import 'package:android_ssh_codex/src/attachments.dart';
 import 'package:android_ssh_codex/src/app_controller.dart';
@@ -12,40 +12,44 @@ void main() {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
   tearDown(() => messenger.setMockMethodCallHandler(Attachments.channel, null));
 
-  test('picker returns image bytes and handles cancellation', () async {
+  test('picker returns a cached file reference and handles cancellation',
+      () async {
     messenger.setMockMethodCallHandler(
         Attachments.channel,
         (call) async => {
               'name': 'photo.png',
-              'bytes': Uint8List.fromList([1, 2, 3]),
+              'path': '/cache/picked.bin',
+              'size': 3,
               'isImage': true,
             });
     final image = await Attachments.pick(image: true);
     expect(image!.isImage, true);
-    expect(image.bytes, [1, 2, 3]);
+    expect(image.path, '/cache/picked.bin');
+    expect(image.size, 3);
     messenger.setMockMethodCallHandler(
         Attachments.channel, (call) async => null);
     expect(await Attachments.pick(image: false), isNull);
   });
 
-  test('attachment count and memory limits apply before upload', () {
-    final empty =
-        LocalAttachment(name: 'file', bytes: Uint8List(0), isImage: false);
+  test('attachment count and 1 GiB per-file limits apply before upload', () {
+    const empty =
+        LocalAttachment(name: 'file', path: '/cache/a', size: 0, isImage: false);
     expect(
         () => Attachments.validate(List.filled(5, empty)), throwsArgumentError);
-    final large = LocalAttachment(
+    const large = LocalAttachment(
         name: 'file',
-        bytes: Uint8List(Attachments.maxFileBytes + 1),
+        path: '/cache/b',
+        size: Attachments.maxFileBytes + 1,
         isImage: false);
     expect(() => Attachments.validate([large]), throwsArgumentError);
-    final allowed = LocalAttachment(
+    const allowed = LocalAttachment(
         name: 'file',
-        bytes: Uint8List(Attachments.maxFileBytes),
+        path: '/cache/c',
+        size: Attachments.maxFileBytes,
         isImage: false);
     expect(
         () => Attachments.validate([allowed, allowed, empty]), returnsNormally);
-    expect(() => Attachments.validate([allowed, allowed, allowed]),
-        throwsArgumentError);
+    expect(() => Attachments.validate(List.filled(4, allowed)), returnsNormally);
   });
 
   test('remote upload command never interpolates shell syntax from filename',
@@ -55,9 +59,28 @@ void main() {
     expect(command, isNot(contains(r'$(')));
     expect(command, isNot(contains('../')));
     expect(command, contains('umask 077'));
-    expect(command, contains('mkdir "\$HOME/'));
+    expect(command, startsWith('/bin/sh -c '));
+    expect(command, contains('trap'));
     expect(
         () => attachmentUploadCommand('../bad', 'file'), throwsArgumentError);
+  });
+
+  test('attachment upload source streams from disk and detects changes',
+      () async {
+    final directory = await Directory.systemTemp.createTemp('attachment-test-');
+    final file = File('${directory.path}/payload');
+    addTearDown(() => directory.delete(recursive: true));
+    await file.writeAsBytes(List.generate(200000, (index) => index % 251));
+    final progress = <int>[];
+    final chunks = await attachmentFileStream(file,
+            expectedSize: 200000, onProgress: progress.add)
+        .toList();
+    expect(chunks.length, greaterThan(1));
+    expect(chunks.fold<int>(0, (sum, chunk) => sum + chunk.length), 200000);
+    expect(progress.last, 200000);
+    await expectLater(
+        attachmentFileStream(file, expectedSize: 199999).drain<void>(),
+        throwsStateError);
   });
 
   test('attachment-only message and queued steer preserve image paths', () {

@@ -38,7 +38,7 @@ Future<void> showRemoteFileDownload(BuildContext context, String path) async {
       title: const Text('Download remote file?'),
       content: SingleChildScrollView(
           child: SelectableText(
-              '$path\n\nMaximum 100 MiB. Choose a save location after downloading.')),
+              '$path\n\nMaximum 1 GiB. Choose a save location after downloading.')),
       actions: [
         TextButton(
             onPressed: () => Navigator.pop(context, false),

@@ -16,7 +16,8 @@ class AttachmentDownloads(private val activity: Activity) {
         try {
             val file = File(path).canonicalFile
             require(file.name == "payload.bin" && file.parentFile?.name?.startsWith("codex-download-") == true &&
-                file.parentFile?.parentFile == activity.cacheDir.canonicalFile && file.isFile && file.length() <= 100 * 1024 * 1024L)
+                file.parentFile?.parentFile == activity.cacheDir.canonicalFile && file.isFile &&
+                file.length() <= 1024L * 1024L * 1024L)
             source = file
             pending = result
             activity.startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT)

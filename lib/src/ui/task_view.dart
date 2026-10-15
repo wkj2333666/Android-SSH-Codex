@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
@@ -78,6 +81,8 @@ class _TaskViewState extends State<TaskView> {
   var _loadingSkills = false;
   var _pickingAttachment = false;
   List<LocalAttachment> _attachments = [];
+  int? _uploadedAttachmentBytes;
+  int? _totalAttachmentBytes;
 
   @override
   void initState() {
@@ -89,6 +94,7 @@ class _TaskViewState extends State<TaskView> {
   void didUpdateWidget(covariant TaskView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.task.id != widget.task.id) {
+      unawaited(Attachments.releaseAll(_attachments));
       _timelineCache.clear();
       _composer.clear();
       _selectedSkill = null;
@@ -100,11 +106,14 @@ class _TaskViewState extends State<TaskView> {
       _commandBusy = false;
       _queueActionBusy = false;
       _attachments = [];
+      _uploadedAttachmentBytes = null;
+      _totalAttachmentBytes = null;
     }
   }
 
   @override
   void dispose() {
+    unawaited(Attachments.releaseAll(_attachments));
     _composer
       ..removeListener(_updateCompletions)
       ..dispose();
@@ -235,7 +244,7 @@ class _TaskViewState extends State<TaskView> {
                     padding: const EdgeInsets.only(right: 8),
                     child: InputChip(
                       avatar: attachment.isImage
-                          ? Image.memory(attachment.bytes,
+                          ? Image.file(File(attachment.path),
                               width: 32,
                               height: 32,
                               cacheWidth: 64,
@@ -251,15 +260,24 @@ class _TaskViewState extends State<TaskView> {
                       onPressed: attachment.isImage
                           ? () => _previewAttachment(attachment)
                           : null,
-                      onDeleted: () =>
-                          setState(() => _attachments.remove(attachment)),
+                      onDeleted: () {
+                        setState(() => _attachments.remove(attachment));
+                        unawaited(Attachments.release(attachment));
+                      },
                     ),
                   ),
               ],
             ),
           ),
         if (_sending || _pickingAttachment)
-          const LinearProgressIndicator(minHeight: 2),
+          LinearProgressIndicator(
+            minHeight: 2,
+            value: _uploadedAttachmentBytes != null &&
+                    _totalAttachmentBytes != null &&
+                    _totalAttachmentBytes! > 0
+                ? _uploadedAttachmentBytes! / _totalAttachmentBytes!
+                : null,
+          ),
         _Composer(
           controller: _composer,
           inputEnabled: isTaskComposerInputEnabled(
@@ -313,6 +331,10 @@ class _TaskViewState extends State<TaskView> {
       _selectedSkill = null;
       _completions = const [];
       _attachments = [];
+      _uploadedAttachmentBytes = submittedAttachments.isEmpty ? null : 0;
+      _totalAttachmentBytes = submittedAttachments.isEmpty
+          ? null
+          : submittedAttachments.fold(0, (sum, file) => sum + file.size);
     });
     _composer.clear();
     try {
@@ -323,7 +345,15 @@ class _TaskViewState extends State<TaskView> {
         model: settings.model,
         effort: settings.effort,
         attachments: submittedAttachments,
+        onUploadProgress: (sent, total) {
+          if (!mounted || widget.task.id != taskId) return;
+          setState(() {
+            _uploadedAttachmentBytes = sent;
+            _totalAttachmentBytes = total;
+          });
+        },
       );
+      await Attachments.releaseAll(submittedAttachments);
       if (!mounted || widget.task.id != taskId) return;
       if (disposition == TaskMessageDisposition.queued) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -346,10 +376,18 @@ class _TaskViewState extends State<TaskView> {
         if (_selectedSkill == null && submittedSkill != null) {
           setState(() => _selectedSkill = submittedSkill);
         }
+      } else {
+        await Attachments.releaseAll(submittedAttachments);
       }
-      _showError(exception);
+      if (mounted && widget.task.id == taskId) _showError(exception);
     } finally {
-      if (mounted && widget.task.id == taskId) setState(() => _sending = false);
+      if (mounted && widget.task.id == taskId) {
+        setState(() {
+          _sending = false;
+          _uploadedAttachmentBytes = null;
+          _totalAttachmentBytes = null;
+        });
+      }
     }
   }
 
@@ -360,13 +398,20 @@ class _TaskViewState extends State<TaskView> {
     }
     final taskId = widget.task.id;
     setState(() => _pickingAttachment = true);
+    LocalAttachment? picked;
     try {
-      final picked = await Attachments.pick(image: image);
-      if (!mounted || widget.task.id != taskId || picked == null) return;
+      picked = await Attachments.pick(image: image);
+      if (picked == null) return;
+      if (!mounted || widget.task.id != taskId) {
+        await Attachments.release(picked);
+        return;
+      }
       final files = [..._attachments, picked];
       Attachments.validate(files);
       setState(() => _attachments = files);
+      picked = null;
     } catch (error) {
+      if (picked != null) await Attachments.release(picked);
       if (mounted && widget.task.id == taskId) _showError(error);
     } finally {
       if (mounted) setState(() => _pickingAttachment = false);
@@ -380,7 +425,7 @@ class _TaskViewState extends State<TaskView> {
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 Flexible(
                     child: InteractiveViewer(
-                        child: Image.memory(attachment.bytes,
+                        child: Image.file(File(attachment.path),
                             cacheWidth: 1200,
                             errorBuilder: (_, __, ___) =>
                                 const Text('Cannot preview image')))),

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -15,7 +16,8 @@ Future<Uint8List> readAttachmentImage(SSHClient client, String path) async {
   final quoted = "'${path.replaceAll("'", "'\\''")}'";
   var timedOut = false;
   final opening = client
-      .execute('test -f $quoted && head -c 10485761 -- $quoted')
+      .execute(
+          'test -f $quoted && head -c ${Attachments.maxImagePreviewBytes + 1} -- $quoted')
       .then((session) {
     if (timedOut) session.close();
     return session;
@@ -31,7 +33,7 @@ Future<Uint8List> readAttachmentImage(SSHClient client, String path) async {
     await (() async {
       await session.stdin.close();
       await for (final chunk in session.stdout) {
-        if (bytes.length + chunk.length > Attachments.maxFileBytes) {
+        if (bytes.length + chunk.length > Attachments.maxImagePreviewBytes) {
           throw StateError('Image exceeds 10 MiB');
         }
         bytes.add(chunk);
@@ -56,16 +58,28 @@ String attachmentUploadCommand(String token, String name) {
       ? 'attachment'
       : safeName.substring(0, min(100, safeName.length));
   const relative = '.local/share/android-ssh-codex/attachments';
-  return 'umask 077; '
-      'mkdir -p "\$HOME/$relative" && '
-      'mkdir "\$HOME/$relative/$token" && '
-      'cat > "\$HOME/$relative/$token/file-$fileName" && '
-      'printf "%s" "\$HOME/$relative/$token/file-$fileName"';
+  final script = 'umask 077; '
+      'base="\$HOME/$relative"; dir="\$base/$token"; '
+      'file="\$dir/file-$fileName"; '
+      'mkdir -p "\$base" && mkdir "\$dir" || exit 1; '
+      'cleanup() { rm -f "\$file"; rmdir "\$dir" 2>/dev/null || true; }; '
+      'trap cleanup EXIT HUP INT TERM; '
+      'cat > "\$file" || exit 1; '
+      'trap - EXIT HUP INT TERM; printf "%s" "\$file"';
+  final argument = script.replaceAllMapped(
+      RegExp(r'[^a-zA-Z0-9_./-]'), (match) => '\\${match[0]}');
+  return '/bin/sh -c $argument';
 }
 
 Future<RemoteAttachment> uploadAttachment(
-    SSHClient client, LocalAttachment attachment) async {
+    SSHClient client, LocalAttachment attachment,
+    {void Function(int sent)? onProgress}) async {
   Attachments.validate([attachment]);
+  final source = File(attachment.path);
+  final actualSize = await source.length();
+  if (actualSize != attachment.size || actualSize > Attachments.maxFileBytes) {
+    throw StateError('Selected attachment changed before upload.');
+  }
   final random = Random.secure();
   final token = List.generate(
       16, (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0')).join();
@@ -102,14 +116,16 @@ Future<RemoteAttachment> uploadAttachment(
     stderr = session.stderr.listen((_) {}, onError: (Object _) {});
     await Future.wait<void>([
       (() async {
-        await session.stdin
-            .addStream(Stream<Uint8List>.value(attachment.bytes));
+        await session.stdin.addStream(attachmentFileStream(
+          source,
+          expectedSize: attachment.size,
+          onProgress: onProgress,
+        ));
         await session.stdin.close();
       })(),
       session.done,
       stdoutDone.future,
-    ], eagerError: true)
-        .timeout(const Duration(seconds: 60));
+    ], eagerError: true);
     if (readError != null || session.exitCode != 0 || outputLength > 8192) {
       throw StateError('Attachment upload failed.');
     }
@@ -123,4 +139,27 @@ Future<RemoteAttachment> uploadAttachment(
     await stdout?.cancel();
     await stderr?.cancel();
   }
+}
+
+/// Reads an attachment with disk backpressure and validates that it did not
+/// change after selection. At most one file-system chunk is held by this layer.
+Stream<List<int>> attachmentFileStream(File source,
+    {required int expectedSize, void Function(int sent)? onProgress}) async* {
+  var sent = 0;
+  final updates = Stopwatch()..start();
+  await for (final chunk in source.openRead()) {
+    sent += chunk.length;
+    if (sent > Attachments.maxFileBytes || sent > expectedSize) {
+      throw StateError('Selected attachment changed during upload.');
+    }
+    yield chunk;
+    if (updates.elapsedMilliseconds >= 100 || sent == expectedSize) {
+      onProgress?.call(sent);
+      updates.reset();
+    }
+  }
+  if (sent != expectedSize) {
+    throw StateError('Selected attachment changed during upload.');
+  }
+  onProgress?.call(sent);
 }

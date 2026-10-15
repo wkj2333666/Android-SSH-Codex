@@ -4,7 +4,7 @@ import 'dart:typed_data';
 
 import 'package:dartssh2/dartssh2.dart';
 
-const maxDownloadBytes = 100 * 1024 * 1024;
+const maxDownloadBytes = 1024 * 1024 * 1024;
 const downloadChunkBytes = 256 * 1024;
 
 class DownloadProgress {
@@ -112,7 +112,7 @@ Future<void> downloadRemoteFile(SSHClient client, String path, File destination,
   }
   if (total != null && total > maxDownloadBytes) {
     throw const FileDownloadException(
-        'File exceeds the 100 MiB download limit.');
+        'File exceeds the 1 GiB download limit.');
   }
   onProgress?.call(DownloadProgress(0, total));
   RandomAccessFile? file;

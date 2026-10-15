@@ -1345,6 +1345,7 @@ final class AppController extends ChangeNotifier {
     String? model,
     String? effort,
     List<LocalAttachment> attachments = const [],
+    void Function(int sent, int total)? onUploadProgress,
   }) async {
     final api = _requireApi();
     final attempt = _connectionAttempt;
@@ -1355,9 +1356,20 @@ final class AppController extends ChangeNotifier {
     Attachments.validate(attachments);
     final uploaded = <RemoteAttachment>[];
     final ssh = _ssh;
+    final totalUploadBytes =
+        attachments.fold<int>(0, (sum, file) => sum + file.size);
+    var completedUploadBytes = 0;
     for (final attachment in attachments) {
       if (ssh == null) throw StateError('SSH is disconnected.');
-      uploaded.add(await uploadAttachment(ssh.client, attachment));
+      uploaded.add(await uploadAttachment(
+        ssh.client,
+        attachment,
+        onProgress: (sent) => onUploadProgress?.call(
+          completedUploadBytes + sent,
+          totalUploadBytes,
+        ),
+      ));
+      completedUploadBytes += attachment.size;
       _ensureCurrentSession(api, attempt, epoch, profileId);
     }
     task = _taskReducer.state.tasks[task.id] ?? task;
