@@ -19,6 +19,7 @@ import 'turn_settings_picker.dart';
 import 'widgets/timeline_item.dart';
 import 'widgets/user_input_panel.dart';
 import 'widgets/remote_file_actions.dart';
+import 'widgets/task_question_panel.dart';
 
 bool isTaskComposerInputEnabled({
   required TaskRecord task,
@@ -30,8 +31,11 @@ bool isTaskComposerSendEnabled({
   required TaskRecord task,
   required bool connected,
   required bool sending,
+  bool attachmentsReady = true,
 }) =>
-    isTaskComposerInputEnabled(task: task, connected: connected) && !sending;
+    isTaskComposerInputEnabled(task: task, connected: connected) &&
+    !sending &&
+    attachmentsReady;
 
 bool isTaskComposerEnabled({
   required TaskRecord task,
@@ -94,7 +98,7 @@ final class _SectorProgressPainter extends CustomPainter {
       progress != oldDelegate.progress || color != oldDelegate.color;
 }
 
-final class _AttachmentTransfer {
+final class _AttachmentTransfer extends ChangeNotifier {
   _AttachmentTransfer(this.local)
       : target = AttachmentUploadTarget.forAttachment(local),
         cancellation = AttachmentUploadCancellation();
@@ -110,10 +114,17 @@ final class _AttachmentTransfer {
   bool discarded = false;
 
   bool get ready => state == _AttachmentState.uploaded && remote != null;
+
+  void updateProgress(double value) {
+    if (discarded || value == progress) return;
+    progress = value;
+    notifyListeners();
+  }
 }
 
 class _TaskViewState extends State<TaskView> {
   final _composer = TextEditingController();
+  final _composerFocus = FocusNode();
   final _timelineCache = TaskTimelineRenderCache<Widget>();
   var _sending = false;
   TaskSendMode _sendMode = TaskSendMode.auto;
@@ -127,6 +138,7 @@ class _TaskViewState extends State<TaskView> {
   var _loadingSkills = false;
   var _pickingAttachment = false;
   List<_AttachmentTransfer> _attachments = [];
+  final Set<String> _answeredQuestionItemIds = {};
 
   @override
   void initState() {
@@ -150,6 +162,7 @@ class _TaskViewState extends State<TaskView> {
       _commandBusy = false;
       _queueActionBusy = false;
       _attachments = [];
+      _answeredQuestionItemIds.clear();
     }
   }
 
@@ -159,6 +172,7 @@ class _TaskViewState extends State<TaskView> {
     _composer
       ..removeListener(_updateCompletions)
       ..dispose();
+    _composerFocus.dispose();
     super.dispose();
   }
 
@@ -194,6 +208,8 @@ class _TaskViewState extends State<TaskView> {
         loadingOlder: timelineState.loadingOlder,
         olderError: timelineState.olderError,
         onLoadOlder: widget.controller.loadOlderSelectedTaskContext,
+        answeredQuestionItemIds: _answeredQuestionItemIds,
+        onAnswerQuestions: _answerTaskQuestions,
       ),
     );
     final content = Column(
@@ -293,6 +309,7 @@ class _TaskViewState extends State<TaskView> {
           const LinearProgressIndicator(minHeight: 2),
         _Composer(
           controller: _composer,
+          focusNode: _composerFocus,
           inputEnabled: isTaskComposerInputEnabled(
             task: task,
             connected: widget.controller.isConnected,
@@ -300,7 +317,8 @@ class _TaskViewState extends State<TaskView> {
           sendEnabled: isTaskComposerSendEnabled(
             task: task,
             connected: widget.controller.isConnected,
-            sending: _sending || _attachments.any((file) => !file.ready),
+            sending: _sending,
+            attachmentsReady: _attachments.every((file) => file.ready),
           ),
           completions: _completions,
           loadingCompletions: _loadingSkills,
@@ -398,6 +416,38 @@ class _TaskViewState extends State<TaskView> {
     }
   }
 
+  Future<void> _answerTaskQuestions(
+    TaskItem item,
+    List<String> answers,
+  ) async {
+    if (_answeredQuestionItemIds.contains(item.id)) return;
+    final taskId = widget.task.id;
+    final message = formatTaskQuestionAnswers(item.questions, answers);
+    final settings = resolveTurnSettings(
+      widget.controller.models,
+      _turnSettings,
+      model: widget.task.model,
+      effort: widget.task.reasoningEffort,
+      useCatalogDefault: false,
+    );
+    try {
+      await widget.controller.sendPrompt(
+        message,
+        mode: TaskSendMode.auto,
+        model: settings.model,
+        effort: settings.effort,
+      );
+      if (!mounted || widget.task.id != taskId) return;
+      setState(() {
+        _answeredQuestionItemIds.add(item.id);
+        _timelineCache.clear();
+      });
+    } catch (error) {
+      if (mounted && widget.task.id == taskId) _showError(error);
+      rethrow;
+    }
+  }
+
   Future<void> _pickAttachment(bool image) async {
     if (_attachments.length >= Attachments.maxCount) {
       _showError('Up to 4 attachments per message.');
@@ -418,6 +468,7 @@ class _TaskViewState extends State<TaskView> {
       final transfer = _AttachmentTransfer(picked);
       setState(() => _attachments = [..._attachments, transfer]);
       picked = null;
+      _composerFocus.requestFocus();
       unawaited(_uploadAttachment(transfer));
     } catch (error) {
       if (picked != null) await Attachments.release(picked);
@@ -427,7 +478,12 @@ class _TaskViewState extends State<TaskView> {
     }
   }
 
-  Widget _attachmentChip(_AttachmentTransfer attachment) {
+  Widget _attachmentChip(_AttachmentTransfer attachment) => AnimatedBuilder(
+        animation: attachment,
+        builder: (context, _) => _buildAttachmentChip(attachment),
+      );
+
+  Widget _buildAttachmentChip(_AttachmentTransfer attachment) {
     final uploading = attachment.state == _AttachmentState.uploading;
     final failed = attachment.state == _AttachmentState.failed;
     final theme = Theme.of(context);
@@ -498,6 +554,7 @@ class _TaskViewState extends State<TaskView> {
                   ? () => _previewAttachment(attachment.local)
                   : null,
           onDeleted: () => _discardAttachment(attachment),
+          deleteButtonTooltipMessage: 'Remove attachment',
         ),
       ),
     );
@@ -524,8 +581,9 @@ class _TaskViewState extends State<TaskView> {
             return;
           }
           updates.reset();
-          setState(() => attachment.progress =
-              total == 0 ? 1 : (acknowledged / total).clamp(0.0, 1.0));
+          attachment.updateProgress(
+            total == 0 ? 1 : (acknowledged / total).clamp(0.0, 1.0),
+          );
         },
       );
       if (!mounted ||
@@ -1064,6 +1122,8 @@ class TaskTimeline extends StatefulWidget {
     this.olderError,
     this.onLoadOlder,
     this.loadImage,
+    this.answeredQuestionItemIds = const {},
+    this.onAnswerQuestions,
     super.key,
   });
 
@@ -1076,6 +1136,9 @@ class TaskTimeline extends StatefulWidget {
   final String? olderError;
   final Future<void> Function()? onLoadOlder;
   final Future<Uint8List> Function(String)? loadImage;
+  final Set<String> answeredQuestionItemIds;
+  final Future<void> Function(TaskItem item, List<String> answers)?
+      onAnswerQuestions;
 
   @override
   State<TaskTimeline> createState() => _TaskTimelineState();
@@ -1309,6 +1372,10 @@ class _TaskTimelineState extends State<TaskTimeline>
       return const Center(child: Text('No task events yet'));
     }
     final entries = buildTimelineEntries(widget.items);
+    final openQuestionItemId = latestOpenTaskQuestionItemId(
+      widget.items,
+      widget.answeredQuestionItemIds,
+    );
     return Stack(
       children: [
         NotificationListener<ScrollNotification>(
@@ -1335,7 +1402,15 @@ class _TaskTimelineState extends State<TaskTimeline>
                   }
                   return switch (entries[entries.length - index - 1]) {
                     TimelineMessageEntry(:final item) =>
-                      TimelineItemView(item: item, loadImage: widget.loadImage),
+                      TimelineItemView(
+                        item: item,
+                        loadImage: widget.loadImage,
+                        onAnswerQuestions: item.id == openQuestionItemId &&
+                                widget.onAnswerQuestions != null
+                            ? (answers) =>
+                                widget.onAnswerQuestions!(item, answers)
+                            : null,
+                      ),
                     TimelineActivityEntry(:final items) =>
                       TimelineActivityGroup(items: items),
                   };
@@ -1358,6 +1433,23 @@ class _TaskTimelineState extends State<TaskTimeline>
       ],
     );
   }
+}
+
+String? latestOpenTaskQuestionItemId(
+  List<TaskItem> items,
+  Set<String> answeredItemIds,
+) {
+  String? result;
+  for (final item in items) {
+    if (item.kind == TaskItemKind.user) {
+      result = null;
+    } else if (item.kind == TaskItemKind.agent &&
+        item.questions.isNotEmpty &&
+        !answeredItemIds.contains(item.id)) {
+      result = item.id;
+    }
+  }
+  return result;
 }
 
 class _OlderContextControl extends StatelessWidget {
@@ -1469,6 +1561,7 @@ class _TaskHeader extends StatelessWidget {
 class _Composer extends StatelessWidget {
   const _Composer({
     required this.controller,
+    required this.focusNode,
     required this.inputEnabled,
     required this.sendEnabled,
     required this.completions,
@@ -1481,6 +1574,7 @@ class _Composer extends StatelessWidget {
   });
 
   final TextEditingController controller;
+  final FocusNode focusNode;
   final bool inputEnabled;
   final bool sendEnabled;
   final List<ComposerCompletion> completions;
@@ -1530,6 +1624,7 @@ class _Composer extends StatelessWidget {
                   Expanded(
                     child: TextField(
                       controller: controller,
+                      focusNode: focusNode,
                       enabled: inputEnabled,
                       minLines: 1,
                       maxLines: 5,

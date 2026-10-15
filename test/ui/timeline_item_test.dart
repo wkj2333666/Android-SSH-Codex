@@ -5,12 +5,64 @@ import 'package:android_ssh_codex/src/tasks/message_attachments.dart';
 import 'package:android_ssh_codex/src/ui/timeline_entries.dart';
 import 'package:android_ssh_codex/src/ui/widgets/codex_directive_content.dart';
 import 'package:android_ssh_codex/src/ui/widgets/markdown_content.dart';
+import 'package:android_ssh_codex/src/ui/widgets/task_question_panel.dart';
 import 'package:android_ssh_codex/src/ui/widgets/timeline_item.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('async questions render selectable options and free text',
+      (tester) async {
+    List<String>? submitted;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: TimelineItemView(
+          item: const TaskItem(
+            id: 'question',
+            kind: TaskItemKind.agent,
+            text: 'Choose a target.',
+            questions: [
+              TaskQuestion(
+                title: 'Environment',
+                options: ['Staging', 'Production'],
+              ),
+            ],
+          ),
+          onAnswerQuestions: (answers) async => submitted = answers,
+        ),
+      ),
+    ));
+
+    expect(find.byKey(const Key('task-question-panel')), findsOneWidget);
+    expect(find.text('Staging'), findsOneWidget);
+    expect(find.byType(TextField), findsOneWidget);
+    await tester.tap(find.text('Staging'));
+    await tester.pump();
+    expect(
+      tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+      isNotNull,
+    );
+    await tester.enterText(find.byType(TextField), 'Canary');
+    await tester.tap(find.text('Submit answers'));
+    await tester.pump();
+
+    expect(submitted, ['Canary']);
+  });
+
+  test('multiple async answers become one readable user message', () {
+    expect(
+      formatTaskQuestionAnswers(
+        const [
+          TaskQuestion(title: 'Environment'),
+          TaskQuestion(title: 'Region'),
+        ],
+        const ['Production', 'Singapore'],
+      ),
+      '1. Environment\nProduction\n\n2. Region\nSingapore',
+    );
+  });
+
   testWidgets('visible images load automatically and failure can be retried',
       (tester) async {
     var reads = 0;

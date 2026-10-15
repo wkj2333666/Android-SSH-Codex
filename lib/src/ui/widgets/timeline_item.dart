@@ -10,6 +10,7 @@ import '../../tasks/message_attachments.dart';
 import 'codex_directive_content.dart';
 import 'markdown_content.dart';
 import 'remote_file_actions.dart';
+import 'task_question_panel.dart';
 
 typedef MessageTextCopier = Future<void> Function(String text);
 
@@ -20,19 +21,26 @@ class TimelineItemView extends StatelessWidget {
     required this.item,
     this.copyText = copyMessageText,
     this.loadImage,
+    this.onAnswerQuestions,
     super.key,
   });
 
   final TaskItem item;
   final MessageTextCopier copyText;
   final Future<Uint8List> Function(String)? loadImage;
+  final TaskQuestionSubmitter? onAnswerQuestions;
 
   @override
   Widget build(BuildContext context) {
     return switch (item.kind) {
       TaskItemKind.user ||
       TaskItemKind.agent =>
-        _Message(item: item, copyText: copyText, loadImage: loadImage),
+        _Message(
+          item: item,
+          copyText: copyText,
+          loadImage: loadImage,
+          onAnswerQuestions: onAnswerQuestions,
+        ),
       _ => _ActivityCard(item: item),
     };
   }
@@ -119,11 +127,17 @@ class _CompactActivityRow extends StatelessWidget {
 }
 
 class _Message extends StatelessWidget {
-  const _Message({required this.item, required this.copyText, this.loadImage});
+  const _Message({
+    required this.item,
+    required this.copyText,
+    this.loadImage,
+    this.onAnswerQuestions,
+  });
 
   final TaskItem item;
   final MessageTextCopier copyText;
   final Future<Uint8List> Function(String)? loadImage;
+  final TaskQuestionSubmitter? onAnswerQuestions;
 
   @override
   Widget build(BuildContext context) {
@@ -162,7 +176,22 @@ class _Message extends StatelessWidget {
                 ],
               )
             else
-              CodexDirectiveContent(text: item.text, copyText: copyText),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (item.text.trim().isNotEmpty)
+                    CodexDirectiveContent(
+                      text: item.text,
+                      copyText: copyText,
+                    ),
+                  if (item.questions.isNotEmpty)
+                    TaskQuestionPanel(
+                      key: ValueKey('questions-${item.id}'),
+                      questions: item.questions,
+                      onSubmit: onAnswerQuestions,
+                    ),
+                ],
+              ),
             if (sending || copyableText.isNotEmpty) ...[
               const SizedBox(height: 4),
               Row(
