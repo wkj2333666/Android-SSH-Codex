@@ -24,6 +24,37 @@ final class _RecordingTransport implements RpcTransport {
 }
 
 void main() {
+  test('agent messages retain async questions from current Codex protocol', () {
+    final snapshot = CodexRemoteApi.parseThread({
+      'id': 'thread',
+      'turns': [
+        {
+          'id': 'turn',
+          'items': [
+            {
+              'id': 'question',
+              'type': 'agentMessage',
+              'text': '',
+              'questions': [
+                {
+                  'title': 'Environment',
+                  'options': ['Staging', 'Production'],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(snapshot.items.single.questions.single.title, 'Environment');
+    expect(snapshot.items.single.text, isEmpty);
+    expect(
+      snapshot.items.single.questions.single.options,
+      ['Staging', 'Production'],
+    );
+  });
+
   test('image-only history is retained and survives item updates', () {
     final snapshot = CodexRemoteApi.parseThread({
       'id': 'thread',

@@ -518,6 +518,7 @@ TaskItem? _parseItem(Map<String, dynamic> item) {
     _ => TaskItemKind.notice,
   };
   final attachments = <MessageAttachment>[];
+  final questions = <TaskQuestion>[];
   if (kind == TaskItemKind.user && item['content'] is List) {
     for (final raw in item['content'] as List) {
       final part = _map(raw);
@@ -531,9 +532,25 @@ TaskItem? _parseItem(Map<String, dynamic> item) {
       }
     }
   }
+  if (kind == TaskItemKind.agent && item['questions'] is List) {
+    for (final raw in item['questions'] as List) {
+      final question = _map(raw);
+      final title = question['title'] as String?;
+      if (title == null || title.trim().isEmpty) continue;
+      questions.add(TaskQuestion(
+        title: title,
+        options: List.unmodifiable(
+          (question['options'] as List<dynamic>? ?? const [])
+              .whereType<String>()
+              .where((option) => option.trim().isNotEmpty),
+        ),
+      ));
+    }
+  }
   if ((kind == TaskItemKind.user || kind == TaskItemKind.agent) &&
       text.trim().isEmpty &&
-      attachments.isEmpty) {
+      attachments.isEmpty &&
+      questions.isEmpty) {
     return null;
   }
   final presentation = _itemPresentation(type, item, text);
@@ -543,6 +560,7 @@ TaskItem? _parseItem(Map<String, dynamic> item) {
     title: presentation.title,
     text: kind == TaskItemKind.user ? text : presentation.text,
     attachments: attachments,
+    questions: List.unmodifiable(questions),
     detail: presentation.detail,
     status: item['status']?.toString(),
   );
@@ -554,6 +572,8 @@ _ItemPresentation _itemPresentation(
   String extractedText,
 ) {
   switch (type) {
+    case 'agentMessage':
+      return _ItemPresentation(text: extractedText);
     case 'reasoning':
       final summary = _readTextBlocks(item['summary']);
       final content = _readTextBlocks(item['content']);

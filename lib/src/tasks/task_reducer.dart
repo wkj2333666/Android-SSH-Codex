@@ -6,6 +6,13 @@ enum TaskOwnership { available, local, external }
 
 enum TaskItemKind { user, agent, command, file, tool, reasoning, notice }
 
+final class TaskQuestion {
+  const TaskQuestion({required this.title, this.options = const []});
+
+  final String title;
+  final List<String> options;
+}
+
 final class TaskItem {
   const TaskItem({
     required this.id,
@@ -15,6 +22,7 @@ final class TaskItem {
     this.detail,
     this.status,
     this.attachments = const [],
+    this.questions = const [],
   });
 
   final String id;
@@ -24,12 +32,14 @@ final class TaskItem {
   final String? detail;
   final String? status;
   final List<MessageAttachment> attachments;
+  final List<TaskQuestion> questions;
 
   TaskItem copyWith({
     String? text,
     String? title,
     String? detail,
     String? status,
+    List<TaskQuestion>? questions,
   }) =>
       TaskItem(
         id: id,
@@ -39,6 +49,7 @@ final class TaskItem {
         detail: detail ?? this.detail,
         status: status ?? this.status,
         attachments: attachments,
+        questions: questions ?? this.questions,
       );
 }
 
@@ -666,7 +677,9 @@ TaskItem _preferCurrentStreamingItem(TaskItem current, TaskItem latest) {
       latest.kind == TaskItemKind.agent &&
       current.text.length > latest.text.length &&
       current.text.startsWith(latest.text)) {
-    return current;
+    return current.copyWith(
+      questions: latest.questions.isEmpty ? null : latest.questions,
+    );
   }
   return latest;
 }

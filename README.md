@@ -228,7 +228,9 @@ Limits: 4 attachments per message and 1 GiB per file. Selection is streamed to
 an app cache file and immediately uploaded over a dedicated SSH/SFTP connection,
 so large files are not retained in Dart or Kotlin memory. The attachment chip
 shows upload progress; an interrupted upload reconnects and resumes from the
-remote acknowledged offset. Tap a failed attachment to retry from that offset.
+remote acknowledged offset. Upload progress repaints only the attachment chip,
+so the message editor remains usable; an uploading attachment can be removed to
+cancel its transfer. Tap a failed attachment to retry from that offset.
 PNG, JPEG, WebP and GIF are accepted as images (up to 64
 megapixels and 16,384 pixels per side); other formats can be sent
 as files. Queued messages and steering preserve image attachments.
@@ -284,11 +286,13 @@ after saving, cancelling or failure. HTTP/HTTPS links still open in your browser
 Remote files must exist on the connected SSH host; links to a different sandbox
 cannot be downloaded through this connection.
 
-Structured agent questions appear above the composer. Select an option or enter
-a custom answer when offered, then submit; nothing is automatically selected or
-submitted. Both blocking and non-blocking questions are supported. Skip submits
-empty answers. Prompts disappear when resolved by another client and are cleared
-on disconnect, so an old prompt cannot answer a new connection's request.
+Blocking structured questions appear above the composer. Select an option or
+enter a custom answer when offered, then submit; nothing is automatically
+selected or submitted. Skip submits empty answers. Prompts disappear when
+resolved by another client and are cleared on disconnect, so an old prompt
+cannot answer a new connection's request. Newer asynchronous Codex questions are
+rendered inside the agent message with choice buttons and an editable answer
+field; submitting starts or steers the next user message as appropriate.
 
 ### Collect Android logs
 

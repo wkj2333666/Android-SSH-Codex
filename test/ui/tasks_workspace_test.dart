@@ -631,6 +631,43 @@ void main() {
       ),
       isFalse,
     );
+    expect(
+      isTaskComposerSendEnabled(
+        task: available,
+        connected: true,
+        sending: false,
+        attachmentsReady: false,
+      ),
+      isFalse,
+    );
+    expect(
+      isTaskComposerInputEnabled(task: available, connected: true),
+      isTrue,
+    );
+  });
+
+  test('only the latest unanswered async question remains interactive', () {
+    const question = TaskItem(
+      id: 'question',
+      kind: TaskItemKind.agent,
+      text: 'Choose',
+      questions: [TaskQuestion(title: 'Environment')],
+    );
+    expect(latestOpenTaskQuestionItemId([question], const {}), 'question');
+    expect(
+      latestOpenTaskQuestionItemId(
+        const [
+          question,
+          TaskItem(id: 'answer', kind: TaskItemKind.user, text: 'Staging'),
+        ],
+        const {},
+      ),
+      isNull,
+    );
+    expect(
+      latestOpenTaskQuestionItemId(const [question], const {'question'}),
+      isNull,
+    );
   });
 
   test('a failed send restores its draft only when no new draft was typed', () {
