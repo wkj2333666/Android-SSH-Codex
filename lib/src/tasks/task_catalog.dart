@@ -254,14 +254,6 @@ final class TaskDetailLoadState {
     _error = error;
   }
 
-  void cancelPending() {
-    _generation++;
-    _isInitialLoading = false;
-    _isLoadingOlder = false;
-    _initialError = null;
-    _olderError = null;
-  }
-
   void clear() {
     _generation++;
     _taskId = null;
@@ -363,6 +355,14 @@ final class TaskHistoryLoadState {
       _olderError = error;
     }
     return true;
+  }
+
+  void cancelPending() {
+    _generation++;
+    _isInitialLoading = false;
+    _isLoadingOlder = false;
+    _initialError = null;
+    _olderError = null;
   }
 
   void clear() {
