@@ -75,6 +75,7 @@ void main() {
         home: Scaffold(
             body: TaskListPane(
       model: TaskListPaneModel(
+        selectedProjectId: null,
         projects: const [],
         projectTasks: const [],
         unassignedTasks: const [],
