@@ -33,7 +33,8 @@ void main() {
     const fenced = '```text\n$fallback\n```';
     const indented = '    扬声器接在哪里？\n    - 主板 3.5 mm 音箱\n    - HDMI';
     expect(questionMessageBody(fenced, questions), fenced);
-    expect(questionMessageBody(indented, questions), indented.trim());
+    expect(questionMessageBody(indented, questions), indented);
+    expect(questionMessageBody('$fallback\n\n$indented', questions), indented);
   });
 
   test('multiple questions and soft-wrapped titles are deduplicated', () {

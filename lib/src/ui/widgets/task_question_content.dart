@@ -7,6 +7,7 @@ String questionMessageBody(String text, List<TaskQuestion> questions) {
   if (questions.isEmpty) return text;
   final lines = text.split('\n');
   final body = <String>[];
+  var removed = false;
   String? fence;
   var index = 0;
   while (index < lines.length) {
@@ -45,10 +46,12 @@ String questionMessageBody(String text, List<TaskQuestion> questions) {
       body.add(line);
       index++;
     } else {
+      removed = true;
       index = end;
     }
   }
-  return body.join('\n').trim();
+  if (!removed) return text;
+  return body.join('\n').replaceAll(RegExp(r'^\n+|\n+$'), '');
 }
 
 int? _matchText(List<String> lines, int start, String text,
