@@ -578,8 +578,9 @@ void main() {
     await tester.enterText(find.byType(TextField), 'editable while offline');
     expect(controller.draftForTask('first').composer.text,
         'editable while offline');
-    expect(tester.widget<IconButton>(find.byTooltip('Send message')).onPressed,
-        isNull);
+    final sendButton = tester.widget<IconButton>(find.byWidgetPredicate(
+        (widget) => widget is IconButton && widget.tooltip == 'Send message'));
+    expect(sendButton.onPressed, isNull);
     await tester.pumpWidget(const SizedBox());
     controller.dispose();
   });
