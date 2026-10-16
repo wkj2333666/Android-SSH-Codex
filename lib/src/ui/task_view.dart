@@ -1519,8 +1519,8 @@ class _Composer extends StatelessWidget {
                       decoration: const InputDecoration(
                         hintText: 'Message Codex',
                         isDense: true,
-                        contentPadding: EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 10),
+                        contentPadding:
+                            EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                       ),
                     ),
                   ),
