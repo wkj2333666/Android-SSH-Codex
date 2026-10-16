@@ -5,7 +5,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:dartssh2/dartssh2.dart';
 
-/// Only explicit metadata goes here: never RPC payloads or exception messages.
+import 'transport/codex_daemon.dart';
+import 'diagnostics_redaction.dart';
+
+export 'diagnostics_redaction.dart';
+
+/// Never records RPC payloads. Bootstrap errors get bounded, redacted details.
 abstract final class Diagnostics {
   static const channel = MethodChannel('android_ssh_codex/diagnostics');
   static int _pending = 0;
@@ -33,7 +38,10 @@ abstract final class Diagnostics {
     }
   }
 
-  static Map<String, Object?> errorFields(Object error) {
+  static Map<String, Object?> errorFields(
+    Object error, {
+    Iterable<String> sensitiveValues = const [],
+  }) {
     final types = <String>[];
     Object cause = error;
     for (var depth = 0; depth < 8; depth++) {
@@ -54,6 +62,7 @@ abstract final class Diagnostics {
     };
     // errno names below are Android/Linux values, not proof of who reset TCP.
     final reason = switch (cause) {
+      CodexBootstrapException(:final reason) => reason,
       TimeoutException() => 'timeout',
       SSHAuthFailError() => 'ssh_authentication_failed',
       SSHHostkeyError() => 'ssh_host_key_rejected',
@@ -80,6 +89,12 @@ abstract final class Diagnostics {
     };
     return {
       'errorType': error.runtimeType.toString(),
+      if (cause is CodexBootstrapException) ...{
+        'errorDetail':
+            redactBootstrapDiagnostic(cause.message, sensitiveValues),
+        if (cause.exitCode != null) 'exitCode': cause.exitCode,
+        if (cause.exitSignal != null) 'exitSignal': cause.exitSignal,
+      },
       'errorChain': types,
       'reason': reason,
       'reasonEvidence': reason == 'unknown' ? 'unavailable' : 'exception',

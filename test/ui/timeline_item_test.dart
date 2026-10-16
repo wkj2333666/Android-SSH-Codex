@@ -12,6 +12,32 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final answered in [false, true]) {
+    testWidgets('question fallback is not duplicated (answered: $answered)',
+        (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: TimelineItemView(
+            item: const TaskItem(
+              id: 'question',
+              kind: TaskItemKind.agent,
+              text: 'Environment?\n\n- Staging\n- Production',
+              questions: [
+                TaskQuestion(
+                    title: 'Environment?', options: ['Staging', 'Production']),
+              ],
+            ),
+            onAnswerQuestions: answered ? null : (_) async {},
+          ),
+        ),
+      ));
+      expect(find.text('Environment?'), findsOneWidget);
+      expect(find.text('Staging'), findsOneWidget);
+      expect(find.byType(MarkdownContent), findsNothing);
+      expect(find.byKey(const Key('task-question-panel')), findsOneWidget);
+    });
+  }
+
   testWidgets('async questions render selectable options and free text',
       (tester) async {
     List<String>? submitted;

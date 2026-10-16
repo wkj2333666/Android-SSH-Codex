@@ -58,6 +58,7 @@ final class RemoteModel {
     required this.isDefault,
     required this.defaultReasoningEffort,
     required this.supportedReasoningEfforts,
+    this.serviceTiers = const [],
   });
 
   final String id;
@@ -67,6 +68,14 @@ final class RemoteModel {
   final bool isDefault;
   final String defaultReasoningEffort;
   final List<RemoteReasoningEffort> supportedReasoningEfforts;
+  final List<String> serviceTiers;
+  String? get fastServiceTier => serviceTiers.contains('priority')
+      ? 'priority'
+      : serviceTiers.contains('fast')
+          ? 'fast'
+          : null;
+  bool get supportsFast =>
+      serviceTiers.contains('fast') || serviceTiers.contains('priority');
 }
 
 final class RemoteThreadGoal {
@@ -345,6 +354,7 @@ final class CodexRemoteApi {
     RemoteSkill? skill,
     String? model,
     String? effort,
+    String? serviceTier,
     List<String> imagePaths = const [],
   }) async {
     await _rpc.request('turn/start', {
@@ -361,6 +371,7 @@ final class CodexRemoteApi {
       ],
       if (model != null) 'model': model,
       if (effort != null) 'effort': effort,
+      if (serviceTier != null) 'serviceTierForTurn': serviceTier,
     });
   }
 
@@ -853,6 +864,13 @@ RemoteModel? _parseModel(Map<String, dynamic> raw) {
     isDefault: raw['isDefault'] == true,
     defaultReasoningEffort: defaultEffort,
     supportedReasoningEfforts: List.unmodifiable(efforts),
+    serviceTiers: List.unmodifiable([
+      for (final tier in raw['serviceTiers'] as List<dynamic>? ?? const [])
+        if (_map(tier)['id'] case final String id) id,
+      for (final tier
+          in raw['additionalSpeedTiers'] as List<dynamic>? ?? const [])
+        if (tier is String) tier,
+    ]),
   );
 }
 

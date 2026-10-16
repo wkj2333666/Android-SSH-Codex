@@ -7,6 +7,7 @@ void main() {
   const models = [
     RemoteModel(
       id: 'sol-entry',
+      serviceTiers: ['priority'],
       model: 'gpt-5.6-sol',
       displayName: 'GPT-5.6 Sol',
       description: 'Frontier coding model',
@@ -38,6 +39,30 @@ void main() {
       ],
     ),
   ];
+
+  testWidgets(
+      'Fast is explicit, retained across effort changes, reset for unsupported models',
+      (tester) async {
+    TurnSettings? selection;
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: TurnSettingsPicker(
+      models: models,
+      value: const TurnSettings(model: 'gpt-5.6-sol', effort: 'high'),
+      onChanged: (value) => selection = value,
+    ))));
+    await tester.tap(find.byKey(const Key('turn-settings-selector')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('turn-fast-toggle')));
+    await tester.tap(find.byKey(const Key('turn-fast-toggle')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('turn-effort-medium')));
+    await tester.tap(find.byKey(const Key('turn-effort-medium')));
+    await tester.tap(find.byKey(const Key('turn-settings-apply')));
+    await tester.pumpAndSettle();
+    expect(selection!.serviceTier, 'priority');
+    expect(selection!.effort, 'medium');
+  });
 
   testWidgets('selecting a model selects its advertised default effort',
       (tester) async {

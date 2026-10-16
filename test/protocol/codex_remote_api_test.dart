@@ -522,6 +522,9 @@ void main() {
               'hidden': false,
               'isDefault': true,
               'defaultReasoningEffort': 'high',
+              'serviceTiers': [
+                {'id': 'fast', 'name': 'Fast', 'description': ''}
+              ],
               'supportedReasoningEfforts': [
                 {
                   'reasoningEffort': 'medium',
@@ -577,6 +580,8 @@ void main() {
       ]);
       expect(result.first.isDefault, isTrue);
       expect(result.first.defaultReasoningEffort, 'high');
+      expect(result.first.supportsFast, isTrue);
+      expect(result.last.supportsFast, isFalse);
       expect(
         result.first.supportedReasoningEfforts
             .map((option) => '${option.effort}:${option.description}'),
@@ -622,6 +627,24 @@ void main() {
       await rpc.close();
     }
   });
+
+  for (final tier in ['priority', 'default']) {
+    test('turn start sends explicit $tier service tier', () async {
+      final transport = _RecordingTransport();
+      final rpc = JsonRpcClient(transport)..start();
+      try {
+        final turn =
+            CodexRemoteApi(rpc).startTurn('thread', 'hello', serviceTier: tier);
+        final request =
+            jsonDecode(transport.sent.single) as Map<String, dynamic>;
+        expect(request['params']['serviceTierForTurn'], tier);
+        transport.incoming.add(jsonEncode({'id': request['id'], 'result': {}}));
+        await turn;
+      } finally {
+        await rpc.close();
+      }
+    });
+  }
 
   test('starts a turn with selected model and reasoning effort', () async {
     final transport = _RecordingTransport();

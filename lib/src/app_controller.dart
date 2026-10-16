@@ -17,6 +17,8 @@ import 'protocol/foreground_probe.dart';
 import 'protocol/json_rpc_client.dart';
 import 'protocol/websocket_rpc_transport.dart';
 import 'tasks/task_catalog.dart';
+import 'tasks/task_draft.dart';
+import 'tasks/turn_settings.dart';
 import 'tasks/task_event_batcher.dart';
 import 'tasks/task_message_queue.dart';
 import 'tasks/task_operation_lock.dart';
@@ -50,6 +52,7 @@ final class QueuedTaskMessage {
     this.skill,
     this.model,
     this.effort,
+    this.serviceTier,
     this.imagePaths = const [],
   });
 
@@ -58,6 +61,7 @@ final class QueuedTaskMessage {
   final RemoteSkill? skill;
   final String? model;
   final String? effort;
+  final String? serviceTier;
   final List<String> imagePaths;
 
   String get timelineItemId => 'local-user:$id';
@@ -188,6 +192,24 @@ final class AppController extends ChangeNotifier {
   List<RemoteModel> get models => _models;
   AppSection get section => _section;
   RemoteConnectionPhase get connectionPhase => _connectionPhase;
+  final Map<(String, String), TaskDraft> _drafts = {};
+
+  TaskDraft draftForTask(String taskId) {
+    final hostId = _selectedHostId ?? '';
+    return _drafts.putIfAbsent(
+        (hostId, taskId),
+        () => TaskDraft(
+              upload: (attachment, target, cancellation, {onProgress}) {
+                if (_selectedHostId != hostId) {
+                  throw StateError(
+                      'Reconnect to the original host to resume upload.');
+                }
+                return uploadAttachmentNow(attachment, target, cancellation,
+                    onProgress: onProgress);
+              },
+            ));
+  }
+
   String? get selectedHostId => _selectedHostId;
   String? get selectedProjectId => _selectedProjectId;
   String? get selectedTaskId => _selectedTaskId;
@@ -283,6 +305,9 @@ final class AppController extends ChangeNotifier {
 
   Future<void> deleteProfile(String id) async {
     if (_selectedHostId == id) await disconnect();
+    for (final key in _drafts.keys.where((key) => key.$1 == id).toList()) {
+      _drafts.remove(key)?.dispose();
+    }
     await _store.deleteProfile(id);
     _profiles = await _store.readProfiles();
     notifyListeners();
@@ -359,10 +384,20 @@ final class AppController extends ChangeNotifier {
       final client = ssh.client;
       final socketPath = await resolveCodexSocketForProfile(
         (command, {environment}) async {
+          final commandWatch = Stopwatch()..start();
           final result = await client.runWithResult(
             command,
             environment: environment,
           );
+          Diagnostics.record('bootstrap.commandResult', {
+            'attempt': attempt,
+            'mode': profile.appServerMode.name,
+            'durationMs': commandWatch.elapsedMilliseconds,
+            'exitCode': result.exitCode,
+            'exitSignal': result.exitSignal?.signalName,
+            'stdoutBytes': result.stdout.length,
+            'stderrBytes': result.stderr.length,
+          });
           return SshCommandResult(
             stdout: result.stdout,
             stderr: result.stderr,
@@ -450,7 +485,9 @@ final class AppController extends ChangeNotifier {
       Diagnostics.record('connection.failed', {
         'attempt': attempt,
         'stage': stage.name,
-        ...Diagnostics.errorFields(exception),
+        'appServerMode': profile.appServerMode.name,
+        ...Diagnostics.errorFields(exception,
+            sensitiveValues: profile.environment.values),
       });
       debugPrint(
         'Connection failed during ${stage.name} for '
@@ -1336,6 +1373,7 @@ final class AppController extends ChangeNotifier {
     String? projectId,
     String? model,
     String? effort,
+    String? serviceTier,
   }) async {
     final api = _requireApi();
     final attempt = _connectionAttempt;
@@ -1349,6 +1387,11 @@ final class AppController extends ChangeNotifier {
         await api.startThread(cwd: cwd, projectId: project?.remoteId);
     if (!_isCurrentSession(api, attempt, epoch, profileId)) return;
     _subscribedThreadIds = {..._subscribedThreadIds, threadId};
+    draftForTask(threadId).settings = TurnSettings(
+      model: model,
+      effort: effort,
+      serviceTier: serviceTier ?? 'default',
+    );
     _selectedTaskId = threadId;
     _taskReducer.applyEvent(
       _epoch,
@@ -1360,6 +1403,7 @@ final class AppController extends ChangeNotifier {
       prompt,
       model: model,
       effort: effort,
+      serviceTier: serviceTier,
     );
     if (!_isCurrentSession(api, attempt, epoch, profileId)) return;
     _taskReducer.setTurnSettings(epoch, threadId, model, effort);
@@ -1517,6 +1561,7 @@ final class AppController extends ChangeNotifier {
     RemoteSkill? skill,
     String? model,
     String? effort,
+    String? serviceTier,
     List<RemoteAttachment> attachments = const [],
   }) async {
     final api = _requireApi();
@@ -1534,6 +1579,7 @@ final class AppController extends ChangeNotifier {
       skill: skill,
       model: model,
       effort: effort,
+      serviceTier: serviceTier,
       imagePaths: List.unmodifiable(
           attachments.where((file) => file.isImage).map((file) => file.path)),
     );
@@ -1699,6 +1745,7 @@ final class AppController extends ChangeNotifier {
         skill: pending.skill,
         model: pending.model,
         effort: pending.effort,
+        serviceTier: pending.serviceTier,
         imagePaths: pending.imagePaths,
       );
       _ensureCurrentSession(api, attempt, epoch, profileId);
@@ -2344,6 +2391,10 @@ final class AppController extends ChangeNotifier {
 
   @override
   void dispose() {
+    for (final draft in _drafts.values) {
+      draft.dispose();
+    }
+    _drafts.clear();
     cancelDownload();
     _network.dispose();
     _connectionAttempt++;

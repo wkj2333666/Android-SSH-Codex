@@ -4,35 +4,9 @@ import 'package:flutter/material.dart';
 
 import '../protocol/codex_remote_api.dart';
 
-final class TurnSettings {
-  const TurnSettings({this.model, this.effort});
+import '../tasks/turn_settings.dart';
 
-  final String? model;
-  final String? effort;
-}
-
-/// Resolve once for both display and sending; never label an implicit choice
-/// with a concrete model while sending a different server-side default.
-TurnSettings resolveTurnSettings(
-  List<RemoteModel> models,
-  TurnSettings value, {
-  String? model,
-  String? effort,
-  bool useCatalogDefault = true,
-}) {
-  final name = value.model ??
-      model ??
-      (useCatalogDefault
-          ? models.where((candidate) => candidate.isDefault).firstOrNull?.model
-          : null);
-  final entry =
-      models.where((candidate) => candidate.model == name).firstOrNull;
-  return TurnSettings(
-    model: name,
-    effort: (value.model != null ? value.effort : effort) ??
-        entry?.defaultReasoningEffort,
-  );
-}
+export '../tasks/turn_settings.dart';
 
 class TurnSettingsPicker extends StatelessWidget {
   const TurnSettingsPicker({
@@ -58,11 +32,16 @@ class TurnSettingsPicker extends StatelessWidget {
     final label = settings.model == null
         ? 'Model unavailable'
         : '${model?.displayName ?? settings.model} · '
-            '${settings.effort ?? 'Effort unavailable'}';
+            '${settings.effort ?? 'Effort unavailable'}'
+            '${settings.fast ? ' · Fast' : ''}';
     return Align(
       alignment: Alignment.centerLeft,
       child: OutlinedButton(
         key: const Key('turn-settings-selector'),
+        style: OutlinedButton.styleFrom(
+          visualDensity: VisualDensity.compact,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+        ),
         onPressed: enabled && models.isNotEmpty
             ? () async {
                 FocusScope.of(context).unfocus();
@@ -146,6 +125,9 @@ class _TurnSettingsSheetState extends State<_TurnSettingsSheet> {
                         _draft = TurnSettings(
                           model: candidate.model,
                           effort: candidate.defaultReasoningEffort,
+                          serviceTier: _draft.fast
+                              ? candidate.fastServiceTier ?? 'default'
+                              : _draft.serviceTier,
                         );
                       }),
                     ),
@@ -164,6 +146,27 @@ class _TurnSettingsSheetState extends State<_TurnSettingsSheet> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      SwitchListTile.adaptive(
+                        key: const Key('turn-fast-toggle'),
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                        title: const Text('Fast'),
+                        subtitle: Text(model.supportsFast
+                            ? 'New turns only · Higher usage'
+                            : 'Not advertised by this model/server'),
+                        value: _draft.fast,
+                        onChanged: model.supportsFast
+                            ? (enabled) => setState(() {
+                                  _draft = TurnSettings(
+                                    model: _draft.model,
+                                    effort: _draft.effort,
+                                    serviceTier: enabled
+                                        ? model.fastServiceTier
+                                        : 'default',
+                                  );
+                                })
+                            : null,
+                      ),
                       const Text('Reasoning effort'),
                       Wrap(
                         spacing: 8,
@@ -179,7 +182,8 @@ class _TurnSettingsSheetState extends State<_TurnSettingsSheet> {
                                 onSelected: (_) => setState(() {
                                   _draft = TurnSettings(
                                       model: model.model,
-                                      effort: option.effort);
+                                      effort: option.effort,
+                                      serviceTier: _draft.serviceTier);
                                 }),
                               ),
                             ),

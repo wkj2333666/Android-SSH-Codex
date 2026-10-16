@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:android_ssh_codex/src/diagnostics.dart';
+import 'package:android_ssh_codex/src/transport/codex_daemon.dart';
 import 'package:android_ssh_codex/src/protocol/json_rpc_client.dart';
 import 'package:android_ssh_codex/src/protocol/rpc_transport.dart';
 import 'package:flutter/foundation.dart';
@@ -19,6 +20,27 @@ void main() {
   tearDown(() {
     debugDefaultTargetPlatformOverride = null;
     messenger.setMockMethodCallHandler(Diagnostics.channel, null);
+  });
+
+  test('bootstrap failures include bounded redacted reason and exit status',
+      () {
+    final fields = Diagnostics.errorFields(
+      const CodexBootstrapException(
+          'Shared start failed: permission denied\nAPI_KEY=sk-private\nBearer abc123\nprofile-value',
+          reason: 'shared_start_failed',
+          exitCode: 127,
+          exitSignal: 'TERM'),
+      sensitiveValues: ['profile-value'],
+    );
+    expect(fields['reason'], 'shared_start_failed');
+    expect(fields['exitCode'], 127);
+    expect(fields['exitSignal'], 'TERM');
+    expect(fields['errorDetail'], contains('permission denied'));
+    expect(fields['errorDetail'], isNot(contains('sk-private')));
+    expect(fields['errorDetail'], isNot(contains('abc123')));
+    expect(fields['errorDetail'], isNot(contains('profile-value')));
+    expect(redactBootstrapDiagnostic('x' * 10000, []).length,
+        lessThanOrEqualTo(1601));
   });
 
   test('records timestamped metadata and exports with cancellation', () async {

@@ -11,6 +11,7 @@ import 'codex_directive_content.dart';
 import 'markdown_content.dart';
 import 'remote_file_actions.dart';
 import 'task_question_panel.dart';
+import 'task_question_content.dart';
 
 typedef MessageTextCopier = Future<void> Function(String text);
 
@@ -144,6 +145,7 @@ class _Message extends StatelessWidget {
     final copyableText = _copyableMessageText(item);
     final sending = user && item.status == 'sending';
     final content = parseAttachmentMessage(item.text, item.attachments);
+    final agentText = questionMessageBody(item.text, item.questions);
     return Align(
       alignment: user ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -177,9 +179,9 @@ class _Message extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (item.text.trim().isNotEmpty)
+                  if (agentText.trim().isNotEmpty)
                     CodexDirectiveContent(
-                      text: item.text,
+                      text: agentText,
                       copyText: copyText,
                     ),
                   if (item.questions.isNotEmpty)

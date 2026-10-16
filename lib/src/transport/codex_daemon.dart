@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:dartssh2/dartssh2.dart';
 
+import '../diagnostics_redaction.dart';
+
 final class SshCommandResult {
   const SshCommandResult({
     required this.stdout,
@@ -18,9 +20,17 @@ final class SshCommandResult {
 }
 
 final class CodexBootstrapException implements Exception {
-  const CodexBootstrapException(this.message);
+  const CodexBootstrapException(
+    this.message, {
+    this.reason = 'bootstrap_failed',
+    this.exitCode,
+    this.exitSignal,
+  });
 
   final String message;
+  final String reason;
+  final int? exitCode;
+  final String? exitSignal;
 
   @override
   String toString() => message;
@@ -88,7 +98,10 @@ final class CodexDaemon {
     if (failures.isNotEmpty) {
       throw CodexBootstrapException(
         'Remote Codex bootstrap failed with ${failures.join(' and ')}: '
-        '${_diagnostic(result)}',
+        '${_diagnostic(result, environment)}',
+        reason: 'bootstrap_command_failed',
+        exitCode: result.exitCode,
+        exitSignal: result.exitSignal,
       );
     }
 
@@ -101,7 +114,8 @@ final class CodexDaemon {
     if (socketPath == null) {
       throw CodexBootstrapException(
         'Remote Codex bootstrap did not report its socket: '
-        '${_diagnostic(result)}',
+        '${_diagnostic(result, environment)}',
+        reason: 'bootstrap_socket_missing',
       );
     }
     return socketPath;
@@ -122,7 +136,10 @@ final class CodexDaemon {
       }
       throw CodexBootstrapException(
         'Shared app-server start failed with ${_failureSummary(result)}: '
-        '${_diagnostic(result)}',
+        '${_diagnostic(result, environment)}',
+        reason: 'shared_start_failed',
+        exitCode: result.exitCode,
+        exitSignal: result.exitSignal,
       );
     }
 
@@ -133,18 +150,21 @@ final class CodexDaemon {
     } on FormatException {
       throw CodexBootstrapException(
         'Shared app-server daemon returned invalid JSON: '
-        '${_diagnostic(result)}',
+        '${_diagnostic(result, environment)}',
+        reason: 'shared_start_invalid_json',
       );
     }
     if (decoded is! Map<String, dynamic>) {
       throw const CodexBootstrapException(
         'Shared app-server daemon returned invalid JSON: expected an object.',
+        reason: 'shared_start_invalid_shape',
       );
     }
     final socketPath = decoded['socketPath'];
     if (socketPath is! String || !_isAbsoluteUnixSocketPath(socketPath)) {
       throw const CodexBootstrapException(
         'Shared app-server daemon returned an invalid socketPath.',
+        reason: 'shared_start_invalid_socket',
       );
     }
     return socketPath;
@@ -185,7 +205,10 @@ final class CodexDaemon {
     if (_commandFailed(result)) {
       throw CodexBootstrapException(
         'Shared app-server is unavailable with this Codex version. Update '
-        'Codex, or select Custom or Isolated. ${_diagnostic(result)}',
+        'Codex, or select Custom or Isolated. ${_diagnostic(result, environment)}',
+        reason: 'shared_socket_unavailable',
+        exitCode: result.exitCode,
+        exitSignal: result.exitSignal,
       );
     }
     final socketPath = utf8.decode(result.stdout, allowMalformed: true).trim();
@@ -193,6 +216,7 @@ final class CodexDaemon {
       throw const CodexBootstrapException(
         'Shared app-server socket probe returned an invalid path. Update '
         'Codex, or select Custom or Isolated.',
+        reason: 'shared_probe_invalid_socket',
       );
     }
     return socketPath;
@@ -227,9 +251,17 @@ final class CodexDaemon {
       value.startsWith('/') &&
       !RegExp(r'[\x00-\x1F\x7F]').hasMatch(value);
 
-  static String _diagnostic(SshCommandResult result) => _boundedDiagnostic(
-        result.stderr.isNotEmpty ? result.stderr : result.stdout,
-      );
+  static String _diagnostic(
+      SshCommandResult result, Map<String, String> environment) {
+    final text = [
+      if (result.stderr.isNotEmpty)
+        'stderr: ${utf8.decode(result.stderr, allowMalformed: true)}',
+      if (result.stdout.isNotEmpty)
+        'stdout: ${utf8.decode(result.stdout, allowMalformed: true)}',
+    ].join('\n');
+    return _boundedDiagnostic(
+        utf8.encode(redactBootstrapDiagnostic(text, environment.values)));
+  }
 
   static const _maxDiagnosticCharacters = 1200;
 
