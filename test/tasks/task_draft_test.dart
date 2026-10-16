@@ -10,7 +10,8 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('offline files wait, resume once, and deleted files stay removed', () async {
+  test('offline files wait, resume once, and deleted files stay removed',
+      () async {
     var connected = false;
     var calls = 0;
     final draft = TaskDraft(
@@ -20,7 +21,8 @@ void main() {
         return const RemoteAttachment(path: '/remote/file', isImage: false);
       },
     );
-    const local = LocalAttachment(name: 'offline', path: '/nonexistent/offline', size: 1, isImage: false);
+    const local = LocalAttachment(
+        name: 'offline', path: '/nonexistent/offline', size: 1, isImage: false);
     draft.addAttachment(local);
     draft.addAttachment(local);
     expect(calls, 0);

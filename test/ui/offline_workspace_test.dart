@@ -11,18 +11,31 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   final cachedTask = TaskSnapshot(
-    id: 'cached', title: 'Cached task', status: TaskStatus.completed,
-    cwd: '/work', updatedAt: DateTime.utc(2026, 10, 16),
-    items: const [TaskItem(id: 'reply', kind: TaskItemKind.agent, text: 'Cached reply')],
+    id: 'cached',
+    title: 'Cached task',
+    status: TaskStatus.completed,
+    cwd: '/work',
+    updatedAt: DateTime.utc(2026, 10, 16),
+    items: const [
+      TaskItem(id: 'reply', kind: TaskItemKind.agent, text: 'Cached reply')
+    ],
   );
   const model = RemoteModel(
-    id: 'model', model: 'model', displayName: 'Cached model', description: '',
-    isDefault: true, defaultReasoningEffort: 'high',
-    supportedReasoningEfforts: [RemoteReasoningEffort(effort: 'high', description: '')],
+    id: 'model',
+    model: 'model',
+    displayName: 'Cached model',
+    description: '',
+    isDefault: true,
+    defaultReasoningEffort: 'high',
+    supportedReasoningEfforts: [
+      RemoteReasoningEffort(effort: 'high', description: '')
+    ],
   );
 
-  testWidgets('disconnect retains cached messages and model choices', (tester) async {
-    final controller = AppController.memory(cachedTasks: [cachedTask], cachedModels: [model]);
+  testWidgets('disconnect retains cached messages and model choices',
+      (tester) async {
+    final controller =
+        AppController.memory(cachedTasks: [cachedTask], cachedModels: [model]);
     await controller.selectTask('cached');
     await controller.disconnect();
     controller.clearSelectedTask();
@@ -33,8 +46,11 @@ void main() {
     expect(controller.selectedTask!.items.single.text, 'Cached reply');
     expect(controller.models, [model]);
     expect(controller.isTaskDetailLoading('cached'), isFalse);
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: TaskView(
-      controller: controller, task: controller.selectedTask!,
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: TaskView(
+      controller: controller,
+      task: controller.selectedTask!,
     ))));
     expect(find.text('Offline · Showing cached messages'), findsOneWidget);
     await tester.tap(find.byKey(const Key('turn-settings-selector')));
@@ -43,8 +59,10 @@ void main() {
     await tester.tap(find.byKey(const Key('turn-settings-apply')));
     await tester.pumpAndSettle();
     expect(controller.draftForTask('cached').settings.model, 'model');
-    final timeline = find.descendant(of: find.byType(TaskTimeline), matching: find.byType(ListView));
-    expect(tester.widget<ListView>(timeline).padding, const EdgeInsets.fromLTRB(16, 12, 16, 12));
+    final timeline = find.descendant(
+        of: find.byType(TaskTimeline), matching: find.byType(ListView));
+    expect(tester.widget<ListView>(timeline).padding,
+        const EdgeInsets.fromLTRB(16, 12, 16, 12));
     await tester.pumpWidget(const SizedBox());
     controller.dispose();
   });
@@ -53,11 +71,16 @@ void main() {
     String? selected;
     final controller = AppController.memory(cachedTasks: [cachedTask]);
     addTearDown(controller.dispose);
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: TaskListPane(
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: TaskListPane(
       model: TaskListPaneModel(
-        projects: const [], projectTasks: const [], unassignedTasks: const [],
+        projects: const [],
+        projectTasks: const [],
+        unassignedTasks: const [],
         recentTasks: controller.recentTasks,
-        connected: false, initialMode: TaskListMode.tasks,
+        connected: false,
+        initialMode: TaskListMode.tasks,
       ),
       onTaskSelected: (id) => selected = id,
     ))));
@@ -68,17 +91,27 @@ void main() {
     expect(find.text('No project selected'), findsWidgets);
   });
 
-  testWidgets('offline attachment picker queues files without starting SSH', (tester) async {
+  testWidgets('offline attachment picker queues files without starting SSH',
+      (tester) async {
     final controller = AppController.memory(cachedTasks: [cachedTask]);
     await controller.selectTask('cached');
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(Attachments.channel, (MethodCall call) async => {
-          'name': 'offline.txt', 'path': '/nonexistent/offline-file', 'size': 1, 'isImage': false,
-        });
-    addTearDown(() => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+            Attachments.channel,
+            (MethodCall call) async => {
+                  'name': 'offline.txt',
+                  'path': '/nonexistent/offline-file',
+                  'size': 1,
+                  'isImage': false,
+                });
+    addTearDown(() => TestDefaultBinaryMessengerBinding
+        .instance.defaultBinaryMessenger
         .setMockMethodCallHandler(Attachments.channel, null));
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: TaskView(
-      controller: controller, task: controller.selectedTask!,
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: TaskView(
+      controller: controller,
+      task: controller.selectedTask!,
     ))));
     await tester.tap(find.byTooltip('Attach image or file'));
     await tester.pumpAndSettle();

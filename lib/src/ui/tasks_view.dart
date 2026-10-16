@@ -411,8 +411,10 @@ class _TaskListPaneState extends State<TaskListPane> {
     final unassignedTasks = _filtered(model.unassignedTasks);
     final canShowTasks = model.connected ||
         model.connectionPhase == RemoteConnectionPhase.reconnecting ||
-        model.projects.isNotEmpty || model.projectTasks.isNotEmpty ||
-        model.recentTasks.isNotEmpty || model.unassignedTasks.isNotEmpty;
+        model.projects.isNotEmpty ||
+        model.projectTasks.isNotEmpty ||
+        model.recentTasks.isNotEmpty ||
+        model.unassignedTasks.isNotEmpty;
     return Column(
       children: [
         Padding(
@@ -474,10 +476,10 @@ class _TaskListPaneState extends State<TaskListPane> {
               ],
               selected: {_mode},
               onSelectionChanged: (selection) {
-                      final mode = selection.single;
-                      setState(() => _mode = mode);
-                      widget.onModeChanged?.call(mode);
-                    },
+                final mode = selection.single;
+                setState(() => _mode = mode);
+                widget.onModeChanged?.call(mode);
+              },
             ),
           ),
         ),
@@ -504,8 +506,7 @@ class _TaskListPaneState extends State<TaskListPane> {
                             child: Text(item.name,
                                 maxLines: 1, overflow: TextOverflow.ellipsis)),
                     ],
-                    onChanged:
-                        widget.onProjectSelected,
+                    onChanged: widget.onProjectSelected,
                   ),
                 ),
                 IconButton(
@@ -541,7 +542,9 @@ class _TaskListPaneState extends State<TaskListPane> {
           child: !canShowTasks
               ? const _ConnectPrompt()
               : RefreshIndicator(
-                  onRefresh: model.connected ? widget.onRefresh ?? () async {} : () async {},
+                  onRefresh: model.connected
+                      ? widget.onRefresh ?? () async {}
+                      : () async {},
                   child: ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
                     children: [
@@ -564,7 +567,9 @@ class _TaskListPaneState extends State<TaskListPane> {
                           _LoadMoreButton(
                             key: const Key('load-more-recent'),
                             loading: model.loadingRecentTasks,
-                            onPressed: model.connected ? widget.onLoadMoreRecentTasks : null,
+                            onPressed: model.connected
+                                ? widget.onLoadMoreRecentTasks
+                                : null,
                           ),
                       ] else ...[
                         if (project == null)
@@ -601,7 +606,9 @@ class _TaskListPaneState extends State<TaskListPane> {
                             _LoadMoreButton(
                               key: const Key('load-more-project'),
                               loading: model.loadingProjectPage,
-                              onPressed: model.connected ? widget.onLoadMoreProjectTasks : null,
+                              onPressed: model.connected
+                                  ? widget.onLoadMoreProjectTasks
+                                  : null,
                             ),
                         ],
                         const Divider(height: 1),
@@ -634,7 +641,9 @@ class _TaskListPaneState extends State<TaskListPane> {
                               _LoadMoreButton(
                                 key: const Key('load-more-unassigned'),
                                 loading: model.loadingUnassignedPage,
-                                onPressed: model.connected ? widget.onLoadMoreUnassignedTasks : null,
+                                onPressed: model.connected
+                                    ? widget.onLoadMoreUnassignedTasks
+                                    : null,
                               ),
                           ],
                         ),

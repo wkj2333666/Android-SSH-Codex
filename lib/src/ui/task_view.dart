@@ -175,9 +175,13 @@ class _TaskViewState extends State<TaskView> {
     final timelineState = TaskTimelineRenderState(
       items: task.items,
       owner: widget.controller,
-      loading: widget.controller.isTaskDetailLoading(task.id) && task.items.isEmpty,
-      error: task.items.isEmpty ? widget.controller.taskDetailError(task.id) : null,
-      hasOlder: widget.controller.isConnected && widget.controller.hasOlderTaskContext,
+      loading:
+          widget.controller.isTaskDetailLoading(task.id) && task.items.isEmpty,
+      error: task.items.isEmpty
+          ? widget.controller.taskDetailError(task.id)
+          : null,
+      hasOlder: widget.controller.isConnected &&
+          widget.controller.hasOlderTaskContext,
       loadingOlder: widget.controller.isLoadingOlderTaskContext,
       olderError: widget.controller.olderTaskContextError,
     );
@@ -209,7 +213,8 @@ class _TaskViewState extends State<TaskView> {
         if (!widget.controller.isConnected)
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-            child: Text('Offline · Showing cached messages', style: TextStyle(fontSize: 12)),
+            child: Text('Offline · Showing cached messages',
+                style: TextStyle(fontSize: 12)),
           ),
         Expanded(
             child: RemoteFileActions(
@@ -329,9 +334,7 @@ class _TaskViewState extends State<TaskView> {
           onCompletion: _selectCompletion,
           onSend: _send,
           sendMode: _sendMode,
-          onAttach: Attachments.supported &&
-                  !_sending &&
-                  !_pickingAttachment
+          onAttach: Attachments.supported && !_sending && !_pickingAttachment
               ? _pickAttachment
               : null,
         ),
@@ -482,10 +485,10 @@ class _TaskViewState extends State<TaskView> {
     final message = waiting
         ? 'Waiting for connection'
         : failed
-        ? 'Upload failed. Tap to resume.'
-        : uploading
-            ? 'Uploading ${(attachment.progress * 100).toStringAsFixed(0)}%'
-            : 'Uploaded';
+            ? 'Upload failed. Tap to resume.'
+            : uploading
+                ? 'Uploading ${(attachment.progress * 100).toStringAsFixed(0)}%'
+                : 'Uploaded';
     return Tooltip(
       message: message,
       child: Material(
@@ -533,7 +536,9 @@ class _TaskViewState extends State<TaskView> {
           label: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 160),
             child: Text(
-                waiting ? '${attachment.local.name} · Waiting for connection' : attachment.local.name,
+                waiting
+                    ? '${attachment.local.name} · Waiting for connection'
+                    : attachment.local.name,
                 overflow: TextOverflow.ellipsis),
           ),
           onPressed: failed

@@ -4,6 +4,27 @@ import 'package:android_ssh_codex/src/tasks/task_reducer.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('disconnect cancels pending history without discarding the cursor', () {
+    final state = TaskHistoryLoadState();
+    final initial = state.beginInitial('cached');
+    state.complete(initial, nextCursor: 'older');
+    final pending = state.beginOlder()!;
+    state.cancelPending();
+    expect(state.isLoadingOlder, isFalse);
+    expect(state.nextCursor, 'older');
+    expect(state.complete(pending, nextCursor: null), isFalse);
+    expect(state.beginOlder()!.cursor, 'older');
+  });
+
+  test('cached project membership restores without a stale remote cursor', () {
+    final catalog = TaskCatalog();
+    catalog.restoreCachedProjectPage(['one', 'two']);
+    expect(catalog.projectTaskIds, ['one', 'two']);
+    expect(catalog.projectContinuation, isNull);
+    catalog.clear();
+    expect(catalog.projectTaskIds, isEmpty);
+  });
+
   TaskSnapshot snapshot(String id, String cwd) => TaskSnapshot(
         id: id,
         title: 'Task $id',

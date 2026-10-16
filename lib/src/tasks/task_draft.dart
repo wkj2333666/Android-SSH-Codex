@@ -108,16 +108,16 @@ final class TaskDraft extends ChangeNotifier {
       }
     } catch (_) {
       if (!transfer.discarded) {
-        transfer.state = _canUpload()
-            ? AttachmentState.failed
-            : AttachmentState.waiting;
+        transfer.state =
+            _canUpload() ? AttachmentState.failed : AttachmentState.waiting;
       }
     } finally {
       transfer.active = false;
       if (transfer.discarded) await Attachments.release(transfer.local);
       changed();
       if (!transfer.discarded &&
-          transfer.state == AttachmentState.waiting && _canUpload()) {
+          transfer.state == AttachmentState.waiting &&
+          _canUpload()) {
         unawaited(upload(transfer));
       }
     }
@@ -126,7 +126,9 @@ final class TaskDraft extends ChangeNotifier {
   void resumeWaitingUploads() {
     if (_disposed || !_canUpload()) return;
     for (final transfer in attachments.toList()) {
-      if (transfer.state == AttachmentState.waiting) unawaited(upload(transfer));
+      if (transfer.state == AttachmentState.waiting) {
+        unawaited(upload(transfer));
+      }
     }
   }
 

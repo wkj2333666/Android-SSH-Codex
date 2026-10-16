@@ -130,7 +130,8 @@ final class AppController extends ChangeNotifier {
     final controller = AppController(store: MemoryProfileStore());
     controller._models = cachedModels;
     controller._taskReducer.applyRefresh(
-        controller._taskReducer.beginRefresh(controller._epoch), cachedTasks, {});
+        controller._taskReducer.beginRefresh(controller._epoch),
+        cachedTasks, {});
     controller._taskCatalog.replaceRecentPage(cachedTasks, nextCursor: null);
     return controller;
   }
@@ -211,7 +212,10 @@ final class AppController extends ChangeNotifier {
     return _drafts.putIfAbsent(
         (hostId, taskId),
         () => TaskDraft(
-              canUpload: () => isConnected && _selectedHostId == hostId && _workspaceHostId == hostId,
+              canUpload: () =>
+                  isConnected &&
+                  _selectedHostId == hostId &&
+                  _workspaceHostId == hostId,
               upload: (attachment, target, cancellation, {onProgress}) {
                 if (_selectedHostId != hostId) {
                   throw StateError(
@@ -362,7 +366,9 @@ final class AppController extends ChangeNotifier {
       _cachedProjectTaskIds.clear();
     }
     _workspaceHostId = profile.id;
-    await _openConnection(profile, attempt: attempt, reconnecting: false,
+    await _openConnection(profile,
+        attempt: attempt,
+        reconnecting: false,
         preserveWorkspace: preserveWorkspace);
   }
 
@@ -398,8 +404,9 @@ final class AppController extends ChangeNotifier {
       if (!_inBackground) await _setKeepAlive(true);
       if (attempt != _connectionAttempt) return;
       final secret = await _store.readSecret(profile.id);
-      final projects =
-          reconnecting || preserveWorkspace ? _projects : await _store.readProjects(profile.id);
+      final projects = reconnecting || preserveWorkspace
+          ? _projects
+          : await _store.readProjects(profile.id);
       if (attempt != _connectionAttempt) return;
       if (!reconnecting && !preserveWorkspace) {
         _projectActivityByCwd.clear();
@@ -984,7 +991,8 @@ final class AppController extends ChangeNotifier {
     _selectedProjectId = projectId;
     _selectedTaskId = null;
     _historyLoadState.clear();
-    _taskCatalog.restoreCachedProjectPage(_cachedProjectTaskIds[projectId] ?? const []);
+    _taskCatalog
+        .restoreCachedProjectPage(_cachedProjectTaskIds[projectId] ?? const []);
     final api = _api;
     final epoch = _epoch;
     final pageToken = _taskReducer.capturePageMerge(epoch);
