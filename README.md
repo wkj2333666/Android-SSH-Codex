@@ -56,7 +56,15 @@ not imply Play approval.
 - Browse tasks by remote project, with unassigned tasks kept out of the way.
 - Start new tasks and continue existing Codex Desktop or CLI conversations.
 - Follow streaming responses, approvals, tool activity, Markdown, and formulas.
-- Choose a server-advertised model and reasoning effort for new turns.
+- Choose a server-advertised model and reasoning effort for new turns. The
+  model panel also offers **Fast** when the server advertises support. Fast
+  uses more quota/credits; it applies to new turns (including queued messages),
+  not to a turn already running. Turning it off requests standard speed.
+- Keep typing while disconnected; sending becomes available after reconnect.
+  Draft text, model settings, and attachments are kept separately per host and
+  task while the app is running. Leaving a task does not cancel its uploads.
+  Failed uploads remain available to retry from the same resumable target.
+  Drafts do not yet survive force-stop or process death.
 - Send follow-up instructions to a working agent; messages are steered to the
   active turn or queued when the turn is changing state.
   The composer delivery menu offers **Auto**, **Steer** (guide the current turn

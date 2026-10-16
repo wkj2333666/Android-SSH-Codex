@@ -537,7 +537,7 @@ void main() {
     expect(find.textContaining('Experimental'), findsNothing);
   });
 
-  testWidgets('switching tasks clears the previous composer draft',
+  testWidgets('switching tasks isolates drafts and restores them after leaving',
       (tester) async {
     final controller = AppController.memory();
     await tester.pumpWidget(MaterialApp(
@@ -564,6 +564,20 @@ void main() {
       tester.widget<TextField>(find.byType(TextField)).controller!.text,
       isEmpty,
     );
+
+    await tester.pumpWidget(const MaterialApp(home: SizedBox()));
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: TaskView(
+      controller: controller,
+      task: task('first', 'First task', '/srv/mobile'),
+    ))));
+    expect(tester.widget<TextField>(find.byType(TextField)).enabled, isTrue);
+    expect(tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        'draft for first task');
+    await tester.enterText(find.byType(TextField), 'editable while offline');
+    expect(controller.draftForTask('first').composer.text, 'editable while offline');
+    expect(tester.widget<IconButton>(find.byTooltip('Send message')).onPressed, isNull);
+    await tester.pumpWidget(const SizedBox());
+    controller.dispose();
   });
 
   testWidgets('system back leaves a mobile task before exiting the app',

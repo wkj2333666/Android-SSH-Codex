@@ -623,6 +623,22 @@ void main() {
     }
   });
 
+  for (final tier in ['fast', 'default']) {
+    test('turn start sends explicit $tier service tier', () async {
+      final transport = _RecordingTransport();
+      final rpc = JsonRpcClient(transport)..start();
+      try {
+        final turn = CodexRemoteApi(rpc).startTurn('thread', 'hello', serviceTier: tier);
+        final request = jsonDecode(transport.sent.single) as Map<String, dynamic>;
+        expect(request['params']['serviceTierForTurn'], tier);
+        transport.incoming.add(jsonEncode({'id': request['id'], 'result': {}}));
+        await turn;
+      } finally {
+        await rpc.close();
+      }
+    });
+  }
+
   test('starts a turn with selected model and reasoning effort', () async {
     final transport = _RecordingTransport();
     final rpc = JsonRpcClient(transport)..start();

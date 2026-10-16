@@ -183,6 +183,7 @@ class _TaskList extends StatelessWidget {
           projectId: project?.id,
           model: turnSettings.model,
           effort: turnSettings.effort,
+          serviceTier: turnSettings.serviceTier,
         );
       } catch (error) {
         if (context.mounted) {

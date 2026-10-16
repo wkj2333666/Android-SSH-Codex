@@ -11,7 +11,7 @@ import '../attachments.dart';
 import '../protocol/codex_remote_api.dart';
 import '../tasks/task_message_queue.dart';
 import '../tasks/task_reducer.dart';
-import '../transport/attachment_upload.dart';
+import '../tasks/task_draft.dart';
 import 'composer_completion.dart';
 import 'task_timeline_render_cache.dart';
 import 'timeline_entries.dart';
@@ -25,7 +25,7 @@ bool isTaskComposerInputEnabled({
   required TaskRecord task,
   required bool connected,
 }) =>
-    connected;
+    true;
 
 bool isTaskComposerSendEnabled({
   required TaskRecord task,
@@ -33,7 +33,7 @@ bool isTaskComposerSendEnabled({
   required bool sending,
   bool attachmentsReady = true,
 }) =>
-    isTaskComposerInputEnabled(task: task, connected: connected) &&
+    connected &&
     !sending &&
     attachmentsReady;
 
@@ -72,8 +72,6 @@ class TaskView extends StatefulWidget {
   State<TaskView> createState() => _TaskViewState();
 }
 
-enum _AttachmentState { uploading, uploaded, failed }
-
 final class _SectorProgressPainter extends CustomPainter {
   const _SectorProgressPainter(this.progress, this.color);
 
@@ -98,80 +96,69 @@ final class _SectorProgressPainter extends CustomPainter {
       progress != oldDelegate.progress || color != oldDelegate.color;
 }
 
-final class _AttachmentTransfer extends ChangeNotifier {
-  _AttachmentTransfer(this.local)
-      : target = AttachmentUploadTarget.forAttachment(local),
-        cancellation = AttachmentUploadCancellation();
-
-  final LocalAttachment local;
-  final AttachmentUploadTarget target;
-  AttachmentUploadCancellation cancellation;
-  _AttachmentState state = _AttachmentState.uploading;
-  RemoteAttachment? remote;
-  double progress = 0;
-  int generation = 0;
-  bool active = false;
-  bool discarded = false;
-
-  bool get ready => state == _AttachmentState.uploaded && remote != null;
-
-  void updateProgress(double value) {
-    if (discarded || value == progress) return;
-    progress = value;
-    notifyListeners();
-  }
-}
-
 class _TaskViewState extends State<TaskView> {
-  final _composer = TextEditingController();
+  late TaskDraft _draft;
+  TextEditingController get _composer => _draft.composer;
   final _composerFocus = FocusNode();
   final _timelineCache = TaskTimelineRenderCache<Widget>();
-  var _sending = false;
-  TaskSendMode _sendMode = TaskSendMode.auto;
+  bool get _sending => _draft.sending;
+  set _sending(bool value) => _draft.sending = value;
+  TaskSendMode get _sendMode => _draft.sendMode;
+  set _sendMode(TaskSendMode value) => _draft.sendMode = value;
   var _commandBusy = false;
   var _queueActionBusy = false;
   var _lastCommandSucceeded = true;
-  RemoteSkill? _selectedSkill;
-  TurnSettings _turnSettings = const TurnSettings();
+  RemoteSkill? get _selectedSkill => _draft.skill;
+  set _selectedSkill(RemoteSkill? value) => _draft.skill = value;
+  TurnSettings get _turnSettings => _draft.settings;
+  set _turnSettings(TurnSettings value) => _draft.settings = value;
   List<RemoteSkill>? _availableSkills;
   List<ComposerCompletion> _completions = const [];
   var _loadingSkills = false;
-  var _pickingAttachment = false;
-  List<_AttachmentTransfer> _attachments = [];
+  bool get _pickingAttachment => _draft.picking;
+  List<AttachmentTransfer> get _attachments => _draft.attachments;
   final Set<String> _answeredQuestionItemIds = {};
 
   @override
   void initState() {
     super.initState();
-    _composer.addListener(_updateCompletions);
+    _bindDraft();
   }
 
   @override
   void didUpdateWidget(covariant TaskView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.task.id != widget.task.id) {
-      _discardAllAttachments();
+    final next = widget.controller.draftForTask(widget.task.id);
+    if (!identical(next, _draft)) {
+      _unbindDraft();
+      _bindDraft();
       _timelineCache.clear();
-      _composer.clear();
-      _selectedSkill = null;
-      _turnSettings = const TurnSettings();
       _availableSkills = null;
       _completions = const [];
-      _sending = false;
-      _sendMode = TaskSendMode.auto;
       _commandBusy = false;
       _queueActionBusy = false;
-      _attachments = [];
       _answeredQuestionItemIds.clear();
     }
   }
 
+  void _bindDraft() {
+    _draft = widget.controller.draftForTask(widget.task.id);
+    _composer.addListener(_updateCompletions);
+    _draft.addListener(_draftChanged);
+  }
+
+  void _unbindDraft() {
+    _composer.removeListener(_updateCompletions);
+    _draft.removeListener(_draftChanged);
+  }
+
+  void _draftChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
-    _discardAllAttachments();
-    _composer
-      ..removeListener(_updateCompletions)
-      ..dispose();
+    _unbindDraft();
     _composerFocus.dispose();
     super.dispose();
   }
@@ -277,22 +264,29 @@ class _TaskViewState extends State<TaskView> {
             ),
           ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-          child: TurnSettingsPicker(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Row(children: [Expanded(child: TurnSettingsPicker(
             models: widget.controller.models,
             value: resolveTurnSettings(widget.controller.models, _turnSettings,
                 model: task.model,
                 effort: task.reasoningEffort,
                 useCatalogDefault: false),
             useCatalogDefault: false,
-            enabled: widget.controller.isConnected && !_sending,
+            enabled: !_sending,
             onChanged: (value) => setState(() => _turnSettings = value),
+          )),
+          SendModePicker(
+            value: _sendMode,
+            enabled: !_sending,
+            onChanged: (mode) => setState(() => _sendMode = mode),
+            compact: true,
           ),
+          ]),
         ),
         const Divider(height: 1),
         if (_attachments.isNotEmpty)
           SizedBox(
-            height: 64,
+            height: 52,
             child: ListView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -325,7 +319,6 @@ class _TaskViewState extends State<TaskView> {
           onCompletion: _selectCompletion,
           onSend: _send,
           sendMode: _sendMode,
-          onSendModeChanged: (mode) => setState(() => _sendMode = mode),
           onAttach: Attachments.supported &&
                   !_sending &&
                   !_pickingAttachment &&
@@ -345,19 +338,21 @@ class _TaskViewState extends State<TaskView> {
   }
 
   Future<void> _send() async {
-    if (_sending) return;
+    if (_sending || !widget.controller.isConnected) return;
+    final draft = _draft;
+    final controller = widget.controller;
     final submittedText = _composer.text;
     final text = submittedText.trim();
     if (text.isEmpty && _attachments.isEmpty) return;
     if (_attachments.any((attachment) => !attachment.ready)) {
       _showError(_attachments
-              .any((attachment) => attachment.state == _AttachmentState.failed)
+              .any((attachment) => attachment.state == AttachmentState.failed)
           ? 'Retry failed attachments before sending.'
           : 'Wait for attachments to finish uploading.');
       return;
     }
     final taskId = widget.task.id;
-    final submittedAttachments = List<_AttachmentTransfer>.of(_attachments);
+    final submittedAttachments = List<AttachmentTransfer>.of(_attachments);
     final submittedSkill = _selectedSkill;
     final settings = resolveTurnSettings(
         widget.controller.models, _turnSettings,
@@ -368,16 +363,17 @@ class _TaskViewState extends State<TaskView> {
       _sending = true;
       _selectedSkill = null;
       _completions = const [];
-      _attachments = [];
+      draft.attachments = [];
     });
     _composer.clear();
     try {
-      final disposition = await widget.controller.sendPrompt(
+      final disposition = await controller.sendPrompt(
         text,
         mode: _sendMode,
         skill: submittedSkill,
         model: settings.model,
         effort: settings.effort,
+        serviceTier: settings.serviceTier,
         attachments: submittedAttachments.map((file) => file.remote!).toList(),
       );
       await Attachments.releaseAll(
@@ -389,30 +385,25 @@ class _TaskViewState extends State<TaskView> {
         );
       }
     } catch (exception) {
-      if (mounted && widget.task.id == taskId) {
-        setState(() => _attachments = submittedAttachments);
-        final restored = restoreComposerDraft(
-          currentText: _composer.text,
-          submittedText: submittedText,
+      if (!draft.disposed) {
+        draft.attachments = [...submittedAttachments, ...draft.attachments];
+        // Keep both the failed submission and any text typed while it was sent.
+        final current = draft.composer.text;
+        final restored = current.isEmpty ? submittedText
+            : submittedText.isEmpty ? current : '$submittedText\n$current';
+        draft.composer.value = TextEditingValue(
+          text: restored,
+          selection: TextSelection.collapsed(offset: restored.length),
         );
-        if (restored != _composer.text) {
-          _composer.value = TextEditingValue(
-            text: restored,
-            selection: TextSelection.collapsed(offset: restored.length),
-          );
-        }
-        if (_selectedSkill == null && submittedSkill != null) {
-          setState(() => _selectedSkill = submittedSkill);
-        }
+        draft.skill ??= submittedSkill;
       } else {
         await Attachments.releaseAll(
             submittedAttachments.map((file) => file.local));
       }
-      if (mounted && widget.task.id == taskId) _showError(exception);
+      if (mounted && identical(_draft, draft)) _showError(exception);
     } finally {
-      if (mounted && widget.task.id == taskId) {
-        setState(() => _sending = false);
-      }
+      draft.sending = false;
+      draft.changed();
     }
   }
 
@@ -449,43 +440,37 @@ class _TaskViewState extends State<TaskView> {
   }
 
   Future<void> _pickAttachment(bool image) async {
-    if (_attachments.length >= Attachments.maxCount) {
+    final draft = _draft;
+    if (draft.attachments.length >= Attachments.maxCount) {
       _showError('Up to 4 attachments per message.');
       return;
     }
-    final taskId = widget.task.id;
-    setState(() => _pickingAttachment = true);
+    draft.picking = true;
+    draft.changed();
     LocalAttachment? picked;
     try {
       picked = await Attachments.pick(image: image);
       if (picked == null) return;
-      if (!mounted || widget.task.id != taskId) {
-        await Attachments.release(picked);
-        return;
-      }
-      final files = [..._attachments.map((file) => file.local), picked];
-      Attachments.validate(files);
-      final transfer = _AttachmentTransfer(picked);
-      setState(() => _attachments = [..._attachments, transfer]);
+      draft.addAttachment(picked);
       picked = null;
-      _composerFocus.requestFocus();
-      unawaited(_uploadAttachment(transfer));
+      if (mounted && identical(_draft, draft)) _composerFocus.requestFocus();
     } catch (error) {
       if (picked != null) await Attachments.release(picked);
-      if (mounted && widget.task.id == taskId) _showError(error);
+      if (mounted && identical(_draft, draft)) _showError(error);
     } finally {
-      if (mounted) setState(() => _pickingAttachment = false);
+      draft.picking = false;
+      draft.changed();
     }
   }
 
-  Widget _attachmentChip(_AttachmentTransfer attachment) => AnimatedBuilder(
+  Widget _attachmentChip(AttachmentTransfer attachment) => AnimatedBuilder(
         animation: attachment,
         builder: (context, _) => _buildAttachmentChip(attachment),
       );
 
-  Widget _buildAttachmentChip(_AttachmentTransfer attachment) {
-    final uploading = attachment.state == _AttachmentState.uploading;
-    final failed = attachment.state == _AttachmentState.failed;
+  Widget _buildAttachmentChip(AttachmentTransfer attachment) {
+    final uploading = attachment.state == AttachmentState.uploading;
+    final failed = attachment.state == AttachmentState.failed;
     final theme = Theme.of(context);
     final avatar = attachment.local.isImage
         ? Image.file(File(attachment.local.path),
@@ -560,94 +545,12 @@ class _TaskViewState extends State<TaskView> {
     );
   }
 
-  Future<void> _uploadAttachment(_AttachmentTransfer attachment) async {
-    final taskId = widget.task.id;
-    final generation = ++attachment.generation;
-    attachment.active = true;
-    final updates = Stopwatch()..start();
-    try {
-      final remote = await widget.controller.uploadAttachmentNow(
-        attachment.local,
-        attachment.target,
-        attachment.cancellation,
-        onProgress: (acknowledged, total) {
-          if (!mounted ||
-              attachment.discarded ||
-              attachment.generation != generation ||
-              widget.task.id != taskId) {
-            return;
-          }
-          if (updates.elapsedMilliseconds < 100 && acknowledged != total) {
-            return;
-          }
-          updates.reset();
-          attachment.updateProgress(
-            total == 0 ? 1 : (acknowledged / total).clamp(0.0, 1.0),
-          );
-        },
-      );
-      if (!mounted ||
-          attachment.discarded ||
-          attachment.generation != generation ||
-          widget.task.id != taskId) {
-        return;
-      }
-      setState(() {
-        attachment
-          ..remote = remote
-          ..progress = 1
-          ..state = _AttachmentState.uploaded;
-      });
-    } on AttachmentUploadCancelled {
-      // Removing an attachment or leaving the task intentionally cancels it.
-    } catch (_) {
-      if (!mounted ||
-          attachment.discarded ||
-          attachment.generation != generation ||
-          widget.task.id != taskId) {
-        return;
-      }
-      setState(() {
-        attachment.state = _AttachmentState.failed;
-      });
-    } finally {
-      if (attachment.generation == generation) attachment.active = false;
-      if (attachment.discarded) {
-        await Attachments.release(attachment.local);
-      }
-    }
+  void _retryAttachment(AttachmentTransfer attachment) {
+    unawaited(_draft.upload(attachment));
   }
 
-  void _retryAttachment(_AttachmentTransfer attachment) {
-    if (attachment.active || attachment.discarded) return;
-    setState(() {
-      attachment
-        ..cancellation = AttachmentUploadCancellation()
-        ..state = _AttachmentState.uploading;
-    });
-    unawaited(_uploadAttachment(attachment));
-  }
-
-  void _discardAttachment(_AttachmentTransfer attachment) {
-    if (attachment.discarded) return;
-    attachment
-      ..discarded = true
-      ..cancellation.cancel();
-    if (mounted) setState(() => _attachments.remove(attachment));
-    if (!attachment.active) unawaited(Attachments.release(attachment.local));
-  }
-
-  void _discardAllAttachments() {
-    final attachments = List<_AttachmentTransfer>.of(_attachments);
-    _attachments = [];
-    for (final attachment in attachments) {
-      attachment
-        ..discarded = true
-        ..cancellation.cancel();
-      if (!attachment.active) {
-        unawaited(Attachments.release(attachment.local));
-      }
-    }
+  void _discardAttachment(AttachmentTransfer attachment) {
+    _draft.removeAttachment(attachment);
   }
 
   Future<void> _previewAttachment(LocalAttachment attachment) async {
@@ -752,7 +655,8 @@ class _TaskViewState extends State<TaskView> {
       _availableSkills ?? const [],
     );
     setState(() => _completions = completions.take(6).toList(growable: false));
-    if (_availableSkills == null &&
+    if (widget.controller.isConnected &&
+        _availableSkills == null &&
         !_loadingSkills &&
         hasActiveSkillCompletion(_composer.text, cursor)) {
       _loadCompletionSkills();
@@ -1568,7 +1472,6 @@ class _Composer extends StatelessWidget {
     required this.onCompletion,
     required this.onSend,
     required this.sendMode,
-    required this.onSendModeChanged,
     this.onAttach,
   });
 
@@ -1581,25 +1484,16 @@ class _Composer extends StatelessWidget {
   final ValueChanged<ComposerCompletion> onCompletion;
   final VoidCallback onSend;
   final TaskSendMode sendMode;
-  final ValueChanged<TaskSendMode> onSendModeChanged;
   final ValueChanged<bool>? onAttach;
 
   @override
   Widget build(BuildContext context) => SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Align(
-                alignment: Alignment.centerLeft,
-                child: SendModePicker(
-                  value: sendMode,
-                  enabled: sendEnabled,
-                  onChanged: onSendModeChanged,
-                ),
-              ),
               if (completions.isNotEmpty || loadingCompletions)
                 _CompletionPicker(
                   completions: completions,
@@ -1629,8 +1523,9 @@ class _Composer extends StatelessWidget {
                       maxLines: 5,
                       textCapitalization: TextCapitalization.sentences,
                       decoration: InputDecoration(
-                        hintText:
-                            inputEnabled ? 'Message Codex' : 'Read-only task',
+                        hintText: 'Message Codex',
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                       ),
                     ),
                   ),
@@ -1661,7 +1556,9 @@ class SendModePicker extends StatelessWidget {
       {required this.value,
       required this.enabled,
       required this.onChanged,
+      this.compact = false,
       super.key});
+  final bool compact;
   final TaskSendMode value;
   final bool enabled;
   final ValueChanged<TaskSendMode> onChanged;
@@ -1686,8 +1583,8 @@ class SendModePicker extends StatelessWidget {
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             Text(switch (value) {
               TaskSendMode.auto => 'Auto',
-              TaskSendMode.steer => 'Steer current turn',
-              TaskSendMode.queue => 'Queue for next turn',
+              TaskSendMode.steer => compact ? 'Steer' : 'Steer current turn',
+              TaskSendMode.queue => compact ? 'Queue' : 'Queue for next turn',
             }),
             const Icon(Icons.arrow_drop_down, size: 20),
           ]),
