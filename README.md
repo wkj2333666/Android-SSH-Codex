@@ -60,7 +60,9 @@ not imply Play approval.
   model panel also offers **Fast** when the server advertises support. Fast
   uses more quota/credits; it applies to new turns (including queued messages),
   not to a turn already running. Turning it off requests standard speed.
-- Keep typing while disconnected; sending becomes available after reconnect.
+- Browse cached tasks, select cached models, and keep typing while disconnected.
+  Attachments picked offline wait for the same host to reconnect before uploading;
+  they can still be removed. Sending becomes available after reconnect.
   Draft text, model settings, and attachments are kept separately per host and
   task while the app is running. Leaving a task does not cancel its uploads.
   Failed uploads remain available to retry from the same resumable target.

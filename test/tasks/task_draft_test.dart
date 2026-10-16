@@ -10,6 +10,33 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test('offline files wait, resume once, and deleted files stay removed',
+      () async {
+    var connected = false;
+    var calls = 0;
+    final draft = TaskDraft(
+      canUpload: () => connected,
+      upload: (file, target, cancel, {onProgress}) async {
+        calls++;
+        return const RemoteAttachment(path: '/remote/file', isImage: false);
+      },
+    );
+    const local = LocalAttachment(
+        name: 'offline', path: '/nonexistent/offline', size: 1, isImage: false);
+    draft.addAttachment(local);
+    draft.addAttachment(local);
+    expect(calls, 0);
+    expect(draft.attachments.first.state, AttachmentState.waiting);
+    draft.removeAttachment(draft.attachments.last);
+    connected = true;
+    draft.resumeWaitingUploads();
+    draft.resumeWaitingUploads();
+    await Future<void>.delayed(Duration.zero);
+    expect(calls, 1);
+    expect(draft.attachments.single.ready, isTrue);
+    draft.dispose();
+  });
+
   test('failed send restores original draft even without page listeners',
       () async {
     final draft = TaskDraft(

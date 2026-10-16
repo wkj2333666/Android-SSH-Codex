@@ -200,6 +200,11 @@ final class TaskCatalog {
     ));
   }
 
+  void restoreCachedProjectPage(List<String> ids) {
+    clearProjectPage();
+    _projectTaskIds = List.unmodifiable(ids);
+  }
+
   void clearProjectPage() {
     _projectGeneration++;
     _projectTaskIds = const [];
@@ -350,6 +355,15 @@ final class TaskHistoryLoadState {
       _olderError = error;
     }
     return true;
+  }
+
+  void cancelPending() {
+    if (_isInitialLoading) _taskId = null;
+    _generation++;
+    _isInitialLoading = false;
+    _isLoadingOlder = false;
+    _initialError = null;
+    _olderError = null;
   }
 
   void clear() {

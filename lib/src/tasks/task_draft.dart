@@ -15,7 +15,7 @@ typedef DraftUploader = Future<RemoteAttachment> Function(
   void Function(int acknowledged, int total)? onProgress,
 });
 
-enum AttachmentState { uploading, uploaded, failed }
+enum AttachmentState { waiting, uploading, uploaded, failed }
 
 final class AttachmentTransfer extends ChangeNotifier {
   AttachmentTransfer(this.local)
@@ -41,9 +41,12 @@ final class AttachmentTransfer extends ChangeNotifier {
 /// Owned by the application, not by a task page. Navigating away must not
 /// cancel a transfer, dispose its editor, or lose an in-flight send's rollback.
 final class TaskDraft extends ChangeNotifier {
-  TaskDraft({required DraftUploader upload}) : _upload = upload;
+  TaskDraft({required DraftUploader upload, bool Function()? canUpload})
+      : _upload = upload,
+        _canUpload = canUpload ?? (() => true);
 
   final DraftUploader _upload;
+  final bool Function() _canUpload;
   final composer = TextEditingController();
   List<AttachmentTransfer> attachments = [];
   RemoteSkill? skill;
@@ -72,6 +75,11 @@ final class TaskDraft extends ChangeNotifier {
 
   Future<void> upload(AttachmentTransfer transfer) async {
     if (_disposed || transfer.active || transfer.discarded) return;
+    if (!_canUpload()) {
+      transfer.state = AttachmentState.waiting;
+      changed();
+      return;
+    }
     transfer
       ..active = true
       ..cancellation = AttachmentUploadCancellation()
@@ -99,11 +107,28 @@ final class TaskDraft extends ChangeNotifier {
           ..state = AttachmentState.uploaded;
       }
     } catch (_) {
-      if (!transfer.discarded) transfer.state = AttachmentState.failed;
+      if (!transfer.discarded) {
+        transfer.state =
+            _canUpload() ? AttachmentState.failed : AttachmentState.waiting;
+      }
     } finally {
       transfer.active = false;
       if (transfer.discarded) await Attachments.release(transfer.local);
       changed();
+      if (!transfer.discarded &&
+          transfer.state == AttachmentState.waiting &&
+          _canUpload()) {
+        unawaited(upload(transfer));
+      }
+    }
+  }
+
+  void resumeWaitingUploads() {
+    if (_disposed || !_canUpload()) return;
+    for (final transfer in attachments.toList()) {
+      if (transfer.state == AttachmentState.waiting) {
+        unawaited(upload(transfer));
+      }
     }
   }
 
