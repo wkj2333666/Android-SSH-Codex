@@ -84,8 +84,9 @@ final class TaskDraft extends ChangeNotifier {
         transfer.target,
         transfer.cancellation,
         onProgress: (acknowledged, total) {
-          if (updates.elapsedMilliseconds < 100 && acknowledged != total)
+          if (updates.elapsedMilliseconds < 100 && acknowledged != total) {
             return;
+          }
           updates.reset();
           transfer.updateProgress(
               total == 0 ? 1 : (acknowledged / total).clamp(0.0, 1.0));
