@@ -358,6 +358,7 @@ final class TaskHistoryLoadState {
   }
 
   void cancelPending() {
+    if (_isInitialLoading) _taskId = null;
     _generation++;
     _isInitialLoading = false;
     _isLoadingOlder = false;

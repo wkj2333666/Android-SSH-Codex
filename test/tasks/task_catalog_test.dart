@@ -4,6 +4,17 @@ import 'package:android_ssh_codex/src/tasks/task_reducer.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('interrupted initial history can restore its head after reconnect', () {
+    final state = TaskHistoryLoadState();
+    final pending = state.beginInitial('cached');
+    state.cancelPending();
+    expect(state.taskId, isNull);
+    expect(state.isInitialLoading, isFalse);
+    expect(state.complete(pending, nextCursor: 'stale'), isFalse);
+    final retry = state.beginInitial('cached');
+    expect(state.complete(retry, nextCursor: 'older'), isTrue);
+  });
+
   test('disconnect cancels pending history without discarding the cursor', () {
     final state = TaskHistoryLoadState();
     final initial = state.beginInitial('cached');
