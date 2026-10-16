@@ -179,6 +179,15 @@ final class PageMergeToken {
 
 enum _TaskEventType { status, agentDelta, item }
 
+// Items are immutable: retaining this list is cheap even for long timelines.
+final class TaskItemsReadToken {
+  const TaskItemsReadToken(this.epoch, this.taskId, this.items);
+
+  final int epoch;
+  final String taskId;
+  final List<TaskItem> items;
+}
+
 final class TaskEvent {
   const TaskEvent.statusChanged(this.taskId, this.status)
       : _type = _TaskEventType.status,
@@ -426,16 +435,20 @@ final class TaskReducer {
       for (final item in current.items) item.id: item,
     };
     final seen = <String>{};
-    final merged = <TaskItem>[];
+    final resolved = <TaskItem>[];
     for (final item in olderItems) {
       if (!seen.add(item.id)) continue;
-      merged.add(currentById[item.id] ?? item);
+      resolved.add(currentById[item.id] ?? item);
     }
-    for (final item in current.items) {
-      if (seen.add(item.id)) merged.add(item);
-    }
-    _replaceTaskItems(current, merged);
+    _replaceTaskItems(
+        current,
+        _mergeOrderedPage(current.items, resolved,
+            prependWithoutOverlap: true));
   }
+
+  TaskItemsReadToken captureItemsRead(int epoch, String taskId) =>
+      TaskItemsReadToken(
+          epoch, taskId, _state.tasks[taskId]?.items ?? const []);
 
   void appendPendingUserMessage(
     int epoch,
@@ -479,9 +492,14 @@ final class TaskReducer {
   void mergeLatestItems(
     int epoch,
     String taskId,
-    List<TaskItem> latestItems,
-  ) {
+    List<TaskItem> latestItems, {
+    TaskItemsReadToken? readToken,
+  }) {
     if (epoch != _state.epoch || latestItems.isEmpty) return;
+    if (readToken != null &&
+        (readToken.epoch != epoch || readToken.taskId != taskId)) {
+      return;
+    }
     final current = _state.tasks[taskId] ??
         TaskRecord.placeholder(taskId, _state.eventRevision);
     final currentItems = current.items;
@@ -491,8 +509,10 @@ final class TaskReducer {
     }
 
     final claimedPendingIndices = <int>{};
-    final overlapIndices = <int>[];
-    final latestIds = latestItems.map((item) => item.id).toSet();
+    final pendingReplacements = <int, TaskItem>{};
+    final beforeRead = readToken == null
+        ? null
+        : {for (final item in readToken.items) item.id: item};
     final resolvedLatest = <TaskItem>[];
     final seenLatestIds = <String>{};
     for (final latest in latestItems) {
@@ -506,34 +526,30 @@ final class TaskReducer {
           latest.text,
           claimedPendingIndices,
         );
-        if (currentIndex != -1) claimedPendingIndices.add(currentIndex);
+        if (currentIndex != -1) {
+          claimedPendingIndices.add(currentIndex);
+          pendingReplacements[currentIndex] = latest;
+        }
       }
-      if (currentIndex != -1) overlapIndices.add(currentIndex);
+      final existing = currentIndex == -1 ? null : currentItems[currentIndex];
       resolvedLatest.add(
-        currentIndex == -1
+        existing == null ||
+                (beforeRead != null &&
+                    identical(beforeRead[latest.id], existing))
             ? latest
-            : _preferCurrentStreamingItem(currentItems[currentIndex], latest),
+            : beforeRead == null || existing.id != latest.id
+                ? _preferCurrentStreamingItem(existing, latest)
+                : _preferItemChangedDuringRead(existing, latest),
       );
     }
 
-    final merged = <TaskItem>[];
-    if (overlapIndices.isEmpty) {
-      merged.addAll(currentItems);
-      merged.addAll(resolvedLatest);
-    } else {
-      final firstOverlap = overlapIndices.reduce((a, b) => a < b ? a : b);
-      final lastOverlap = overlapIndices.reduce((a, b) => a > b ? a : b);
-      merged.addAll(currentItems.take(firstOverlap).where(
-            (item) => !latestIds.contains(item.id),
-          ));
-      merged.addAll(resolvedLatest);
-      for (var index = lastOverlap + 1; index < currentItems.length; index++) {
-        if (claimedPendingIndices.contains(index)) continue;
-        final item = currentItems[index];
-        if (!latestIds.contains(item.id)) merged.add(item);
-      }
-    }
-    _replaceTaskItems(current, merged);
+    // Replace optimistic IDs before finding anchors, keeping their position.
+    final anchoredCurrent = [
+      for (var index = 0; index < currentItems.length; index++)
+        pendingReplacements[index] ?? currentItems[index],
+    ];
+    _replaceTaskItems(
+        current, _mergeOrderedPage(anchoredCurrent, resolvedLatest));
   }
 
   void _replaceTaskItems(TaskRecord current, List<TaskItem> items) {
@@ -684,6 +700,49 @@ TaskItem _preferCurrentStreamingItem(TaskItem current, TaskItem latest) {
     );
   }
   return latest;
+}
+
+TaskItem _preferItemChangedDuringRead(TaskItem current, TaskItem latest) {
+  // A growing snapshot may include more of the same stream. Otherwise retain
+  // the event received while the request was in flight (including completion).
+  if (current.kind == TaskItemKind.agent &&
+      latest.kind == TaskItemKind.agent &&
+      current.status != 'completed' &&
+      latest.text.length > current.text.length &&
+      latest.text.startsWith(current.text)) {
+    return latest;
+  }
+  return current;
+}
+
+List<TaskItem> _mergeOrderedPage(
+  List<TaskItem> current,
+  List<TaskItem> page, {
+  bool prependWithoutOverlap = false,
+}) {
+  final positions = {for (var i = 0; i < current.length; i++) current[i].id: i};
+  final pageIds = page.map((item) => item.id).toSet();
+  final overlaps = page.map((item) => positions[item.id]).whereType<int>();
+  if (overlaps.isEmpty) {
+    return prependWithoutOverlap
+        ? [...page, ...current]
+        : [...current, ...page];
+  }
+  var cursor = overlaps.reduce((a, b) => a < b ? a : b);
+  final result = current.take(cursor).toList();
+  for (final item in page) {
+    final position = positions[item.id];
+    if (position != null && position >= cursor) {
+      for (var i = cursor; i < position; i++) {
+        if (!pageIds.contains(current[i].id)) result.add(current[i]);
+      }
+      cursor = position + 1;
+    }
+    result.add(item);
+  }
+  result
+      .addAll(current.skip(cursor).where((item) => !pageIds.contains(item.id)));
+  return result;
 }
 
 List<TaskItem> _mergeItems(
