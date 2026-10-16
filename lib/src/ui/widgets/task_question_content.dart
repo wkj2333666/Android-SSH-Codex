@@ -26,17 +26,22 @@ String questionMessageBody(String text, List<TaskQuestion> questions) {
     int? end;
     if (fence == null && !line.startsWith('    ') && !line.startsWith('\t')) {
       for (final question in questions) {
-        var cursor = _matchText(lines, index, question.title, option: false);
-        if (cursor == null) continue;
+        final start = _matchText(lines, index, question.title, option: false);
+        if (start == null) continue;
+        var cursor = start;
+        var complete = true;
         for (final option in question.options) {
-          if (cursor == null) break;
           while (cursor < lines.length && lines[cursor].trim().isEmpty) {
             cursor++;
           }
-          cursor = _matchText(lines, cursor, option, option: true);
-          if (cursor == null) break;
+          final next = _matchText(lines, cursor, option, option: true);
+          if (next == null) {
+            complete = false;
+            break;
+          }
+          cursor = next;
         }
-        if (cursor != null) {
+        if (complete) {
           end = cursor;
           break;
         }
