@@ -175,11 +175,8 @@ class _TaskViewState extends State<TaskView> {
     final timelineState = TaskTimelineRenderState(
       items: task.items,
       owner: widget.controller,
-      loading:
-          widget.controller.isTaskDetailLoading(task.id) && task.items.isEmpty,
-      error: task.items.isEmpty
-          ? widget.controller.taskDetailError(task.id)
-          : null,
+      loading: widget.controller.isTaskDetailLoading(task.id),
+      error: widget.controller.taskDetailError(task.id),
       hasOlder: widget.controller.isConnected &&
           widget.controller.hasOlderTaskContext,
       loadingOlder: widget.controller.isLoadingOlderTaskContext,
@@ -1254,10 +1251,10 @@ class _TaskTimelineState extends State<TaskTimeline>
 
   @override
   Widget build(BuildContext context) {
-    if (widget.loading) {
+    if (widget.loading && widget.items.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (widget.error != null) {
+    if (widget.error != null && widget.items.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -1288,7 +1285,7 @@ class _TaskTimelineState extends State<TaskTimeline>
       widget.items,
       widget.answeredQuestionItemIds,
     );
-    return Stack(
+    final timeline = Stack(
       children: [
         NotificationListener<ScrollNotification>(
           onNotification: _handleScrollNotification,
@@ -1341,6 +1338,26 @@ class _TaskTimelineState extends State<TaskTimeline>
               child: const Icon(Icons.arrow_downward),
             ),
           ),
+      ],
+    );
+    return Column(
+      children: [
+        if (widget.loading) const LinearProgressIndicator(minHeight: 2),
+        if (widget.error != null)
+          Material(
+            key: const Key('task-refresh-error'),
+            color: Theme.of(context).colorScheme.errorContainer,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              child: Row(
+                children: [
+                  Expanded(child: Text('Showing cached context. ${widget.error}')),
+                  TextButton(onPressed: widget.onRetry, child: const Text('Retry')),
+                ],
+              ),
+            ),
+          ),
+        Expanded(child: timeline),
       ],
     );
   }
