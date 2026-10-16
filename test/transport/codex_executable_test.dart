@@ -35,7 +35,8 @@ void main() {
           includeParentEnvironment: false,
           environment: {'HOME': userHome, 'PATH': initialPath, ...extra});
 
-  test('shared startup finds local bin with spaces and quotes in home', () async {
+  test('shared startup finds local bin with spaces and quotes in home',
+      () async {
     await executable('$userHome/.local/bin', r'''printf '%s\n' "$*"''');
     final result = await run(CodexDaemon.sharedStartCommand);
     expect(result.exitCode, 0, reason: result.stderr.toString());
@@ -46,15 +47,18 @@ void main() {
   test('an existing PATH selection wins over fallback installations', () async {
     await executable(initialPath, "printf '%s\\n' selected");
     await executable('$userHome/.local/bin', 'exit 99');
-    await executable('$userHome/.local/lib/codex-provider-switcher/bin', 'exit 98');
+    await executable(
+        '$userHome/.local/lib/codex-provider-switcher/bin', 'exit 98');
     final result = await run(CodexDaemon.sharedStartCommand);
     expect(result.exitCode, 0);
     expect(result.stdout, 'selected\n');
   });
 
-  test('fallback preserves a provider wrapper before a raw local binary', () async {
+  test('fallback preserves a provider wrapper before a raw local binary',
+      () async {
     await executable('$userHome/.local/bin', 'exit 99');
-    await executable('$userHome/.local/lib/codex-provider-switcher/bin', "printf '%s\\n' wrapper");
+    await executable('$userHome/.local/lib/codex-provider-switcher/bin',
+        "printf '%s\\n' wrapper");
     final result = await run(CodexDaemon.sharedStartCommand);
     expect(result.exitCode, 0);
     expect(result.stdout, 'wrapper\n');
@@ -62,7 +66,8 @@ void main() {
 
   test('fallback exports directories for launcher dependencies', () async {
     await executable('$userHome/.npm-global/bin', 'exec codex-test-helper');
-    await executable('$userHome/.local/bin', "printf '%s\\n' dependency", name: 'codex-test-helper');
+    await executable('$userHome/.local/bin', "printf '%s\\n' dependency",
+        name: 'codex-test-helper');
     final result = await run(CodexDaemon.sharedStartCommand);
     expect(result.exitCode, 0, reason: result.stderr.toString());
     expect(result.stdout, 'dependency\n');
@@ -77,7 +82,9 @@ void main() {
     expect(result.stdout, 'custom\n');
   });
 
-  test('missing or non-executable Codex fails clearly without shell startup files', () async {
+  test(
+      'missing or non-executable Codex fails clearly without shell startup files',
+      () async {
     await File('$userHome/.profile').writeAsString('exit 99\n');
     await Directory('$userHome/.local/bin').create(recursive: true);
     await File('$userHome/.local/bin/codex').writeAsString('not executable');
@@ -93,8 +100,8 @@ void main() {
 IFS= read -r line || exit 3
 printf 'socket=%s\ninput=%s\n' "$4" "$line"
 ''');
-    final process = await Process.start('/bin/sh',
-        ['-c', CodexDaemon.proxyCommand("/tmp/socket with'quote")],
+    final process = await Process.start(
+        '/bin/sh', ['-c', CodexDaemon.proxyCommand("/tmp/socket with'quote")],
         includeParentEnvironment: false,
         environment: {'HOME': userHome, 'PATH': initialPath});
     final output = process.stdout.transform(utf8.decoder).join();
@@ -103,14 +110,17 @@ printf 'socket=%s\ninput=%s\n' "$4" "$line"
     await process.stdin.close();
     expect(await process.exitCode.timeout(const Duration(seconds: 5)), 0,
         reason: await errors);
-    expect(await output, "socket=/tmp/socket with'quote\ninput=GET / HTTP/1.1\n");
+    expect(
+        await output, "socket=/tmp/socket with'quote\ninput=GET / HTTP/1.1\n");
   });
 
   test('isolated bootstrap resolves Codex before any lifecycle mutations', () {
     final command = CodexDaemon.bootstrapCommand(const {});
-    final payload = RegExp("'([A-Za-z0-9+/=]+)' ").allMatches(command).last.group(1)!;
+    final payload =
+        RegExp("'([A-Za-z0-9+/=]+)' ").allMatches(command).last.group(1)!;
     final script = utf8.decode(base64Decode(payload));
-    expect(script.indexOf('command -v codex'), lessThan(script.indexOf('mkdir -p')));
+    expect(script.indexOf('command -v codex'),
+        lessThan(script.indexOf('mkdir -p')));
     expect(script, contains(r'nohup "$codex_executable" app-server'));
   });
 }
