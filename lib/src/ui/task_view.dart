@@ -175,9 +175,9 @@ class _TaskViewState extends State<TaskView> {
     final timelineState = TaskTimelineRenderState(
       items: task.items,
       owner: widget.controller,
-      loading: widget.controller.isTaskDetailLoading(task.id),
-      error: widget.controller.taskDetailError(task.id),
-      hasOlder: widget.controller.hasOlderTaskContext,
+      loading: widget.controller.isTaskDetailLoading(task.id) && task.items.isEmpty,
+      error: task.items.isEmpty ? widget.controller.taskDetailError(task.id) : null,
+      hasOlder: widget.controller.isConnected && widget.controller.hasOlderTaskContext,
       loadingOlder: widget.controller.isLoadingOlderTaskContext,
       olderError: widget.controller.olderTaskContextError,
     );
@@ -206,6 +206,11 @@ class _TaskViewState extends State<TaskView> {
           onCommand: _handleCommand,
         ),
         const Divider(height: 1),
+        if (!widget.controller.isConnected)
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+            child: Text('Offline · Showing cached messages', style: TextStyle(fontSize: 12)),
+          ),
         Expanded(
             child: RemoteFileActions(
                 download: widget.controller.downloadFile,
@@ -326,8 +331,7 @@ class _TaskViewState extends State<TaskView> {
           sendMode: _sendMode,
           onAttach: Attachments.supported &&
                   !_sending &&
-                  !_pickingAttachment &&
-                  widget.controller.isConnected
+                  !_pickingAttachment
               ? _pickAttachment
               : null,
         ),
@@ -465,6 +469,7 @@ class _TaskViewState extends State<TaskView> {
   Widget _buildAttachmentChip(AttachmentTransfer attachment) {
     final uploading = attachment.state == AttachmentState.uploading;
     final failed = attachment.state == AttachmentState.failed;
+    final waiting = attachment.state == AttachmentState.waiting;
     final theme = Theme.of(context);
     final avatar = attachment.local.isImage
         ? Image.file(File(attachment.local.path),
@@ -474,7 +479,9 @@ class _TaskViewState extends State<TaskView> {
             fit: BoxFit.cover,
             errorBuilder: (_, __, ___) => const Icon(Icons.broken_image))
         : const Icon(Icons.insert_drive_file_outlined);
-    final message = failed
+    final message = waiting
+        ? 'Waiting for connection'
+        : failed
         ? 'Upload failed. Tap to resume.'
         : uploading
             ? 'Uploading ${(attachment.progress * 100).toStringAsFixed(0)}%'
@@ -525,7 +532,9 @@ class _TaskViewState extends State<TaskView> {
           ),
           label: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 160),
-            child: Text(attachment.local.name, overflow: TextOverflow.ellipsis),
+            child: Text(
+                waiting ? '${attachment.local.name} · Waiting for connection' : attachment.local.name,
+                overflow: TextOverflow.ellipsis),
           ),
           onPressed: failed
               ? () => _retryAttachment(attachment)
@@ -1287,7 +1296,7 @@ class _TaskTimelineState extends State<TaskTimeline>
               child: ListView.builder(
                 controller: _scrollController,
                 reverse: true,
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 72),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                 itemCount: entries.length + 1,
                 itemBuilder: (_, index) {
                   if (index == entries.length) {

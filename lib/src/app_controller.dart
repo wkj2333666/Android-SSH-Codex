@@ -123,7 +123,17 @@ final class AppController extends ChangeNotifier {
       : _store = store,
         _connector = SshConnector(store);
 
-  factory AppController.memory() => AppController(store: MemoryProfileStore());
+  factory AppController.memory({
+    List<TaskSnapshot> cachedTasks = const [],
+    List<RemoteModel> cachedModels = const [],
+  }) {
+    final controller = AppController(store: MemoryProfileStore());
+    controller._models = cachedModels;
+    controller._taskReducer.applyRefresh(
+        controller._taskReducer.beginRefresh(controller._epoch), cachedTasks, {});
+    controller._taskCatalog.replaceRecentPage(cachedTasks, nextCursor: null);
+    return controller;
+  }
 
   final ProfileStore _store;
   final SshConnector _connector;
@@ -148,6 +158,8 @@ final class AppController extends ChangeNotifier {
   AppSection _section = AppSection.hosts;
   RemoteConnectionPhase _connectionPhase = RemoteConnectionPhase.disconnected;
   String? _selectedHostId;
+  String? _workspaceHostId;
+  final Map<String, List<String>> _cachedProjectTaskIds = {};
   String? _selectedProjectId;
   String? _selectedTaskId;
   final Map<String, String> _activeTurnIds = {};
@@ -199,6 +211,7 @@ final class AppController extends ChangeNotifier {
     return _drafts.putIfAbsent(
         (hostId, taskId),
         () => TaskDraft(
+              canUpload: () => isConnected && _selectedHostId == hostId && _workspaceHostId == hostId,
               upload: (attachment, target, cancellation, {onProgress}) {
                 if (_selectedHostId != hostId) {
                   throw StateError(
@@ -305,6 +318,16 @@ final class AppController extends ChangeNotifier {
 
   Future<void> deleteProfile(String id) async {
     if (_selectedHostId == id) await disconnect();
+    if (_workspaceHostId == id) {
+      _workspaceHostId = null;
+      _models = const [];
+      _projects = const [];
+      _selectedTaskId = null;
+      _selectedProjectId = null;
+      _taskCatalog.clear();
+      _cachedProjectTaskIds.clear();
+      _epoch = _taskReducer.beginConnection();
+    }
     for (final key in _drafts.keys.where((key) => key.$1 == id).toList()) {
       _drafts.remove(key)?.dispose();
     }
@@ -317,6 +340,7 @@ final class AppController extends ChangeNotifier {
 
   Future<void> connectHost(HostProfile profile) async {
     cancelDownload();
+    final preserveWorkspace = _workspaceHostId == profile.id;
     final attempt = ++_connectionAttempt;
     _cancelHostKeyPrompt();
     _reconnectTimer?.cancel();
@@ -328,14 +352,25 @@ final class AppController extends ChangeNotifier {
     await _closeTransport();
     if (attempt != _connectionAttempt) return;
     _agentDeltaBatcher.clear();
-    _epoch = _taskReducer.beginConnection();
-    await _openConnection(profile, attempt: attempt, reconnecting: false);
+    _epoch = _taskReducer.beginConnection(clearTasks: !preserveWorkspace);
+    if (!preserveWorkspace) {
+      _models = const [];
+      _projects = const [];
+      _selectedProjectId = null;
+      _selectedTaskId = null;
+      _taskCatalog.clear();
+      _cachedProjectTaskIds.clear();
+    }
+    _workspaceHostId = profile.id;
+    await _openConnection(profile, attempt: attempt, reconnecting: false,
+        preserveWorkspace: preserveWorkspace);
   }
 
   Future<void> _openConnection(
     HostProfile profile, {
     required int attempt,
     required bool reconnecting,
+    bool preserveWorkspace = false,
   }) async {
     _openingAttempt = attempt;
     Diagnostics.record('connection.open', {
@@ -344,7 +379,7 @@ final class AppController extends ChangeNotifier {
       'background': _inBackground,
     });
     _selectedHostId = profile.id;
-    if (!reconnecting) _selectedTaskId = null;
+    if (!reconnecting && !preserveWorkspace) _selectedTaskId = null;
     _connectionPhase = reconnecting
         ? RemoteConnectionPhase.reconnecting
         : RemoteConnectionPhase.connecting;
@@ -364,9 +399,9 @@ final class AppController extends ChangeNotifier {
       if (attempt != _connectionAttempt) return;
       final secret = await _store.readSecret(profile.id);
       final projects =
-          reconnecting ? _projects : await _store.readProjects(profile.id);
+          reconnecting || preserveWorkspace ? _projects : await _store.readProjects(profile.id);
       if (attempt != _connectionAttempt) return;
-      if (!reconnecting) {
+      if (!reconnecting && !preserveWorkspace) {
         _projectActivityByCwd.clear();
         _projects = projects;
         _selectedProjectId = projects.firstOrNull?.id;
@@ -438,9 +473,10 @@ final class AppController extends ChangeNotifier {
       await api.initialize();
       if (attempt != _connectionAttempt) return;
       try {
-        _models = await api.readModelCatalog();
+        final catalog = await api.readModelCatalog();
+        if (attempt != _connectionAttempt) return;
+        _models = catalog;
       } catch (exception) {
-        _models = const [];
         debugPrint('Could not read remote model catalog: $exception');
       }
       if (attempt != _connectionAttempt) return;
@@ -461,7 +497,7 @@ final class AppController extends ChangeNotifier {
       Diagnostics.record('connection.ready', {'attempt': attempt});
       _reconnectAttempt = 0;
       _expediteReconnect = false;
-      if (reconnecting) {
+      if (reconnecting || preserveWorkspace) {
         await _recoverSelectedTaskAfterReconnect(
           api,
           attempt: attempt,
@@ -480,6 +516,9 @@ final class AppController extends ChangeNotifier {
       await _rememberAutoConnectHost(profile.id);
       if (attempt != _connectionAttempt) return;
       _startRefreshTimer();
+      for (final entry in _drafts.entries) {
+        if (entry.key.$1 == profile.id) entry.value.resumeWaitingUploads();
+      }
     } catch (exception, stackTrace) {
       if (attempt != _connectionAttempt) return;
       Diagnostics.record('connection.failed', {
@@ -810,7 +849,7 @@ final class AppController extends ChangeNotifier {
           token,
           snapshots.values.toList(growable: false),
           loadedByUs,
-          retainExisting: !shouldResetPages,
+          retainExisting: true,
         );
         if (projectPage == null) {
           _taskCatalog.clearProjectPage();
@@ -871,7 +910,8 @@ final class AppController extends ChangeNotifier {
   Future<void> selectTask(String taskId) async {
     _selectedTaskId = taskId;
     _section = AppSection.tasks;
-    _taskReducer.replaceItems(_epoch, taskId, const []);
+    _historyLoadState.clear();
+    notifyListeners();
     await _loadInitialTaskContext(taskId);
   }
 
@@ -938,10 +978,13 @@ final class AppController extends ChangeNotifier {
         : _projects.where((project) => project.id == projectId).firstOrNull;
     if (projectId != null && project == null) return;
     if (_selectedProjectId == projectId) return;
+    if (_selectedProjectId case final previous?) {
+      _cachedProjectTaskIds[previous] = List.of(_taskCatalog.projectTaskIds);
+    }
     _selectedProjectId = projectId;
     _selectedTaskId = null;
     _historyLoadState.clear();
-    _taskCatalog.clearProjectPage();
+    _taskCatalog.restoreCachedProjectPage(_cachedProjectTaskIds[projectId] ?? const []);
     final api = _api;
     final epoch = _epoch;
     final pageToken = _taskReducer.capturePageMerge(epoch);
@@ -1865,6 +1908,10 @@ final class AppController extends ChangeNotifier {
       final page = await api.readThreadTurnsPage(threadId);
       if (!_isCurrentSession(api, attempt, epoch, profileId)) return;
       _taskReducer.mergeLatestItems(epoch, threadId, page.items);
+      if (_selectedTaskId == threadId && _historyLoadState.taskId != threadId) {
+        final token = _historyLoadState.beginInitial(threadId);
+        _historyLoadState.complete(token, nextCursor: page.nextCursor);
+      }
       notifyListeners();
     } catch (exception) {
       debugPrint('Could not catch up selected task context: $exception');
@@ -2297,16 +2344,10 @@ final class AppController extends ChangeNotifier {
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
     _connectionPhase = RemoteConnectionPhase.disconnected;
-    _selectedTaskId = null;
-    _selectedProjectId = null;
-    _projects = const [];
-    _projectActivityByCwd.clear();
-    _models = const [];
     _loadingProjectPage = false;
     _loadingRecentPage = false;
     _loadingUnassignedPage = false;
     _projectPageGeneration++;
-    _taskCatalog.clear();
     _historyLoadState.clear();
     _activeTurnIds.clear();
     _messageQueue.clear();
@@ -2315,7 +2356,7 @@ final class AppController extends ChangeNotifier {
     _subscribedThreadIds = {};
     _interactiveThreadIds.clear();
     _agentDeltaBatcher.clear();
-    _epoch = _taskReducer.beginConnection();
+    _epoch = _taskReducer.beginConnection(clearTasks: false);
     _approvals = const [];
     await _closeTransport(reason: 'user_disconnect');
     try {
@@ -2358,7 +2399,7 @@ final class AppController extends ChangeNotifier {
     _refreshTimer = null;
     _agentDeltaBatcher.clear();
     _approvals = const [];
-    _models = const [];
+    _historyLoadState.cancelPending();
     _projectDiscoveryApi = null;
     _subscribedThreadIds = {};
     _loadingProjectPage = false;
