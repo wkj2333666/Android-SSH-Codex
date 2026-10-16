@@ -578,7 +578,10 @@ final class AppController extends ChangeNotifier {
     _error = 'Remote connection lost. Reconnecting...';
     notifyListeners();
     await _closeTransport(reason: 'transport_loss_cleanup');
-    if (attempt == _connectionAttempt) _scheduleReconnect(profile, attempt);
+    if (attempt == _connectionAttempt) {
+      notifyListeners();
+      _scheduleReconnect(profile, attempt);
+    }
   }
 
   void _scheduleReconnect(HostProfile profile, int attempt,
