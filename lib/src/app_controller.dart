@@ -973,7 +973,9 @@ final class AppController extends ChangeNotifier {
             'Live updates unavailable: ${_friendlyError(exception)}';
       }
       if (!_isCurrentSession(api, attempt, epoch, profileId) ||
-          _selectedTaskId != taskId) return;
+          _selectedTaskId != taskId) {
+        return;
+      }
       _agentDeltaBatcher.flush();
       final readToken = _taskReducer.captureItemsRead(epoch, taskId);
       final page = await api.readThreadTurnsPage(taskId);
@@ -984,8 +986,9 @@ final class AppController extends ChangeNotifier {
       _agentDeltaBatcher.flush();
       _taskReducer.mergeLatestItems(epoch, taskId, page.items,
           readToken: readToken);
-      if (subscriptionError != null)
+      if (subscriptionError != null) {
         _historyLoadState.fail(token, subscriptionError);
+      }
     } catch (exception) {
       if (api != _api || epoch != _epoch) return;
       _historyLoadState.fail(token, _friendlyError(exception));
@@ -2264,7 +2267,7 @@ final class AppController extends ChangeNotifier {
       await operation;
     } finally {
       if (identical(_pendingThreadSubscriptions[threadId], operation)) {
-        _pendingThreadSubscriptions.remove(threadId);
+        unawaited(_pendingThreadSubscriptions.remove(threadId));
       }
     }
   }

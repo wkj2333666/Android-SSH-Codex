@@ -497,7 +497,9 @@ final class TaskReducer {
   }) {
     if (epoch != _state.epoch || latestItems.isEmpty) return;
     if (readToken != null &&
-        (readToken.epoch != epoch || readToken.taskId != taskId)) return;
+        (readToken.epoch != epoch || readToken.taskId != taskId)) {
+      return;
+    }
     final current = _state.tasks[taskId] ??
         TaskRecord.placeholder(taskId, _state.eventRevision);
     final currentItems = current.items;
