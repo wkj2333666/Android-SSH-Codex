@@ -54,6 +54,7 @@ final class CodexDaemon {
 
   static String _bootstrapPayload(Map<String, String> environment) =>
       "environment_fingerprint='${environmentFingerprint(environment)}'\n"
+      '$executableResolutionScript\n'
       '$bootstrapScript';
 
   static String _shellCommand(String script) {
@@ -71,11 +72,49 @@ final class CodexDaemon {
       _shellCommand(_bootstrapPayload(environment));
 
   static String get sharedStartCommand =>
-      _shellCommand('exec codex app-server daemon start');
+      _shellCommand('$executableResolutionScript\n'
+          r'exec "$codex_executable" app-server daemon start');
 
   static String proxyCommand(String socketPath) => _shellCommandPreservingStdin(
-        'exec codex app-server proxy --sock ${_shellQuote(socketPath)}',
+        '$executableResolutionScript\n'
+        'exec "\$codex_executable" app-server proxy --sock ${_shellQuote(socketPath)}',
       );
+
+  // SSH exec channels need not inherit a login-shell PATH. Do not source shell
+  // startup files: they may print to stdout, attach a terminal, or replace stdin.
+  // Keep explicitly configured PATH precedence; supplement it only if needed.
+  static const executableResolutionScript = r'''
+set -eu
+if ! codex_executable=$(command -v codex 2>/dev/null) || [ ! -x "$codex_executable" ] || [ -d "$codex_executable" ]; then
+  codex_search_path=${PATH:-/usr/local/bin:/usr/bin:/bin}
+  codex_add_directory() {
+    if [ -n "$1" ] && [ -d "$1" ]; then
+      codex_search_path="$codex_search_path:$1"
+    fi
+  }
+  codex_add_directory "${CODEX_INSTALL_DIR:-}"
+  codex_user_home=${HOME:-}
+  if [ -n "$codex_user_home" ]; then
+    for codex_directory in \
+      "$codex_user_home/.local/lib/codex-provider-switcher/bin" \
+      "$codex_user_home/.local/bin" \
+      "$codex_user_home/bin" \
+      "$codex_user_home/.npm-global/bin" \
+      "$codex_user_home/.local/share/pnpm" \
+      "$codex_user_home/.bun/bin" \
+      "$codex_user_home/.codex/packages/standalone/current/bin"
+    do
+      codex_add_directory "$codex_directory"
+    done
+  fi
+  PATH=$codex_search_path
+  export PATH
+  if ! codex_executable=$(command -v codex 2>/dev/null) || [ ! -x "$codex_executable" ] || [ -d "$codex_executable" ]; then
+    printf '%s\n' 'android-ssh-codex: codex executable not found in SSH PATH or supported user install directories. Install Codex for this SSH user or configure its non-interactive PATH.' >&2
+    exit 127
+  fi
+fi
+''';
 
   static String _shellQuote(String value) =>
       "'${value.replaceAll("'", "'\"'\"'")}'";
@@ -367,7 +406,7 @@ if is_our_server_running; then
   stop_our_server
 fi
 rm -f "$socket" "$pidfile" "$fingerprint_file"
-nohup codex app-server --listen "unix://$socket" </dev/null >>"$log" 2>&1 &
+nohup "$codex_executable" app-server --listen "unix://$socket" </dev/null >>"$log" 2>&1 &
 printf '%s\n' "$!" >"$pidfile"
 count=0
 while [ "$count" -lt 100 ]; do

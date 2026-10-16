@@ -115,6 +115,17 @@ an SSH exec channel and renders the resulting tasks and events.
 The phone does not need the Android SDK, Flutter, Codex credentials, or direct
 access to your source repository.
 
+Codex is resolved in the SSH command environment, which may differ from your
+interactive terminal. The app honors an existing `codex` on `PATH` first. If it
+is missing, Shared startup, the proxy, and Isolated startup also check
+`CODEX_INSTALL_DIR` (when set), the provider-switcher wrapper directory,
+`~/.local/bin`, `~/bin`, `~/.npm-global/bin`, `~/.local/share/pnpm`,
+`~/.bun/bin`, and `~/.codex/packages/standalone/current/bin`.
+These fallback directories are added to the child process PATH. Shell startup
+files are not sourced, and your server configuration is not modified. For a
+different installation location, make it available in the SSH user's
+non-interactive PATH.
+
 ## Install
 
 Download the latest build from

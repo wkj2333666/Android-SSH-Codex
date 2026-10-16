@@ -144,7 +144,7 @@ printf 'socket=%s\nstdin=%s\n' "$4" "$line"
 
     expect(
       _decodeShellWrapper(receivedCommand!),
-      'exec codex app-server daemon start',
+      contains(r'exec "$codex_executable" app-server daemon start'),
     );
     expect(identical(receivedEnvironment, environment), isTrue);
     expect(
@@ -230,7 +230,8 @@ printf 'socket=%s\nstdin=%s\n' "$4" "$line"
     );
 
     expect(commands, hasLength(2));
-    expect(commands.first, 'exec codex app-server daemon start');
+    expect(commands.first,
+        contains(r'exec "$codex_executable" app-server daemon start'));
     expect(commands.last, contains('app-server-control.sock'));
     expect(commands.last, isNot(contains('android-ssh-codex')));
     expect(
