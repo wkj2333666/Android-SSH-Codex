@@ -69,7 +69,8 @@ final class RemoteModel {
   final String defaultReasoningEffort;
   final List<RemoteReasoningEffort> supportedReasoningEfforts;
   final List<String> serviceTiers;
-  bool get supportsFast => serviceTiers.contains('fast') || serviceTiers.contains('priority');
+  bool get supportsFast =>
+      serviceTiers.contains('fast') || serviceTiers.contains('priority');
 }
 
 final class RemoteThreadGoal {
@@ -861,7 +862,8 @@ RemoteModel? _parseModel(Map<String, dynamic> raw) {
     serviceTiers: List.unmodifiable([
       for (final tier in raw['serviceTiers'] as List<dynamic>? ?? const [])
         if (_map(tier)['id'] case final String id) id,
-      for (final tier in raw['additionalSpeedTiers'] as List<dynamic>? ?? const [])
+      for (final tier
+          in raw['additionalSpeedTiers'] as List<dynamic>? ?? const [])
         if (tier is String) tier,
     ]),
   );

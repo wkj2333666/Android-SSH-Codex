@@ -566,7 +566,9 @@ void main() {
     );
 
     await tester.pumpWidget(const MaterialApp(home: SizedBox()));
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: TaskView(
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: TaskView(
       controller: controller,
       task: task('first', 'First task', '/srv/mobile'),
     ))));
@@ -574,8 +576,10 @@ void main() {
     expect(tester.widget<TextField>(find.byType(TextField)).controller!.text,
         'draft for first task');
     await tester.enterText(find.byType(TextField), 'editable while offline');
-    expect(controller.draftForTask('first').composer.text, 'editable while offline');
-    expect(tester.widget<IconButton>(find.byTooltip('Send message')).onPressed, isNull);
+    expect(controller.draftForTask('first').composer.text,
+        'editable while offline');
+    expect(tester.widget<IconButton>(find.byTooltip('Send message')).onPressed,
+        isNull);
     await tester.pumpWidget(const SizedBox());
     controller.dispose();
   });

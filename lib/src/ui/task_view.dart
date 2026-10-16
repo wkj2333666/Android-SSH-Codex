@@ -3,7 +3,6 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 
 import '../app_controller.dart';
@@ -33,9 +32,7 @@ bool isTaskComposerSendEnabled({
   required bool sending,
   bool attachmentsReady = true,
 }) =>
-    connected &&
-    !sending &&
-    attachmentsReady;
+    connected && !sending && attachmentsReady;
 
 bool isTaskComposerEnabled({
   required TaskRecord task,
@@ -111,7 +108,6 @@ class _TaskViewState extends State<TaskView> {
   RemoteSkill? get _selectedSkill => _draft.skill;
   set _selectedSkill(RemoteSkill? value) => _draft.skill = value;
   TurnSettings get _turnSettings => _draft.settings;
-  set _turnSettings(TurnSettings value) => _draft.settings = value;
   List<RemoteSkill>? _availableSkills;
   List<ComposerCompletion> _completions = const [];
   var _loadingSkills = false;
@@ -166,6 +162,7 @@ class _TaskViewState extends State<TaskView> {
   @override
   Widget build(BuildContext context) {
     final task = widget.task;
+    final draft = _draft;
     final compact = MediaQuery.sizeOf(context).width < 800;
     final approvals = widget.controller.approvals
         .where((approval) => approval.threadId == task.id)
@@ -265,22 +262,28 @@ class _TaskViewState extends State<TaskView> {
           ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 10),
-          child: Row(children: [Expanded(child: TurnSettingsPicker(
-            models: widget.controller.models,
-            value: resolveTurnSettings(widget.controller.models, _turnSettings,
-                model: task.model,
-                effort: task.reasoningEffort,
-                useCatalogDefault: false),
-            useCatalogDefault: false,
-            enabled: !_sending,
-            onChanged: (value) => setState(() => _turnSettings = value),
-          )),
-          SendModePicker(
-            value: _sendMode,
-            enabled: !_sending,
-            onChanged: (mode) => setState(() => _sendMode = mode),
-            compact: true,
-          ),
+          child: Row(children: [
+            Expanded(
+                child: TurnSettingsPicker(
+              models: widget.controller.models,
+              value: resolveTurnSettings(widget.controller.models, _turnSettings,
+                  model: task.model,
+                  effort: task.reasoningEffort,
+                  useCatalogDefault: false),
+              useCatalogDefault: false,
+              enabled: !_sending,
+              onChanged: (value) {
+                if (draft.disposed) return;
+                draft.settings = value;
+                draft.changed();
+              },
+            )),
+            SendModePicker(
+              value: _sendMode,
+              enabled: !_sending,
+              onChanged: (mode) => setState(() => _sendMode = mode),
+              compact: true,
+            ),
           ]),
         ),
         const Divider(height: 1),
@@ -351,7 +354,6 @@ class _TaskViewState extends State<TaskView> {
           : 'Wait for attachments to finish uploading.');
       return;
     }
-    final taskId = widget.task.id;
     final submittedAttachments = List<AttachmentTransfer>.of(_attachments);
     final submittedSkill = _selectedSkill;
     final settings = resolveTurnSettings(
@@ -378,28 +380,18 @@ class _TaskViewState extends State<TaskView> {
       );
       await Attachments.releaseAll(
           submittedAttachments.map((file) => file.local));
-      if (!mounted || widget.task.id != taskId) return;
+      if (!mounted || !identical(_draft, draft)) return;
       if (disposition == TaskMessageDisposition.queued) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Message queued for the next turn.')),
         );
       }
     } catch (exception) {
-      if (!draft.disposed) {
-        draft.attachments = [...submittedAttachments, ...draft.attachments];
-        // Keep both the failed submission and any text typed while it was sent.
-        final current = draft.composer.text;
-        final restored = current.isEmpty ? submittedText
-            : submittedText.isEmpty ? current : '$submittedText\n$current';
-        draft.composer.value = TextEditingValue(
-          text: restored,
-          selection: TextSelection.collapsed(offset: restored.length),
-        );
-        draft.skill ??= submittedSkill;
-      } else {
-        await Attachments.releaseAll(
-            submittedAttachments.map((file) => file.local));
-      }
+      await draft.restoreFailedSubmission(
+        text: submittedText,
+        files: submittedAttachments,
+        submittedSkill: submittedSkill,
+      );
       if (mounted && identical(_draft, draft)) _showError(exception);
     } finally {
       draft.sending = false;
@@ -1525,7 +1517,8 @@ class _Composer extends StatelessWidget {
                       decoration: InputDecoration(
                         hintText: 'Message Codex',
                         isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
                       ),
                     ),
                   ),

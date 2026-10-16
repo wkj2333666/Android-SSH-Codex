@@ -195,15 +195,18 @@ final class AppController extends ChangeNotifier {
 
   TaskDraft draftForTask(String taskId) {
     final hostId = _selectedHostId ?? '';
-    return _drafts.putIfAbsent((hostId, taskId), () => TaskDraft(
-      upload: (attachment, target, cancellation, {onProgress}) {
-        if (_selectedHostId != hostId) {
-          throw StateError('Reconnect to the original host to resume upload.');
-        }
-        return uploadAttachmentNow(attachment, target, cancellation,
-            onProgress: onProgress);
-      },
-    ));
+    return _drafts.putIfAbsent(
+        (hostId, taskId),
+        () => TaskDraft(
+              upload: (attachment, target, cancellation, {onProgress}) {
+                if (_selectedHostId != hostId) {
+                  throw StateError(
+                      'Reconnect to the original host to resume upload.');
+                }
+                return uploadAttachmentNow(attachment, target, cancellation,
+                    onProgress: onProgress);
+              },
+            ));
   }
 
   String? get selectedHostId => _selectedHostId;
@@ -388,7 +391,7 @@ final class AppController extends ChangeNotifier {
           Diagnostics.record('bootstrap.commandResult', {
             'attempt': attempt,
             'mode': profile.appServerMode.name,
-            'elapsedMs': commandWatch.elapsedMilliseconds,
+            'durationMs': commandWatch.elapsedMilliseconds,
             'exitCode': result.exitCode,
             'exitSignal': result.exitSignal?.signalName,
             'stdoutBytes': result.stdout.length,

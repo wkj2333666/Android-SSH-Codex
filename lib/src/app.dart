@@ -106,7 +106,9 @@ class _Workspace extends StatelessWidget {
                         ],
                       )
                     : _section(controller),
-                bottomNavigationBar: wide || (controller.section == AppSection.tasks && controller.selectedTask != null)
+                bottomNavigationBar: wide ||
+                        (controller.section == AppSection.tasks &&
+                            controller.selectedTask != null)
                     ? null
                     : NavigationBar(
                         height: 56,

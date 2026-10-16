@@ -20,7 +20,8 @@ final class SshCommandResult {
 }
 
 final class CodexBootstrapException implements Exception {
-  const CodexBootstrapException(this.message, {
+  const CodexBootstrapException(
+    this.message, {
     this.reason = 'bootstrap_failed',
     this.exitCode,
     this.exitSignal,
@@ -250,15 +251,16 @@ final class CodexDaemon {
       value.startsWith('/') &&
       !RegExp(r'[\x00-\x1F\x7F]').hasMatch(value);
 
-  static String _diagnostic(SshCommandResult result, Map<String, String> environment) {
+  static String _diagnostic(
+      SshCommandResult result, Map<String, String> environment) {
     final text = [
       if (result.stderr.isNotEmpty)
         'stderr: ${utf8.decode(result.stderr, allowMalformed: true)}',
       if (result.stdout.isNotEmpty)
         'stdout: ${utf8.decode(result.stdout, allowMalformed: true)}',
     ].join('\n');
-    return _boundedDiagnostic(utf8.encode(
-        redactBootstrapDiagnostic(text, environment.values)));
+    return _boundedDiagnostic(
+        utf8.encode(redactBootstrapDiagnostic(text, environment.values)));
   }
 
   static const _maxDiagnosticCharacters = 1200;

@@ -10,13 +10,27 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('upload continues without page listeners and can finish offscreen', () async {
+  test('failed send restores original draft even without page listeners',
+      () async {
+    final draft = TaskDraft(
+        upload: (file, target, cancel, {onProgress}) async =>
+            const RemoteAttachment(path: '/remote/file', isImage: false));
+    draft.composer.text = 'new text typed during send';
+    await draft.restoreFailedSubmission(text: 'failed message', files: []);
+    expect(draft.composer.text, 'failed message\nnew text typed during send');
+    draft.dispose();
+  });
+
+  test('upload continues without page listeners and can finish offscreen',
+      () async {
     final done = Completer<RemoteAttachment>();
-    final draft = TaskDraft(upload: (file, target, cancel, {onProgress}) => done.future);
+    final draft =
+        TaskDraft(upload: (file, target, cancel, {onProgress}) => done.future);
     final dir = await Directory.systemTemp.createTemp('task-draft-');
     final file = File('${dir.path}/upload.txt');
     await file.writeAsString('draft');
-    final local = LocalAttachment(name: 'upload.txt', path: file.path, size: 5, isImage: false);
+    final local = LocalAttachment(
+        name: 'upload.txt', path: file.path, size: 5, isImage: false);
     void listener() {}
     draft.addListener(listener);
     draft.composer.text = 'saved text';
@@ -25,7 +39,8 @@ void main() {
     draft.removeListener(listener); // task page was disposed
     expect(transfer.cancellation.isCancelled, isFalse);
     expect(await file.exists(), isTrue);
-    done.complete(const RemoteAttachment(path: '/remote/upload.txt', isImage: false));
+    done.complete(
+        const RemoteAttachment(path: '/remote/upload.txt', isImage: false));
     await Future<void>.delayed(Duration.zero);
     expect(draft.attachments.single.ready, isTrue);
     expect(draft.composer.text, 'saved text');
@@ -45,7 +60,10 @@ void main() {
       return const RemoteAttachment(path: '/remote/file', isImage: false);
     });
     draft.addAttachment(const LocalAttachment(
-      name: 'file', path: '/nonexistent/draft-fixture', size: 1, isImage: false));
+        name: 'file',
+        path: '/nonexistent/draft-fixture',
+        size: 1,
+        isImage: false));
     await Future<void>.delayed(Duration.zero);
     expect(draft.attachments.single.state, AttachmentState.failed);
     await draft.upload(draft.attachments.single);
@@ -54,11 +72,16 @@ void main() {
     draft.dispose();
   });
 
-  test('removing an active upload cancels it and ignores late completion', () async {
+  test('removing an active upload cancels it and ignores late completion',
+      () async {
     final done = Completer<RemoteAttachment>();
-    final draft = TaskDraft(upload: (file, target, cancel, {onProgress}) => done.future);
+    final draft =
+        TaskDraft(upload: (file, target, cancel, {onProgress}) => done.future);
     draft.addAttachment(const LocalAttachment(
-      name: 'file', path: '/nonexistent/draft-fixture', size: 1, isImage: false));
+        name: 'file',
+        path: '/nonexistent/draft-fixture',
+        size: 1,
+        isImage: false));
     final transfer = draft.attachments.single;
     draft.removeAttachment(transfer);
     expect(transfer.cancellation.isCancelled, isTrue);
@@ -72,9 +95,14 @@ void main() {
   test('draft keys separate hosts as well as tasks', () async {
     final controller = AppController.memory();
     Future<void> selectHost(String id) => controller.saveProfile(
-      HostProfile(id: id, label: id, hostName: '$id.example', user: 'codex', port: 22),
-      const HostSecret(password: 'test'),
-    );
+          HostProfile(
+              id: id,
+              label: id,
+              hostName: '$id.example',
+              user: 'codex',
+              port: 22),
+          const HostSecret(password: 'test'),
+        );
     await selectHost('a');
     final first = controller.draftForTask('same-thread');
     first.composer.text = 'host a';

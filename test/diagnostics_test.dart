@@ -22,11 +22,14 @@ void main() {
     messenger.setMockMethodCallHandler(Diagnostics.channel, null);
   });
 
-  test('bootstrap failures include bounded redacted reason and exit status', () {
+  test('bootstrap failures include bounded redacted reason and exit status',
+      () {
     final fields = Diagnostics.errorFields(
       const CodexBootstrapException(
-        'Shared start failed: permission denied\nAPI_KEY=sk-private\nBearer abc123\nprofile-value',
-        reason: 'shared_start_failed', exitCode: 127, exitSignal: 'TERM'),
+          'Shared start failed: permission denied\nAPI_KEY=sk-private\nBearer abc123\nprofile-value',
+          reason: 'shared_start_failed',
+          exitCode: 127,
+          exitSignal: 'TERM'),
       sensitiveValues: ['profile-value'],
     );
     expect(fields['reason'], 'shared_start_failed');
@@ -36,7 +39,8 @@ void main() {
     expect(fields['errorDetail'], isNot(contains('sk-private')));
     expect(fields['errorDetail'], isNot(contains('abc123')));
     expect(fields['errorDetail'], isNot(contains('profile-value')));
-    expect(redactBootstrapDiagnostic('x' * 10000, []).length, lessThanOrEqualTo(1601));
+    expect(redactBootstrapDiagnostic('x' * 10000, []).length,
+        lessThanOrEqualTo(1601));
   });
 
   test('records timestamped metadata and exports with cancellation', () async {

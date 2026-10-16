@@ -21,7 +21,8 @@ TurnSettings resolveTurnSettings(
       (useCatalogDefault
           ? models.where((candidate) => candidate.isDefault).firstOrNull?.model
           : null);
-  final entry = models.where((candidate) => candidate.model == name).firstOrNull;
+  final entry =
+      models.where((candidate) => candidate.model == name).firstOrNull;
   return TurnSettings(
     model: name,
     effort: (value.model != null ? value.effort : effort) ??

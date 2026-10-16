@@ -84,7 +84,8 @@ final class TaskDraft extends ChangeNotifier {
         transfer.target,
         transfer.cancellation,
         onProgress: (acknowledged, total) {
-          if (updates.elapsedMilliseconds < 100 && acknowledged != total) return;
+          if (updates.elapsedMilliseconds < 100 && acknowledged != total)
+            return;
           updates.reset();
           transfer.updateProgress(
               total == 0 ? 1 : (acknowledged / total).clamp(0.0, 1.0));
@@ -112,6 +113,30 @@ final class TaskDraft extends ChangeNotifier {
       ..cancellation.cancel();
     attachments.remove(transfer);
     if (!transfer.active) unawaited(Attachments.release(transfer.local));
+    changed();
+  }
+
+  Future<void> restoreFailedSubmission({
+    required String text,
+    required List<AttachmentTransfer> files,
+    RemoteSkill? submittedSkill,
+  }) async {
+    if (_disposed) {
+      await Attachments.releaseAll(files.map((file) => file.local));
+      return;
+    }
+    attachments = [...files, ...attachments];
+    final current = composer.text;
+    final restored = current.isEmpty
+        ? text
+        : text.isEmpty
+            ? current
+            : '$text\n$current';
+    composer.value = TextEditingValue(
+      text: restored,
+      selection: TextSelection.collapsed(offset: restored.length),
+    );
+    skill ??= submittedSkill;
     changed();
   }
 

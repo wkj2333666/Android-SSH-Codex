@@ -40,10 +40,13 @@ void main() {
     ),
   ];
 
-  testWidgets('Fast is explicit, retained across effort changes, reset for unsupported models',
+  testWidgets(
+      'Fast is explicit, retained across effort changes, reset for unsupported models',
       (tester) async {
     TurnSettings? selection;
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: TurnSettingsPicker(
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: TurnSettingsPicker(
       models: models,
       value: const TurnSettings(model: 'gpt-5.6-sol', effort: 'high'),
       onChanged: (value) => selection = value,

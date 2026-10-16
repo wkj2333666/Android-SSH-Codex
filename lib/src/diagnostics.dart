@@ -38,7 +38,8 @@ abstract final class Diagnostics {
     }
   }
 
-  static Map<String, Object?> errorFields(Object error, {
+  static Map<String, Object?> errorFields(
+    Object error, {
     Iterable<String> sensitiveValues = const [],
   }) {
     final types = <String>[];
@@ -89,7 +90,8 @@ abstract final class Diagnostics {
     return {
       'errorType': error.runtimeType.toString(),
       if (cause is CodexBootstrapException) ...{
-        'errorDetail': redactBootstrapDiagnostic(cause.message, sensitiveValues),
+        'errorDetail':
+            redactBootstrapDiagnostic(cause.message, sensitiveValues),
         if (cause.exitCode != null) 'exitCode': cause.exitCode,
         if (cause.exitSignal != null) 'exitSignal': cause.exitSignal,
       },
