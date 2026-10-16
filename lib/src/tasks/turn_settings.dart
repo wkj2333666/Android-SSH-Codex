@@ -6,6 +6,7 @@ final class TurnSettings {
   final String? model;
   final String? effort;
   final String? serviceTier;
+  bool get fast => serviceTier == 'fast' || serviceTier == 'priority';
 }
 
 /// Use the same resolved settings for presentation and submission.
@@ -29,4 +30,11 @@ TurnSettings resolveTurnSettings(
         entry?.defaultReasoningEffort,
     serviceTier: value.serviceTier,
   );
+}
+
+extension<T> on Iterable<T> {
+  T? get firstOrNull {
+    final iterator = this.iterator;
+    return iterator.moveNext() ? iterator.current : null;
+  }
 }

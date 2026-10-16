@@ -266,7 +266,8 @@ class _TaskViewState extends State<TaskView> {
             Expanded(
                 child: TurnSettingsPicker(
               models: widget.controller.models,
-              value: resolveTurnSettings(widget.controller.models, _turnSettings,
+              value: resolveTurnSettings(
+                  widget.controller.models, _turnSettings,
                   model: task.model,
                   effort: task.reasoningEffort,
                   useCatalogDefault: false),

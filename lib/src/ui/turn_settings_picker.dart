@@ -33,7 +33,7 @@ class TurnSettingsPicker extends StatelessWidget {
         ? 'Model unavailable'
         : '${model?.displayName ?? settings.model} · '
             '${settings.effort ?? 'Effort unavailable'}'
-            '${settings.serviceTier == 'fast' ? ' · Fast' : ''}';
+            '${settings.fast ? ' · Fast' : ''}';
     return Align(
       alignment: Alignment.centerLeft,
       child: OutlinedButton(
@@ -125,9 +125,8 @@ class _TurnSettingsSheetState extends State<_TurnSettingsSheet> {
                         _draft = TurnSettings(
                           model: candidate.model,
                           effort: candidate.defaultReasoningEffort,
-                          serviceTier: _draft.serviceTier == 'fast' &&
-                                  !candidate.supportsFast
-                              ? 'default'
+                          serviceTier: _draft.fast
+                              ? candidate.fastServiceTier ?? 'default'
                               : _draft.serviceTier,
                         );
                       }),
@@ -155,13 +154,15 @@ class _TurnSettingsSheetState extends State<_TurnSettingsSheet> {
                         subtitle: Text(model.supportsFast
                             ? 'New turns only · Higher usage'
                             : 'Not advertised by this model/server'),
-                        value: _draft.serviceTier == 'fast',
+                        value: _draft.fast,
                         onChanged: model.supportsFast
                             ? (enabled) => setState(() {
                                   _draft = TurnSettings(
                                     model: _draft.model,
                                     effort: _draft.effort,
-                                    serviceTier: enabled ? 'fast' : 'default',
+                                    serviceTier: enabled
+                                        ? model.fastServiceTier
+                                        : 'default',
                                   );
                                 })
                             : null,

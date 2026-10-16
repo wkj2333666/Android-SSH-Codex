@@ -69,6 +69,11 @@ final class RemoteModel {
   final String defaultReasoningEffort;
   final List<RemoteReasoningEffort> supportedReasoningEfforts;
   final List<String> serviceTiers;
+  String? get fastServiceTier => serviceTiers.contains('priority')
+      ? 'priority'
+      : serviceTiers.contains('fast')
+          ? 'fast'
+          : null;
   bool get supportsFast =>
       serviceTiers.contains('fast') || serviceTiers.contains('priority');
 }

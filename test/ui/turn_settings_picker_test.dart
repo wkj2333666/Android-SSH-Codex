@@ -7,7 +7,7 @@ void main() {
   const models = [
     RemoteModel(
       id: 'sol-entry',
-      serviceTiers: ['fast'],
+      serviceTiers: ['priority'],
       model: 'gpt-5.6-sol',
       displayName: 'GPT-5.6 Sol',
       description: 'Frontier coding model',
@@ -60,7 +60,7 @@ void main() {
     await tester.tap(find.byKey(const Key('turn-effort-medium')));
     await tester.tap(find.byKey(const Key('turn-settings-apply')));
     await tester.pumpAndSettle();
-    expect(selection!.serviceTier, 'fast');
+    expect(selection!.serviceTier, 'priority');
     expect(selection!.effort, 'medium');
   });
 

@@ -522,7 +522,9 @@ void main() {
               'hidden': false,
               'isDefault': true,
               'defaultReasoningEffort': 'high',
-              'serviceTiers': [{'id': 'fast', 'name': 'Fast', 'description': ''}],
+              'serviceTiers': [
+                {'id': 'fast', 'name': 'Fast', 'description': ''}
+              ],
               'supportedReasoningEfforts': [
                 {
                   'reasoningEffort': 'medium',
@@ -626,7 +628,7 @@ void main() {
     }
   });
 
-  for (final tier in ['fast', 'default']) {
+  for (final tier in ['priority', 'default']) {
     test('turn start sends explicit $tier service tier', () async {
       final transport = _RecordingTransport();
       final rpc = JsonRpcClient(transport)..start();

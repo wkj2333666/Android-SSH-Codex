@@ -18,6 +18,7 @@ import 'protocol/json_rpc_client.dart';
 import 'protocol/websocket_rpc_transport.dart';
 import 'tasks/task_catalog.dart';
 import 'tasks/task_draft.dart';
+import 'tasks/turn_settings.dart';
 import 'tasks/task_event_batcher.dart';
 import 'tasks/task_message_queue.dart';
 import 'tasks/task_operation_lock.dart';
@@ -1386,6 +1387,11 @@ final class AppController extends ChangeNotifier {
         await api.startThread(cwd: cwd, projectId: project?.remoteId);
     if (!_isCurrentSession(api, attempt, epoch, profileId)) return;
     _subscribedThreadIds = {..._subscribedThreadIds, threadId};
+    draftForTask(threadId).settings = TurnSettings(
+      model: model,
+      effort: effort,
+      serviceTier: serviceTier ?? 'default',
+    );
     _selectedTaskId = threadId;
     _taskReducer.applyEvent(
       _epoch,
