@@ -150,7 +150,8 @@ final class AppController extends ChangeNotifier {
     controller._workspaceHostId = 'test';
     controller._connectionPhase = RemoteConnectionPhase.connected;
     controller._notificationSubscription = rpc.notifications.listen(
-      (event) => controller._handleNotification(controller._connectionAttempt, event),
+      (event) =>
+          controller._handleNotification(controller._connectionAttempt, event),
     );
     return controller;
   }
@@ -968,7 +969,8 @@ final class AppController extends ChangeNotifier {
         await _ensureThreadSubscribed(taskId,
             api: api, attempt: attempt, epoch: epoch, profileId: profileId);
       } catch (exception) {
-        subscriptionError = 'Live updates unavailable: ${_friendlyError(exception)}';
+        subscriptionError =
+            'Live updates unavailable: ${_friendlyError(exception)}';
       }
       if (!_isCurrentSession(api, attempt, epoch, profileId) ||
           _selectedTaskId != taskId) return;
@@ -980,8 +982,10 @@ final class AppController extends ChangeNotifier {
         return;
       }
       _agentDeltaBatcher.flush();
-      _taskReducer.mergeLatestItems(epoch, taskId, page.items, readToken: readToken);
-      if (subscriptionError != null) _historyLoadState.fail(token, subscriptionError);
+      _taskReducer.mergeLatestItems(epoch, taskId, page.items,
+          readToken: readToken);
+      if (subscriptionError != null)
+        _historyLoadState.fail(token, subscriptionError);
     } catch (exception) {
       if (api != _api || epoch != _epoch) return;
       _historyLoadState.fail(token, _friendlyError(exception));
@@ -1942,21 +1946,23 @@ final class AppController extends ChangeNotifier {
     bool readItems = true,
   }) async {
     if (readItems) {
-    try {
-      _agentDeltaBatcher.flush();
-      final readToken = _taskReducer.captureItemsRead(epoch, threadId);
-      final page = await api.readThreadTurnsPage(threadId);
-      if (!_isCurrentSession(api, attempt, epoch, profileId)) return;
-      _agentDeltaBatcher.flush();
-      _taskReducer.mergeLatestItems(epoch, threadId, page.items, readToken: readToken);
-      if (_selectedTaskId == threadId && _historyLoadState.taskId != threadId) {
-        final token = _historyLoadState.beginInitial(threadId);
-        _historyLoadState.complete(token, nextCursor: page.nextCursor);
+      try {
+        _agentDeltaBatcher.flush();
+        final readToken = _taskReducer.captureItemsRead(epoch, threadId);
+        final page = await api.readThreadTurnsPage(threadId);
+        if (!_isCurrentSession(api, attempt, epoch, profileId)) return;
+        _agentDeltaBatcher.flush();
+        _taskReducer.mergeLatestItems(epoch, threadId, page.items,
+            readToken: readToken);
+        if (_selectedTaskId == threadId &&
+            _historyLoadState.taskId != threadId) {
+          final token = _historyLoadState.beginInitial(threadId);
+          _historyLoadState.complete(token, nextCursor: page.nextCursor);
+        }
+        notifyListeners();
+      } catch (exception) {
+        debugPrint('Could not catch up selected task context: $exception');
       }
-      notifyListeners();
-    } catch (exception) {
-      debugPrint('Could not catch up selected task context: $exception');
-    }
     }
     try {
       final activeTurnId = await api.readActiveTurnId(threadId);
@@ -2249,7 +2255,8 @@ final class AppController extends ChangeNotifier {
     final operation = () async {
       final settings = await api.resumeThread(threadId);
       _ensureCurrentSession(api, attempt, epoch, profileId);
-      _taskReducer.setTurnSettings(epoch, threadId, settings.model, settings.effort);
+      _taskReducer.setTurnSettings(
+          epoch, threadId, settings.model, settings.effort);
       _subscribedThreadIds = {..._subscribedThreadIds, threadId};
     }();
     _pendingThreadSubscriptions[threadId] = operation;

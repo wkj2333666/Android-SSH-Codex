@@ -13,16 +13,21 @@ void main() {
   });
   List<TaskItem> items() => reducer.state.tasks['task']!.items;
 
-  test('fresh read replaces even longer cached text and preserves older history', () {
-    reducer.replaceItems(epoch, 'task', [item('a'), item('b', 'A long cached draft')]);
+  test(
+      'fresh read replaces even longer cached text and preserves older history',
+      () {
+    reducer.replaceItems(
+        epoch, 'task', [item('a'), item('b', 'A long cached draft')]);
     final token = reducer.captureItemsRead(epoch, 'task');
-    reducer.mergeLatestItems(epoch, 'task', [item('b', 'A'), item('c')], readToken: token);
+    reducer.mergeLatestItems(epoch, 'task', [item('b', 'A'), item('c')],
+        readToken: token);
     expect(items().map((item) => item.id), ['a', 'b', 'c']);
     expect(items()[1].text, 'A');
   });
 
   test('older overlapping page never moves cached messages to the bottom', () {
-    reducer.replaceItems(epoch, 'task', [item('a'), item('b'), item('c'), item('d')]);
+    reducer.replaceItems(
+        epoch, 'task', [item('a'), item('b'), item('c'), item('d')]);
     reducer.prependItems(epoch, 'task', [item('b'), item('c')]);
     expect(items().map((item) => item.id), ['a', 'b', 'c', 'd']);
     reducer.prependItems(epoch, 'task', [item('old'), item('a')]);
@@ -34,24 +39,47 @@ void main() {
     final token = reducer.captureItemsRead(epoch, 'task');
     reducer.applyEvent(epoch, TaskEvent.itemChanged('task', item('live')));
     reducer.applyEvent(epoch, TaskEvent.itemChanged('task', item('c')));
-    reducer.mergeLatestItems(epoch, 'task', [item('b'), item('c')], readToken: token);
+    reducer.mergeLatestItems(epoch, 'task', [item('b'), item('c')],
+        readToken: token);
     expect(items().map((item) => item.id), ['a', 'b', 'live', 'c']);
   });
 
   test('snapshot cannot rewind a streamed delta or completed tool event', () {
-    reducer.replaceItems(epoch, 'task', [item('a', 'Hello'),
-      const TaskItem(id: 'tool', kind: TaskItemKind.command, text: 'running', status: 'inProgress')]);
+    reducer.replaceItems(epoch, 'task', [
+      item('a', 'Hello'),
+      const TaskItem(
+          id: 'tool',
+          kind: TaskItemKind.command,
+          text: 'running',
+          status: 'inProgress')
+    ]);
     final token = reducer.captureItemsRead(epoch, 'task');
-    reducer.applyEvent(epoch, const TaskEvent.agentDelta('task', 'a', null, ' world'));
-    reducer.applyEvent(epoch, const TaskEvent.itemChanged('task',
-      TaskItem(id: 'tool', kind: TaskItemKind.command, text: 'done', status: 'completed')));
-    reducer.mergeLatestItems(epoch, 'task', [item('a', 'Hello'),
-      const TaskItem(id: 'tool', kind: TaskItemKind.command, text: 'running')], readToken: token);
+    reducer.applyEvent(
+        epoch, const TaskEvent.agentDelta('task', 'a', null, ' world'));
+    reducer.applyEvent(
+        epoch,
+        const TaskEvent.itemChanged(
+            'task',
+            TaskItem(
+                id: 'tool',
+                kind: TaskItemKind.command,
+                text: 'done',
+                status: 'completed')));
+    reducer.mergeLatestItems(
+        epoch,
+        'task',
+        [
+          item('a', 'Hello'),
+          const TaskItem(
+              id: 'tool', kind: TaskItemKind.command, text: 'running')
+        ],
+        readToken: token);
     expect(items().first.text, 'Hello world');
     expect(items().last.status, 'completed');
   });
 
-  test('two identical optimistic messages retain separate server identities', () {
+  test('two identical optimistic messages retain separate server identities',
+      () {
     reducer.appendPendingUserMessage(epoch, 'task', 'local-1', 'again');
     reducer.appendPendingUserMessage(epoch, 'task', 'local-2', 'again');
     reducer.mergeLatestItems(epoch, 'task', const [

@@ -1351,8 +1351,10 @@ class _TaskTimelineState extends State<TaskTimeline>
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               child: Row(
                 children: [
-                  Expanded(child: Text('Showing cached context. ${widget.error}')),
-                  TextButton(onPressed: widget.onRetry, child: const Text('Retry')),
+                  Expanded(
+                      child: Text('Showing cached context. ${widget.error}')),
+                  TextButton(
+                      onPressed: widget.onRetry, child: const Text('Retry')),
                 ],
               ),
             ),

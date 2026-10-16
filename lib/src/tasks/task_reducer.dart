@@ -440,12 +440,15 @@ final class TaskReducer {
       if (!seen.add(item.id)) continue;
       resolved.add(currentById[item.id] ?? item);
     }
-    _replaceTaskItems(current,
-        _mergeOrderedPage(current.items, resolved, prependWithoutOverlap: true));
+    _replaceTaskItems(
+        current,
+        _mergeOrderedPage(current.items, resolved,
+            prependWithoutOverlap: true));
   }
 
   TaskItemsReadToken captureItemsRead(int epoch, String taskId) =>
-      TaskItemsReadToken(epoch, taskId, _state.tasks[taskId]?.items ?? const []);
+      TaskItemsReadToken(
+          epoch, taskId, _state.tasks[taskId]?.items ?? const []);
 
   void appendPendingUserMessage(
     int epoch,
@@ -529,7 +532,8 @@ final class TaskReducer {
       final existing = currentIndex == -1 ? null : currentItems[currentIndex];
       resolvedLatest.add(
         existing == null ||
-                (beforeRead != null && identical(beforeRead[latest.id], existing))
+                (beforeRead != null &&
+                    identical(beforeRead[latest.id], existing))
             ? latest
             : beforeRead == null || existing.id != latest.id
                 ? _preferCurrentStreamingItem(existing, latest)
@@ -542,7 +546,8 @@ final class TaskReducer {
       for (var index = 0; index < currentItems.length; index++)
         pendingReplacements[index] ?? currentItems[index],
     ];
-    _replaceTaskItems(current, _mergeOrderedPage(anchoredCurrent, resolvedLatest));
+    _replaceTaskItems(
+        current, _mergeOrderedPage(anchoredCurrent, resolvedLatest));
   }
 
   void _replaceTaskItems(TaskRecord current, List<TaskItem> items) {
@@ -717,7 +722,9 @@ List<TaskItem> _mergeOrderedPage(
   final pageIds = page.map((item) => item.id).toSet();
   final overlaps = page.map((item) => positions[item.id]).whereType<int>();
   if (overlaps.isEmpty) {
-    return prependWithoutOverlap ? [...page, ...current] : [...current, ...page];
+    return prependWithoutOverlap
+        ? [...page, ...current]
+        : [...current, ...page];
   }
   var cursor = overlaps.reduce((a, b) => a < b ? a : b);
   final result = current.take(cursor).toList();
@@ -731,7 +738,8 @@ List<TaskItem> _mergeOrderedPage(
     }
     result.add(item);
   }
-  result.addAll(current.skip(cursor).where((item) => !pageIds.contains(item.id)));
+  result
+      .addAll(current.skip(cursor).where((item) => !pageIds.contains(item.id)));
   return result;
 }
 
