@@ -56,6 +56,7 @@ void main() {
     await tester.tap(find.byKey(const Key('turn-settings-selector')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('turn-model-model')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('turn-settings-apply')));
     await tester.pumpAndSettle();
     expect(controller.draftForTask('cached').settings.model, 'model');
