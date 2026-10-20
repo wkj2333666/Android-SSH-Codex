@@ -52,7 +52,9 @@ void main() {
 
   test('disposing before initialization does not erase saved drafts', () async {
     final store = MemoryProfileStore();
-    await store.writeWorkspace({'drafts': ['existing state']});
+    await store.writeWorkspace({
+      'drafts': ['existing state']
+    });
     AppController(store: store).dispose();
     await Future<void>.delayed(Duration.zero);
     expect((await store.readWorkspace())['drafts'], ['existing state']);
