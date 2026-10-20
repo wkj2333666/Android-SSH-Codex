@@ -269,7 +269,7 @@ class _TaskViewState extends State<TaskView> {
             onTap: widget.controller.isConnected && !_commandBusy
                 ? _editGoal
                 : null,
-            trailing: goal.status == 'active' || goal.status == 'paused'
+            trailing: goal.status != 'complete'
                 ? IconButton(
                     tooltip:
                         goal.status == 'active' ? 'Pause goal' : 'Resume goal',
@@ -1466,6 +1466,9 @@ class _TaskTimelineState extends State<TaskTimeline>
                         child: TimelineItemView(
                           item: item,
                           loadImage: widget.loadImage,
+                          onTurnAction: item.kind == TaskItemKind.user &&
+                                  item.turnId != null && widget.onTurnAction != null
+                              ? () => widget.onTurnAction!(item) : null,
                           onAnswerQuestions: item.id == openQuestionItemId &&
                                   widget.onAnswerQuestions != null
                               ? (answers) =>

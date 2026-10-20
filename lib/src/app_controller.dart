@@ -1804,7 +1804,8 @@ final class AppController extends ChangeNotifier {
     final profileId = _selectedHostId;
     if (profileId == null) throw StateError('Select a host first.');
     if (!isConnected && mode == TaskSendMode.steer) {
-      throw StateError('Reconnect to steer the active turn. Use Queue while offline.');
+      throw StateError(
+          'Reconnect to steer the active turn. Use Queue while offline.');
     }
     var task = selectedTask;
     if (task == null) throw StateError('Select or create a task first.');
@@ -2015,8 +2016,7 @@ final class AppController extends ChangeNotifier {
     TaskRecord task,
     QueuedTaskMessage pending, {
     bool keepOnFailure = false,
-  }
-  ) async {
+  }) async {
     final api = _requireApi();
     final attempt = _connectionAttempt;
     final epoch = _epoch;
@@ -2066,7 +2066,8 @@ final class AppController extends ChangeNotifier {
         return;
       }
       _setLocalUserMessageStatus(task.id, pending, 'failed', epoch: epoch);
-      await _settlePrompt(profileId, task.id, pending, keepOnFailure ? 'failed' : 'sent');
+      await _settlePrompt(
+          profileId, task.id, pending, keepOnFailure ? 'failed' : 'sent');
       rethrow;
     }
   }
@@ -2419,7 +2420,9 @@ final class AppController extends ChangeNotifier {
       task.id,
       objective: normalizedObjective,
       tokenBudget: tokenBudget,
-      status: _goals[task.id]?.status ?? 'active',
+      status: _goals[task.id]?.objective == normalizedObjective
+          ? _goals[task.id]!.status
+          : 'active',
     );
     if (api == _api && epoch == _epoch) {
       _goals[task.id] = result;
@@ -2495,6 +2498,9 @@ final class AppController extends ChangeNotifier {
   }
 
   Future<void> archiveTask(String id, bool archived) async {
+    if (archived && _messageQueue.hasPending(id)) {
+      throw StateError('Resolve queued messages before archiving this task.');
+    }
     final api = _requireApi();
     final epoch = _epoch;
     await api.archiveThread(id, archived: archived);

@@ -57,7 +57,7 @@ not imply Play approval.
 - Use **Manage tasks** for paginated server search, pinned tasks and archived
   tasks. Rename, pin/unpin, archive and restore without deleting conversations.
   Pinning requires a server that supports persisted `isPinned` metadata.
-- Fork a conversation from its menu, or long-press a message to fork through
+- Fork a conversation from its menu, or use a message's **⋯** / long-press to fork through
   that turn or revert from it. Revert removes that turn and later conversation
   history, **not file changes**; it requires an idle, paginated thread. Fork
   first to keep a copy. Older servers may not support these operations.

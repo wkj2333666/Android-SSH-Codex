@@ -715,7 +715,8 @@ String _normalizedUserMessageText(String text) =>
 
 bool _isPendingUserItem(TaskItem item) =>
     item.kind == TaskItemKind.user &&
-    (item.status == 'sending' || item.status == 'sent');
+    (item.status == 'sending' || item.status == 'sent' ||
+        item.status == 'uncertain');
 
 TaskItem _preferCurrentStreamingItem(TaskItem current, TaskItem latest) {
   if (current.kind == TaskItemKind.agent &&

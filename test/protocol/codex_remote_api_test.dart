@@ -334,6 +334,8 @@ void main() {
 
       final page = await reading;
       expect(page.items.map((item) => item.id), ['old', 'new']);
+      expect(page.items.map((item) => item.turnId),
+          ['same-large-turn', 'same-large-turn']);
       expect(page.nextCursor, 'opaque-older-cursor');
     } finally {
       await rpc.close();
