@@ -1467,8 +1467,10 @@ class _TaskTimelineState extends State<TaskTimeline>
                           item: item,
                           loadImage: widget.loadImage,
                           onTurnAction: item.kind == TaskItemKind.user &&
-                                  item.turnId != null && widget.onTurnAction != null
-                              ? () => widget.onTurnAction!(item) : null,
+                                  item.turnId != null &&
+                                  widget.onTurnAction != null
+                              ? () => widget.onTurnAction!(item)
+                              : null,
                           onAnswerQuestions: item.id == openQuestionItemId &&
                                   widget.onAnswerQuestions != null
                               ? (answers) =>

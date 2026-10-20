@@ -1972,11 +1972,13 @@ final class AppController extends ChangeNotifier {
     final queue = _outboxes.putIfAbsent(host, TaskMessageQueue.new);
     if (!queue.values(task).contains(pending)) queue.enqueue(task, pending);
     _deliveryStates[pending.id] = 'sending';
+    _markQueuedMessageInFlight(task, pending.id);
     await _saveWorkspace();
   }
 
   Future<void> _settlePrompt(
       String host, String task, QueuedTaskMessage pending, String state) async {
+    _unmarkQueuedMessageInFlight(task, pending.id);
     if (state == 'sent') {
       _outboxes[host]?.remove(task, pending);
       _deliveryStates.remove(pending.id);
@@ -2078,6 +2080,7 @@ final class AppController extends ChangeNotifier {
     String status, {
     required int epoch,
   }) {
+    if (_disposed) return;
     if (status == 'sending') {
       _taskReducer.appendPendingUserMessage(
         epoch,
@@ -2246,17 +2249,20 @@ final class AppController extends ChangeNotifier {
 
   void _markQueuedMessageInFlight(String threadId, String messageId) {
     final ids = _inFlightQueuedMessageIds.putIfAbsent(threadId, () => {});
-    if (ids.add(messageId)) notifyListeners();
+    if (ids.add(messageId) && !_disposed) notifyListeners();
   }
 
   void _unmarkQueuedMessageInFlight(String threadId, String messageId) {
     final ids = _inFlightQueuedMessageIds[threadId];
     if (ids == null || !ids.remove(messageId)) return;
     if (ids.isEmpty) _inFlightQueuedMessageIds.remove(threadId);
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   Future<void> removeQueuedMessage(String taskId, String messageId) async {
+    if (_deliveryStates[messageId] == 'sending') {
+      throw StateError('This message is already being sent.');
+    }
     final operation = _messageOperations.tryAcquire(taskId);
     if (operation == null) {
       throw StateError('A queued message is already being sent.');
@@ -2277,6 +2283,10 @@ final class AppController extends ChangeNotifier {
   }
 
   Future<void> steerQueuedMessage(String taskId, String messageId) async {
+    if (_deliveryStates[messageId] == 'sending' ||
+        _deliveryStates[messageId] == 'uncertain') {
+      throw StateError('Check delivery before sending this message again.');
+    }
     final operation = _messageOperations.tryAcquire(taskId);
     if (operation == null) {
       throw StateError('A queued message is already being sent.');
@@ -2641,6 +2651,14 @@ final class AppController extends ChangeNotifier {
     if (attempt != _connectionAttempt) return;
     final method = notification.method;
     final params = notification.params;
+    if (method == 'thread/name/updated') {
+      final id = params['threadId'] as String?;
+      final name = params['threadName'] as String?;
+      if (id != null && name != null) {
+        _taskReducer.updateMetadata(_epoch, id, title: name);
+        notifyListeners();
+      }
+    }
     if (method == 'thread/goal/updated' || method == 'thread/goal/cleared') {
       final id = params['threadId'] as String?;
       if (id != null) {

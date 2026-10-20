@@ -50,11 +50,13 @@ TaskSnapshot task() => TaskSnapshot(
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('timed-out submission is durable and refresh never resends it', () async {
+  test('timed-out submission is durable and refresh never resends it',
+      () async {
     final store = MemoryProfileStore();
     final transport = Transport()..withheldMethods.add('turn/start');
     final rpc = JsonRpcClient(transport,
-        requestTimeout: const Duration(milliseconds: 50))..start();
+        requestTimeout: const Duration(milliseconds: 50))
+      ..start();
     final controller = AppController.connectedForTesting(
         rpc: rpc, store: store, cachedTasks: [task()]);
     await controller.selectTask('task');
@@ -65,19 +67,24 @@ void main() {
     expect((saved['outbox'] as List).single['state'], 'uncertain');
     await controller.refreshTasks();
     await Future<void>.delayed(Duration.zero);
-    expect(transport.calls.where((call) => call['method'] == 'turn/start').length, 1);
+    expect(
+        transport.calls.where((call) => call['method'] == 'turn/start').length,
+        1);
     controller.dispose();
     await rpc.close();
   });
 
-  test('project change notifications refresh without waiting for timer polling', () async {
+  test('project change notifications refresh without waiting for timer polling',
+      () async {
     final transport = Transport();
     final rpc = JsonRpcClient(transport)..start();
     final controller = AppController.connectedForTesting(rpc: rpc);
     transport.notify('project/changed', {});
     await Future<void>.delayed(const Duration(milliseconds: 350));
-    expect(transport.calls.any((call) => call['method'] == 'project/list'), isTrue);
-    expect(transport.calls.any((call) => call['method'] == 'thread/list'), isTrue);
+    expect(transport.calls.any((call) => call['method'] == 'project/list'),
+        isTrue);
+    expect(
+        transport.calls.any((call) => call['method'] == 'thread/list'), isTrue);
     controller.dispose();
     await rpc.close();
   });

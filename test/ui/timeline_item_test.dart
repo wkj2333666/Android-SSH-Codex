@@ -12,11 +12,14 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('message turn actions share the compact copy row', (tester) async {
+  testWidgets('message turn actions share the compact copy row',
+      (tester) async {
     var invoked = false;
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: TimelineItemView(
-      item: const TaskItem(id: 'user', kind: TaskItemKind.user,
-          text: 'Hello', turnId: 'turn'),
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: TimelineItemView(
+      item: const TaskItem(
+          id: 'user', kind: TaskItemKind.user, text: 'Hello', turnId: 'turn'),
       onTurnAction: () => invoked = true,
     ))));
     await tester.tap(find.byTooltip('Turn actions'));
