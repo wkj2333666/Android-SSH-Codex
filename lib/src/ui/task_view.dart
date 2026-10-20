@@ -20,6 +20,7 @@ import 'widgets/timeline_item.dart';
 import 'widgets/user_input_panel.dart';
 import 'widgets/remote_file_actions.dart';
 import 'widgets/task_question_panel.dart';
+import 'task_manager.dart';
 
 bool isTaskComposerInputEnabled({
   required TaskRecord task,
@@ -33,7 +34,7 @@ bool isTaskComposerSendEnabled({
   required bool sending,
   bool attachmentsReady = true,
 }) =>
-    connected && !sending && attachmentsReady;
+    !sending && attachmentsReady;
 
 bool isTaskComposerEnabled({
   required TaskRecord task,
@@ -196,6 +197,7 @@ class _TaskViewState extends State<TaskView> {
         onLoadOlder: widget.controller.loadOlderSelectedTaskContext,
         answeredQuestionItemIds: _answeredQuestionItemIds,
         onAnswerQuestions: _answerTaskQuestions,
+        onTurnAction: _turnAction,
       ),
     );
     final content = Column(
@@ -252,6 +254,26 @@ class _TaskViewState extends State<TaskView> {
             enabled: widget.controller.isConnected && !_queueActionBusy,
             onSteer: _steerQueuedMessage,
             onRemove: _removeQueuedMessage,
+            deliveryState: widget.controller.deliveryState,
+            onRetry: _retryQueuedMessage,
+          ),
+        if (widget.controller.selectedGoal case final goal?)
+          ListTile(
+            dense: true,
+            visualDensity: const VisualDensity(vertical: -4),
+            leading: const Icon(Icons.flag_outlined, size: 18),
+            title: Text(goal.objective, maxLines: 1, overflow: TextOverflow.ellipsis),
+            subtitle: Text('${goal.status} · ${goal.tokensUsed}'
+                '${goal.tokenBudget == null ? '' : ' / ${goal.tokenBudget}'} tokens'),
+            onTap: widget.controller.isConnected && !_commandBusy ? _editGoal : null,
+            trailing: goal.status == 'active' || goal.status == 'paused'
+                ? IconButton(
+                    tooltip: goal.status == 'active' ? 'Pause goal' : 'Resume goal',
+                    icon: Icon(goal.status == 'active' ? Icons.pause : Icons.play_arrow),
+                    onPressed: widget.controller.isConnected && !_commandBusy
+                        ? () => _runCommand(() => widget.controller.setGoalPaused(goal.status == 'active'))
+                        : null)
+                : null,
           ),
         if (_selectedSkill case final skill?)
           Align(
@@ -290,7 +312,7 @@ class _TaskViewState extends State<TaskView> {
             SendModePicker(
               value: _sendMode,
               enabled: !_sending,
-              onChanged: (mode) => setState(() => _sendMode = mode),
+              onChanged: (mode) { setState(() => _sendMode = mode); _draft.changed(); },
               compact: true,
             ),
           ]),
@@ -347,7 +369,7 @@ class _TaskViewState extends State<TaskView> {
   }
 
   Future<void> _send() async {
-    if (_sending || !widget.controller.isConnected) return;
+    if (_sending) return;
     final draft = _draft;
     final controller = widget.controller;
     final submittedText = _composer.text;
@@ -584,6 +606,49 @@ class _TaskViewState extends State<TaskView> {
         () => widget.controller.removeQueuedMessage(widget.task.id, messageId),
       );
 
+  Future<void> _retryQueuedMessage(String messageId) async {
+    final confirm = await showDialog<bool>(context: context, builder: (context) => AlertDialog(
+      title: const Text('Send this message again?'),
+      content: const Text('Check the latest conversation first. If the server already '
+          'received this message, sending it again may execute it twice.'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Send again')),
+      ],
+    ));
+    if (confirm == true && mounted) {
+      await _runQueueAction(() => widget.controller.retryQueuedMessage(widget.task.id, messageId));
+    }
+  }
+
+  Future<void> _turnAction(TaskItem item) async {
+    if (!widget.controller.isConnected || item.turnId == null || _commandBusy) return;
+    final action = await showModalBottomSheet<String>(context: context,
+        builder: (context) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(leading: const Icon(Icons.fork_right), title: const Text('Fork through this turn'),
+              onTap: () => Navigator.pop(context, 'fork')),
+          ListTile(leading: const Icon(Icons.undo), title: const Text('Revert from this turn'),
+              onTap: () => Navigator.pop(context, 'revert')),
+        ])));
+    if (!mounted || action == null) return;
+    if (action == 'fork') {
+      await _runCommand(() => widget.controller.forkSelectedTask(turnId: item.turnId));
+      return;
+    }
+    final confirmed = await showDialog<bool>(context: context, builder: (context) => AlertDialog(
+      title: const Text('Revert conversation?'),
+      content: const Text('Remove this turn and all later turns from conversation history. '
+          'Files are NOT reverted. Fork first if you want to keep a copy.'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Revert')),
+      ],
+    ));
+    if (confirmed == true && mounted) {
+      await _runCommand(() => widget.controller.revertSelectedTask(item.turnId!));
+    }
+  }
+
   Future<void> _runQueueAction(Future<void> Function() operation) async {
     if (_queueActionBusy) return;
     setState(() => _queueActionBusy = true);
@@ -606,6 +671,19 @@ class _TaskViewState extends State<TaskView> {
         await _compactTask();
       case TaskCommand.interrupt:
         await _runCommand(widget.controller.interruptSelectedTask);
+      case TaskCommand.rename:
+        final name = await askTaskName(context, widget.task.title);
+        if (name != null && mounted) {
+          await _runCommand(() => widget.controller.renameTask(widget.task.id, name));
+        }
+      case TaskCommand.pin:
+        await _runCommand(() => widget.controller.pinTask(widget.task.id, !widget.task.isPinned));
+      case TaskCommand.archive:
+        if (await confirmArchive(context) && mounted) {
+          await _runCommand(() => widget.controller.archiveTask(widget.task.id, true));
+        }
+      case TaskCommand.fork:
+        await _runCommand(() => widget.controller.forkSelectedTask());
     }
   }
 
@@ -868,7 +946,7 @@ class _TaskViewState extends State<TaskView> {
 
 enum _GoalAction { save, clear }
 
-enum TaskCommand { skills, goal, compact, interrupt }
+enum TaskCommand { skills, goal, compact, interrupt, rename, pin, archive, fork }
 
 class QueuedMessagePanel extends StatelessWidget {
   const QueuedMessagePanel({
@@ -876,6 +954,8 @@ class QueuedMessagePanel extends StatelessWidget {
     required this.enabled,
     required this.onSteer,
     required this.onRemove,
+    this.deliveryState,
+    this.onRetry,
     super.key,
   });
 
@@ -883,6 +963,8 @@ class QueuedMessagePanel extends StatelessWidget {
   final bool enabled;
   final Future<void> Function(String messageId) onSteer;
   final Future<void> Function(String messageId) onRemove;
+  final String? Function(String id)? deliveryState;
+  final Future<void> Function(String id)? onRetry;
 
   @override
   Widget build(BuildContext context) => DecoratedBox(
@@ -917,6 +999,8 @@ class QueuedMessagePanel extends StatelessWidget {
                   separatorBuilder: (_, __) => const Divider(height: 1),
                   itemBuilder: (context, index) {
                     final message = messages[index];
+                    final state = deliveryState?.call(message.id);
+                    final needsReview = state == 'uncertain' || state == 'failed';
                     final metadata = [
                       if (message.model case final model?) model,
                       if (message.effort case final effort?) effort,
@@ -940,6 +1024,11 @@ class QueuedMessagePanel extends StatelessWidget {
                                     style:
                                         Theme.of(context).textTheme.bodySmall,
                                   ),
+                                if (needsReview)
+                                  Text(state == 'uncertain'
+                                      ? 'Delivery unknown · Check conversation before retrying'
+                                      : 'Not sent · Retry or remove',
+                                      style: Theme.of(context).textTheme.bodySmall),
                               ],
                             ),
                           ),
@@ -948,16 +1037,17 @@ class QueuedMessagePanel extends StatelessWidget {
                           message: 'Steer queued message',
                           child: TextButton.icon(
                             onPressed: enabled
-                                ? () async => onSteer(message.id)
+                                ? () async => needsReview
+                                    ? onRetry?.call(message.id) : onSteer(message.id)
                                 : null,
                             icon: const Icon(Icons.redo, size: 18),
-                            label: const Text('Steer'),
+                            label: Text(needsReview ? 'Retry' : 'Steer'),
                           ),
                         ),
                         IconButton(
                           tooltip: 'Remove queued message',
                           onPressed:
-                              enabled ? () async => onRemove(message.id) : null,
+                              () async => onRemove(message.id),
                           icon: const Icon(Icons.close),
                         ),
                       ],
@@ -987,6 +1077,10 @@ class TaskCommandMenu extends StatelessWidget {
         tooltip: 'Task commands',
         onSelected: onSelected,
         itemBuilder: (context) => const [
+          PopupMenuItem(value: TaskCommand.rename, child: Text('Rename')),
+          PopupMenuItem(value: TaskCommand.pin, child: Text('Pin / unpin')),
+          PopupMenuItem(value: TaskCommand.archive, child: Text('Archive')),
+          PopupMenuItem(value: TaskCommand.fork, child: Text('Fork conversation')),
           PopupMenuItem(
             value: TaskCommand.skills,
             child: ListTile(
@@ -1033,10 +1127,12 @@ class TaskTimeline extends StatefulWidget {
     this.loadImage,
     this.answeredQuestionItemIds = const {},
     this.onAnswerQuestions,
+    this.onTurnAction,
     super.key,
   });
 
   final List<TaskItem> items;
+  final Future<void> Function(TaskItem)? onTurnAction;
   final bool loading;
   final String? error;
   final VoidCallback? onRetry;
@@ -1310,7 +1406,10 @@ class _TaskTimelineState extends State<TaskTimeline>
                     );
                   }
                   return switch (entries[entries.length - index - 1]) {
-                    TimelineMessageEntry(:final item) => TimelineItemView(
+                    TimelineMessageEntry(:final item) => GestureDetector(
+                      onLongPress: item.turnId != null && widget.onTurnAction != null
+                          ? () => widget.onTurnAction!(item) : null,
+                      child: TimelineItemView(
                         item: item,
                         loadImage: widget.loadImage,
                         onAnswerQuestions: item.id == openQuestionItemId &&
@@ -1318,7 +1417,7 @@ class _TaskTimelineState extends State<TaskTimeline>
                             ? (answers) =>
                                 widget.onAnswerQuestions!(item, answers)
                             : null,
-                      ),
+                      )),
                     TimelineActivityEntry(:final items) =>
                       TimelineActivityGroup(items: items),
                   };

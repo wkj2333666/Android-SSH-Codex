@@ -746,6 +746,7 @@ void main() {
           jsonDecode(transport.sent.single) as Map<String, dynamic>;
       expect(setRequest['params'], {
         'threadId': 'thr_1',
+        'origin': 'user',
         'objective': 'Finish the migration',
         'status': 'active',
         'tokenBudget': 40000,
@@ -792,7 +793,7 @@ void main() {
       expect(clearRequest, {
         'method': 'thread/goal/clear',
         'id': 1,
-        'params': {'threadId': 'thr_1'},
+        'params': {'threadId': 'thr_1', 'origin': 'user'},
       });
       transport.incoming.add(jsonEncode({
         'id': clearRequest['id'],

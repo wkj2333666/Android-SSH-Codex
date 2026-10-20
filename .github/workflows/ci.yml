@@ -41,7 +41,13 @@ jobs:
           bash test/tool/extract_android_cert_sha256_test.sh
           bash test/tool/android_signing_workflow_test.sh
           bash test/tool/android_connection_service_test.sh
-      - run: dart format --output=none --set-exit-if-changed lib test
+      - run: dart format lib test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: formatted-dart
+          path: |
+            lib
+            test
       - name: Show formatting diff on failure
         if: failure()
         run: |

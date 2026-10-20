@@ -20,11 +20,27 @@ abstract interface class ProfileStore {
   Future<void> deleteProject(String hostId, String projectId);
 }
 
-final class SecureProfileStore implements ProfileStore {
+/// Optional durable UI state, kept separate from the host credential contract.
+abstract interface class WorkspaceStore {
+  Future<Map<String, dynamic>> readWorkspace();
+  Future<void> writeWorkspace(Map<String, dynamic> value);
+}
+
+final class SecureProfileStore implements ProfileStore, WorkspaceStore {
   SecureProfileStore([SecureKeyValueStore? storage])
       : _storage = storage ?? createSecureKeyValueStore();
 
   final SecureKeyValueStore _storage;
+
+  @override
+  Future<Map<String, dynamic>> readWorkspace() async {
+    final raw = await _storage.read(key: 'workspace.v1');
+    return raw == null ? {} : (jsonDecode(raw) as Map).cast<String, dynamic>();
+  }
+
+  @override
+  Future<void> writeWorkspace(Map<String, dynamic> value) =>
+      _storage.write(key: 'workspace.v1', value: jsonEncode(value));
 
   @override
   Future<List<HostProfile>> readProfiles() async {
@@ -165,7 +181,17 @@ final class SecureProfileStore implements ProfileStore {
   }
 }
 
-final class MemoryProfileStore implements ProfileStore {
+final class MemoryProfileStore implements ProfileStore, WorkspaceStore {
+  Map<String, dynamic> _workspace = {};
+
+  @override
+  Future<Map<String, dynamic>> readWorkspace() async =>
+      (jsonDecode(jsonEncode(_workspace)) as Map).cast<String, dynamic>();
+
+  @override
+  Future<void> writeWorkspace(Map<String, dynamic> value) async {
+    _workspace = (jsonDecode(jsonEncode(value)) as Map).cast<String, dynamic>();
+  }
   final Map<String, HostProfile> _profiles = {};
   final Map<String, HostSecret> _secrets = {};
   final Map<String, String> _fingerprints = {};
