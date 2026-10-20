@@ -50,6 +50,14 @@ TaskSnapshot task() => TaskSnapshot(
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test('disposing before initialization does not erase saved drafts', () async {
+    final store = MemoryProfileStore();
+    await store.writeWorkspace({'drafts': ['existing state']});
+    AppController(store: store).dispose();
+    await Future<void>.delayed(Duration.zero);
+    expect((await store.readWorkspace())['drafts'], ['existing state']);
+  });
+
   test('timed-out submission is durable and refresh never resends it',
       () async {
     final store = MemoryProfileStore();

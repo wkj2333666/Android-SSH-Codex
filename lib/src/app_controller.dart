@@ -161,6 +161,7 @@ final class AppController extends ChangeNotifier {
     ProfileStore? store,
   }) {
     final controller = AppController(store: store ?? MemoryProfileStore());
+    controller._workspaceLoaded = true;
     controller._models = cachedModels;
     controller._taskReducer.applyRefresh(
         controller._taskReducer.beginRefresh(controller._epoch),
@@ -211,6 +212,7 @@ final class AppController extends ChangeNotifier {
   Timer? _draftSaveTimer;
   Future<void> _workspaceWrite = Future.value();
   bool _disposed = false;
+  bool _workspaceLoaded = false;
   final Map<String, RemoteThreadGoal?> _goals = {};
   final Map<String, int> _goalRevisions = {};
   Timer? _projectSyncTimer;
@@ -334,11 +336,15 @@ final class AppController extends ChangeNotifier {
           ? 'uncertain'
           : entry['state'] as String? ?? 'queued';
     }
+    _workspaceLoaded = true;
   }
 
   Future<void> _saveWorkspace() {
     final store = _store;
     if (store is! WorkspaceStore) return Future.value();
+    if (!_workspaceLoaded) {
+      return Future.error(StateError('Draft storage has not been restored.'));
+    }
     final snapshot = <String, dynamic>{
       'drafts': [
         for (final entry in _savedDrafts.entries)
@@ -364,6 +370,7 @@ final class AppController extends ChangeNotifier {
 
   Future<void> flushWorkspace() async {
     _draftSaveTimer?.cancel();
+    if (!_workspaceLoaded) return;
     await _saveWorkspace();
   }
 
@@ -431,7 +438,6 @@ final class AppController extends ChangeNotifier {
     HostProfile? autoConnectProfile;
     try {
       _profiles = await _store.readProfiles();
-      await _restoreWorkspace();
       autoConnectProfile = resolveAutoConnectProfile(
         _profiles,
         await _store.readAutoConnectHostId(),
@@ -439,6 +445,12 @@ final class AppController extends ChangeNotifier {
     } catch (exception) {
       _profiles = const [];
       _error = 'Could not read secure storage: $exception';
+    }
+    try {
+      await _restoreWorkspace();
+    } catch (exception) {
+      _workspaceLoaded = false;
+      _error = 'Could not restore drafts and queued messages: $exception';
     }
     notifyListeners();
     if (autoConnectProfile != null) {
@@ -2899,7 +2911,9 @@ final class AppController extends ChangeNotifier {
     _disposed = true;
     _draftSaveTimer?.cancel();
     _projectSyncTimer?.cancel();
-    unawaited(_saveWorkspace());
+    unawaited(flushWorkspace().catchError((Object error) {
+      debugPrint('Could not save workspace on close: $error');
+    }));
     for (final draft in _drafts.values) {
       draft.dispose();
     }
