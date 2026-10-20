@@ -12,6 +12,20 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('message turn actions share the compact copy row',
+      (tester) async {
+    var invoked = false;
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: TimelineItemView(
+      item: const TaskItem(
+          id: 'user', kind: TaskItemKind.user, text: 'Hello', turnId: 'turn'),
+      onTurnAction: () => invoked = true,
+    ))));
+    await tester.tap(find.byTooltip('Turn actions'));
+    expect(invoked, isTrue);
+    expect(find.byTooltip('Copy message'), findsOneWidget);
+  });
   for (final answered in [false, true]) {
     testWidgets('question fallback is not duplicated (answered: $answered)',
         (tester) async {

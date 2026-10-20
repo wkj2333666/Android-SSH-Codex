@@ -334,6 +334,8 @@ void main() {
 
       final page = await reading;
       expect(page.items.map((item) => item.id), ['old', 'new']);
+      expect(page.items.map((item) => item.turnId),
+          ['same-large-turn', 'same-large-turn']);
       expect(page.nextCursor, 'opaque-older-cursor');
     } finally {
       await rpc.close();
@@ -746,6 +748,7 @@ void main() {
           jsonDecode(transport.sent.single) as Map<String, dynamic>;
       expect(setRequest['params'], {
         'threadId': 'thr_1',
+        'origin': 'user',
         'objective': 'Finish the migration',
         'status': 'active',
         'tokenBudget': 40000,
@@ -792,7 +795,7 @@ void main() {
       expect(clearRequest, {
         'method': 'thread/goal/clear',
         'id': 1,
-        'params': {'threadId': 'thr_1'},
+        'params': {'threadId': 'thr_1', 'origin': 'user'},
       });
       transport.incoming.add(jsonEncode({
         'id': clearRequest['id'],

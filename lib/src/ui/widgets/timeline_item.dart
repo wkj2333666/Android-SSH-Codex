@@ -23,6 +23,7 @@ class TimelineItemView extends StatelessWidget {
     this.copyText = copyMessageText,
     this.loadImage,
     this.onAnswerQuestions,
+    this.onTurnAction,
     super.key,
   });
 
@@ -30,6 +31,7 @@ class TimelineItemView extends StatelessWidget {
   final MessageTextCopier copyText;
   final Future<Uint8List> Function(String)? loadImage;
   final TaskQuestionSubmitter? onAnswerQuestions;
+  final VoidCallback? onTurnAction;
 
   @override
   Widget build(BuildContext context) {
@@ -39,6 +41,7 @@ class TimelineItemView extends StatelessWidget {
           copyText: copyText,
           loadImage: loadImage,
           onAnswerQuestions: onAnswerQuestions,
+          onTurnAction: onTurnAction,
         ),
       _ => _ActivityCard(item: item),
     };
@@ -131,12 +134,14 @@ class _Message extends StatelessWidget {
     required this.copyText,
     this.loadImage,
     this.onAnswerQuestions,
+    this.onTurnAction,
   });
 
   final TaskItem item;
   final MessageTextCopier copyText;
   final Future<Uint8List> Function(String)? loadImage;
   final TaskQuestionSubmitter? onAnswerQuestions;
+  final VoidCallback? onTurnAction;
 
   @override
   Widget build(BuildContext context) {
@@ -192,7 +197,7 @@ class _Message extends StatelessWidget {
                     ),
                 ],
               ),
-            if (sending || copyableText.isNotEmpty) ...[
+            if (sending || copyableText.isNotEmpty || onTurnAction != null) ...[
               const SizedBox(height: 4),
               Row(
                 mainAxisSize: MainAxisSize.min,
@@ -219,6 +224,19 @@ class _Message extends StatelessWidget {
                           _copyMessage(context, copyableText, copyText),
                         ),
                         icon: const Icon(Icons.copy_all_outlined),
+                      ),
+                    ),
+                  if (onTurnAction != null)
+                    SizedBox(
+                      width: 28,
+                      height: 24,
+                      child: IconButton(
+                        tooltip: 'Turn actions',
+                        padding: EdgeInsets.zero,
+                        visualDensity: VisualDensity.compact,
+                        iconSize: 16,
+                        onPressed: onTurnAction,
+                        icon: const Icon(Icons.more_horiz),
                       ),
                     ),
                 ],

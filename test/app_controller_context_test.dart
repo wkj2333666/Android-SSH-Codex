@@ -15,8 +15,15 @@ final class _Transport implements RpcTransport {
   @override
   Stream<String> get messages => incoming.stream;
   @override
-  void send(String message) =>
-      outgoing.add(jsonDecode(message) as Map<String, dynamic>);
+  void send(String message) {
+    final request = jsonDecode(message) as Map<String, dynamic>;
+    if (request['method'] == 'thread/goal/get') {
+      reply(request, {'goal': null});
+    } else {
+      outgoing.add(request);
+    }
+  }
+
   @override
   Future<void> close() async {
     if (!incoming.isClosed) await incoming.close();

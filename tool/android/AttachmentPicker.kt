@@ -51,7 +51,7 @@ class AttachmentPicker(private val activity: Activity) {
                 resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
                     if (it.moveToFirst()) name = it.getString(0) ?: name
                 }
-                val directory = File(activity.cacheDir, "codex-attachments")
+                val directory = File(activity.filesDir, "codex-attachments")
                 require(directory.isDirectory || directory.mkdirs()) { "Cannot create attachment cache" }
                 val outputFile = File.createTempFile("picked-", ".bin", directory)
                 target = outputFile

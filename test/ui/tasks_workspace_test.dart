@@ -580,7 +580,8 @@ void main() {
         'editable while offline');
     final sendButton = tester.widget<IconButton>(find.byWidgetPredicate(
         (widget) => widget is IconButton && widget.tooltip == 'Send message'));
-    expect(sendButton.onPressed, isNull);
+    // Offline submissions now enter the durable queue.
+    expect(sendButton.onPressed, isNotNull);
     await tester.pumpWidget(const SizedBox());
     controller.dispose();
   });
