@@ -456,7 +456,8 @@ final class CodexRemoteApi {
   }
 
   Future<void> clearThreadGoal(String threadId) async {
-    await _rpc.request('thread/goal/clear', {'threadId': threadId, 'origin': 'user'});
+    await _rpc
+        .request('thread/goal/clear', {'threadId': threadId, 'origin': 'user'});
   }
 
   static RemoteThreadGoal? parseGoal(Object? value) => _parseGoal(value);
@@ -466,16 +467,17 @@ final class CodexRemoteApi {
   }
 
   Future<void> pinThread(String id, bool pinned) async {
-    final result = _map(await _rpc.request('thread/metadata/update',
-        {'threadId': id, 'isPinned': pinned}));
+    final result = _map(await _rpc.request(
+        'thread/metadata/update', {'threadId': id, 'isPinned': pinned}));
     if (_map(result['thread'])['isPinned'] != pinned) {
-      throw UnsupportedError('This server did not confirm pinning. Update remote Codex.');
+      throw UnsupportedError(
+          'This server did not confirm pinning. Update remote Codex.');
     }
   }
 
   Future<void> archiveThread(String id, {required bool archived}) async {
-    await _rpc.request(archived ? 'thread/archive' : 'thread/unarchive',
-        {'threadId': id});
+    await _rpc.request(
+        archived ? 'thread/archive' : 'thread/unarchive', {'threadId': id});
   }
 
   Future<TaskSnapshot> forkThread(String id, {String? lastTurnId}) async {
@@ -488,8 +490,8 @@ final class CodexRemoteApi {
   }
 
   Future<void> revertThread(String id, String turnId) async {
-    await _rpc.request('thread/revert',
-        {'threadId': id, 'beforeTurnId': turnId});
+    await _rpc
+        .request('thread/revert', {'threadId': id, 'beforeTurnId': turnId});
   }
 
   Future<void> compactThread(String threadId) async {
@@ -593,8 +595,8 @@ final class CodexRemoteApi {
         final parsed = _parseItem(item);
         return parsed == null
             ? null
-            : TaskEvent.itemChanged(threadId,
-                parsed.copyWith(turnId: params['turnId'] as String?));
+            : TaskEvent.itemChanged(
+                threadId, parsed.copyWith(turnId: params['turnId'] as String?));
       default:
         return null;
     }

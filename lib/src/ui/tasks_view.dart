@@ -93,7 +93,8 @@ class _TaskList extends StatelessWidget {
         loadingUnassignedPage: controller.isLoadingUnassignedPage,
       ),
       onRefresh: controller.refreshTasks,
-      onManageTasks: () => showDialog<void>(context: context,
+      onManageTasks: () => showDialog<void>(
+          context: context,
           builder: (_) => TaskManager(controller: controller)),
       onAddProject: () => _editProject(context),
       onEditProject: () => _editProject(context, controller.selectedProject),
@@ -445,7 +446,8 @@ class _TaskListPaneState extends State<TaskListPane> {
                 icon: const Icon(Icons.refresh),
               ),
               if (widget.onManageTasks != null)
-                IconButton(tooltip: 'Manage tasks',
+                IconButton(
+                    tooltip: 'Manage tasks',
                     onPressed: model.connected ? widget.onManageTasks : null,
                     icon: const Icon(Icons.manage_search)),
               IconButton(

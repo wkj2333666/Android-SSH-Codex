@@ -67,21 +67,35 @@ final class QueuedTaskMessage {
   String get timelineItemId => 'local-user:$id';
 
   Map<String, dynamic> toJson() => {
-    'id': id, 'text': text, 'model': model, 'effort': effort,
-    'serviceTier': serviceTier, 'imagePaths': imagePaths,
-    if (skill case final s?) 'skill': {
-      'name': s.name, 'description': s.description, 'path': s.path,
-    },
-  };
+        'id': id,
+        'text': text,
+        'model': model,
+        'effort': effort,
+        'serviceTier': serviceTier,
+        'imagePaths': imagePaths,
+        if (skill case final s?)
+          'skill': {
+            'name': s.name,
+            'description': s.description,
+            'path': s.path,
+          },
+      };
 
   factory QueuedTaskMessage.fromJson(Map value) {
     final s = value['skill'] as Map?;
-    return QueuedTaskMessage(id: value['id'] as String,
-        text: value['text'] as String, model: value['model'] as String?,
-        effort: value['effort'] as String?, serviceTier: value['serviceTier'] as String?,
+    return QueuedTaskMessage(
+        id: value['id'] as String,
+        text: value['text'] as String,
+        model: value['model'] as String?,
+        effort: value['effort'] as String?,
+        serviceTier: value['serviceTier'] as String?,
         imagePaths: (value['imagePaths'] as List? ?? const []).cast<String>(),
-        skill: s == null ? null : RemoteSkill(name: s['name'] as String,
-            description: s['description'] as String, path: s['path'] as String));
+        skill: s == null
+            ? null
+            : RemoteSkill(
+                name: s['name'] as String,
+                description: s['description'] as String,
+                path: s['path'] as String));
   }
 }
 
@@ -164,7 +178,8 @@ final class AppController extends ChangeNotifier {
     ProfileStore? store,
     String hostId = 'test',
   }) {
-    final controller = AppController.memory(cachedTasks: cachedTasks, store: store);
+    final controller =
+        AppController.memory(cachedTasks: cachedTasks, store: store);
     controller._rpc = rpc;
     controller._api = CodexRemoteApi(rpc);
     controller._selectedHostId = hostId;
@@ -189,7 +204,8 @@ final class AppController extends ChangeNotifier {
   final TaskHistoryLoadState _historyLoadState = TaskHistoryLoadState();
   final Map<String, TaskMessageQueue<QueuedTaskMessage>> _outboxes = {};
   TaskMessageQueue<QueuedTaskMessage> get _messageQueue =>
-      _outboxes.putIfAbsent(_workspaceHostId ?? _selectedHostId ?? '', TaskMessageQueue.new);
+      _outboxes.putIfAbsent(
+          _workspaceHostId ?? _selectedHostId ?? '', TaskMessageQueue.new);
   final Map<String, String> _deliveryStates = {};
   final Map<(String, String), Map<String, dynamic>> _savedDrafts = {};
   Timer? _draftSaveTimer;
@@ -259,41 +275,40 @@ final class AppController extends ChangeNotifier {
 
   TaskDraft draftForTask(String taskId) {
     final hostId = _selectedHostId ?? '';
-    return _drafts.putIfAbsent(
-        (hostId, taskId),
-        () {
-          final draft = TaskDraft(
-              retainFilesOnDispose: _store is WorkspaceStore,
-              canUpload: () =>
-                  isConnected &&
-                  _selectedHostId == hostId &&
-                  _workspaceHostId == hostId,
-              upload: (attachment, target, cancellation, {onProgress}) {
-                if (_selectedHostId != hostId) {
-                  throw StateError(
-                      'Reconnect to the original host to resume upload.');
-                }
-                return uploadAttachmentNow(attachment, target, cancellation,
-                    onProgress: onProgress);
-              },
-            );
-          final saved = _savedDrafts[(hostId, taskId)];
-          if (saved != null) draft.restore(saved);
-          void save() {
-            if (_disposed || draft.sending) return;
-            _savedDrafts[(hostId, taskId)] = draft.toJson();
-            _draftSaveTimer?.cancel();
-            _draftSaveTimer = Timer(const Duration(milliseconds: 200), () {
-              unawaited(_saveWorkspace().catchError((Object error) {
-                _error = 'Could not save draft: $error';
-                if (!_disposed) notifyListeners();
-              }));
-            });
+    return _drafts.putIfAbsent((hostId, taskId), () {
+      final draft = TaskDraft(
+        retainFilesOnDispose: _store is WorkspaceStore,
+        canUpload: () =>
+            isConnected &&
+            _selectedHostId == hostId &&
+            _workspaceHostId == hostId,
+        upload: (attachment, target, cancellation, {onProgress}) {
+          if (_selectedHostId != hostId) {
+            throw StateError(
+                'Reconnect to the original host to resume upload.');
           }
-          draft.composer.addListener(save);
-          draft.addListener(save);
-          return draft;
+          return uploadAttachmentNow(attachment, target, cancellation,
+              onProgress: onProgress);
+        },
+      );
+      final saved = _savedDrafts[(hostId, taskId)];
+      if (saved != null) draft.restore(saved);
+      void save() {
+        if (_disposed || draft.sending) return;
+        _savedDrafts[(hostId, taskId)] = draft.toJson();
+        _draftSaveTimer?.cancel();
+        _draftSaveTimer = Timer(const Duration(milliseconds: 200), () {
+          unawaited(_saveWorkspace().catchError((Object error) {
+            _error = 'Could not save draft: $error';
+            if (!_disposed) notifyListeners();
+          }));
         });
+      }
+
+      draft.composer.addListener(save);
+      draft.addListener(save);
+      return draft;
+    });
   }
 
   String? deliveryState(String id) => _deliveryStates[id];
@@ -312,10 +327,12 @@ final class AppController extends ChangeNotifier {
       final entry = raw as Map;
       final message = QueuedTaskMessage.fromJson(entry['message'] as Map);
       final host = entry['host'] as String;
-      _outboxes.putIfAbsent(host, TaskMessageQueue.new)
+      _outboxes
+          .putIfAbsent(host, TaskMessageQueue.new)
           .enqueue(entry['task'] as String, message);
       _deliveryStates[message.id] = entry['state'] == 'sending'
-          ? 'uncertain' : entry['state'] as String? ?? 'queued';
+          ? 'uncertain'
+          : entry['state'] as String? ?? 'queued';
     }
   }
 
@@ -323,17 +340,24 @@ final class AppController extends ChangeNotifier {
     final store = _store;
     if (store is! WorkspaceStore) return Future.value();
     final snapshot = <String, dynamic>{
-      'drafts': [for (final entry in _savedDrafts.entries)
-        {'host': entry.key.$1, 'task': entry.key.$2, 'draft': entry.value}],
-      'outbox': [for (final host in _outboxes.entries)
-        for (final task in host.value.threadIds)
-          for (final message in host.value.values(task)) {
-            'host': host.key, 'task': task, 'message': message.toJson(),
-            'state': _deliveryStates[message.id] ?? 'queued',
-          }],
+      'drafts': [
+        for (final entry in _savedDrafts.entries)
+          {'host': entry.key.$1, 'task': entry.key.$2, 'draft': entry.value}
+      ],
+      'outbox': [
+        for (final host in _outboxes.entries)
+          for (final task in host.value.threadIds)
+            for (final message in host.value.values(task))
+              {
+                'host': host.key,
+                'task': task,
+                'message': message.toJson(),
+                'state': _deliveryStates[message.id] ?? 'queued',
+              }
+      ],
     };
-    final result = _workspaceWrite.then((_) =>
-        (store as WorkspaceStore).writeWorkspace(snapshot));
+    final result = _workspaceWrite
+        .then((_) => (store as WorkspaceStore).writeWorkspace(snapshot));
     _workspaceWrite = result.catchError((Object _) {});
     return result;
   }
@@ -651,6 +675,9 @@ final class AppController extends ChangeNotifier {
       if (attempt != _connectionAttempt) return;
       _startRefreshTimer();
       _flushReadyQueuedPrompts();
+      for (final key in _savedDrafts.keys.toList()) {
+        if (key.$1 == profile.id) draftForTask(key.$2);
+      }
       for (final entry in _drafts.entries) {
         if (entry.key.$1 == profile.id) entry.value.resumeWaitingUploads();
       }
@@ -1776,6 +1803,9 @@ final class AppController extends ChangeNotifier {
     final epoch = _epoch;
     final profileId = _selectedHostId;
     if (profileId == null) throw StateError('Select a host first.');
+    if (!isConnected && mode == TaskSendMode.steer) {
+      throw StateError('Reconnect to steer the active turn. Use Queue while offline.');
+    }
     var task = selectedTask;
     if (task == null) throw StateError('Select or create a task first.');
     task = _taskReducer.state.tasks[task.id] ?? task;
@@ -1791,7 +1821,9 @@ final class AppController extends ChangeNotifier {
       imagePaths: List.unmodifiable(
           attachments.where((file) => file.isImage).map((file) => file.path)),
     );
-    if (!isConnected || api == null || mode == TaskSendMode.queue ||
+    if (!isConnected ||
+        api == null ||
+        mode == TaskSendMode.queue ||
         (mode == TaskSendMode.auto && _messageQueue.hasPending(task.id))) {
       await _enqueuePrompt(task.id, pending);
       return TaskMessageDisposition.queued;
@@ -1863,11 +1895,11 @@ final class AppController extends ChangeNotifier {
       }
       try {
         await _journalPrompt(profileId, task.id, pending);
+        _ensureCurrentSession(api, attempt, epoch, profileId);
         steerRequested = true;
         await api.steerTurn(task.id, turnId, pending.text,
             imagePaths: pending.imagePaths);
         await _settlePrompt(profileId, task.id, pending, 'sent');
-        _ensureCurrentSession(api, attempt, epoch, profileId);
       } on RpcRemoteException {
         steerRequested = false;
         final refreshedTurnId = await api.readActiveTurnId(task.id);
@@ -1893,7 +1925,6 @@ final class AppController extends ChangeNotifier {
         await api.steerTurn(task.id, refreshedTurnId, pending.text,
             imagePaths: pending.imagePaths);
         await _settlePrompt(profileId, task.id, pending, 'sent');
-        _ensureCurrentSession(api, attempt, epoch, profileId);
       }
       _recordSubmittedPrompt(
         task.id,
@@ -1916,19 +1947,26 @@ final class AppController extends ChangeNotifier {
     }
   }
 
-  Future<void> _enqueuePrompt(String threadId, QueuedTaskMessage pending) async {
+  Future<void> _enqueuePrompt(
+      String threadId, QueuedTaskMessage pending) async {
     _captureSubmittedDraft(_selectedHostId!, threadId);
     if (!_messageQueue.values(threadId).contains(pending)) {
       _messageQueue.enqueue(threadId, pending);
     }
     _deliveryStates[pending.id] = 'queued';
-    await _saveWorkspace();
+    try {
+      await _saveWorkspace();
+    } catch (_) {
+      _messageQueue.remove(threadId, pending);
+      _deliveryStates.remove(pending.id);
+      rethrow;
+    }
     notifyListeners();
     unawaited(_flushQueuedPrompt(threadId));
   }
 
-  Future<void> _journalPrompt(String host, String task,
-      QueuedTaskMessage pending) async {
+  Future<void> _journalPrompt(
+      String host, String task, QueuedTaskMessage pending) async {
     _captureSubmittedDraft(host, task);
     final queue = _outboxes.putIfAbsent(host, TaskMessageQueue.new);
     if (!queue.values(task).contains(pending)) queue.enqueue(task, pending);
@@ -1936,8 +1974,8 @@ final class AppController extends ChangeNotifier {
     await _saveWorkspace();
   }
 
-  Future<void> _settlePrompt(String host, String task,
-      QueuedTaskMessage pending, String state) async {
+  Future<void> _settlePrompt(
+      String host, String task, QueuedTaskMessage pending, String state) async {
     if (state == 'sent') {
       _outboxes[host]?.remove(task, pending);
       _deliveryStates.remove(pending.id);
@@ -1947,7 +1985,8 @@ final class AppController extends ChangeNotifier {
     try {
       await _saveWorkspace();
     } catch (error) {
-      _error = 'Could not save delivery status. Check conversation before retrying: $error';
+      _error =
+          'Could not save delivery status. Check conversation before retrying: $error';
     }
     if (!_disposed) notifyListeners();
   }
@@ -1960,8 +1999,10 @@ final class AppController extends ChangeNotifier {
   }
 
   Future<void> retryQueuedMessage(String taskId, String messageId) async {
-    final pending = _messageQueue.values(taskId)
-        .where((message) => message.id == messageId).firstOrNull;
+    final pending = _messageQueue
+        .values(taskId)
+        .where((message) => message.id == messageId)
+        .firstOrNull;
     if (pending == null || _deliveryStates[messageId] == 'sending') return;
     _requireApi();
     _deliveryStates[messageId] = 'queued';
@@ -1972,7 +2013,9 @@ final class AppController extends ChangeNotifier {
 
   Future<void> _startPendingPrompt(
     TaskRecord task,
-    QueuedTaskMessage pending,
+    QueuedTaskMessage pending, {
+    bool keepOnFailure = false,
+  }
   ) async {
     final api = _requireApi();
     final attempt = _connectionAttempt;
@@ -1993,6 +2036,7 @@ final class AppController extends ChangeNotifier {
         );
       }
       await _journalPrompt(profileId, task.id, pending);
+      _ensureCurrentSession(api, attempt, epoch, profileId);
       turnRequested = true;
       await api.startTurn(
         task.id,
@@ -2004,7 +2048,7 @@ final class AppController extends ChangeNotifier {
         imagePaths: pending.imagePaths,
       );
       await _settlePrompt(profileId, task.id, pending, 'sent');
-      _ensureCurrentSession(api, attempt, epoch, profileId);
+      if (!_isCurrentSession(api, attempt, epoch, profileId)) return;
       _taskReducer.setTurnSettings(
           epoch, task.id, pending.model, pending.effort);
       _recordSubmittedPrompt(
@@ -2022,7 +2066,7 @@ final class AppController extends ChangeNotifier {
         return;
       }
       _setLocalUserMessageStatus(task.id, pending, 'failed', epoch: epoch);
-      await _settlePrompt(profileId, task.id, pending, 'failed');
+      await _settlePrompt(profileId, task.id, pending, keepOnFailure ? 'failed' : 'sent');
       rethrow;
     }
   }
@@ -2144,7 +2188,9 @@ final class AppController extends ChangeNotifier {
     try {
       final pending = _messageQueue.peek(threadId);
       final task = _taskReducer.state.tasks[threadId];
-      if (pending == null || task == null || !isConnected ||
+      if (pending == null ||
+          task == null ||
+          !isConnected ||
           (_deliveryStates[pending.id] != null &&
               _deliveryStates[pending.id] != 'queued')) {
         return;
@@ -2175,7 +2221,7 @@ final class AppController extends ChangeNotifier {
       }
       _markQueuedMessageInFlight(threadId, pending.id);
       try {
-        await _startPendingPrompt(task, pending);
+        await _startPendingPrompt(task, pending, keepOnFailure: true);
       } finally {
         _unmarkQueuedMessageInFlight(threadId, pending.id);
       }
@@ -2190,8 +2236,8 @@ final class AppController extends ChangeNotifier {
   void _flushReadyQueuedPrompts() {
     for (final threadId in _messageQueue.threadIds) {
       if (!_taskReducer.state.tasks.containsKey(threadId)) {
-        _taskReducer.applyEvent(_epoch,
-            TaskEvent.statusChanged(threadId, TaskStatus.unknown));
+        _taskReducer.applyEvent(
+            _epoch, TaskEvent.statusChanged(threadId, TaskStatus.unknown));
       }
       unawaited(_flushQueuedPrompt(threadId));
     }
@@ -2270,11 +2316,11 @@ final class AppController extends ChangeNotifier {
         }
         try {
           await _journalPrompt(profileId, taskId, pending);
+          _ensureCurrentSession(api, attempt, epoch, profileId);
           steerRequested = true;
           await api.steerTurn(taskId, turnId, pending.text,
               imagePaths: pending.imagePaths);
           await _settlePrompt(profileId, taskId, pending, 'sent');
-          _ensureCurrentSession(api, attempt, epoch, profileId);
         } on RpcRemoteException {
           steerRequested = false;
           final refreshedTurnId = await api.readActiveTurnId(taskId);
@@ -2291,7 +2337,6 @@ final class AppController extends ChangeNotifier {
           await api.steerTurn(taskId, refreshedTurnId, pending.text,
               imagePaths: pending.imagePaths);
           await _settlePrompt(profileId, taskId, pending, 'sent');
-          _ensureCurrentSession(api, attempt, epoch, profileId);
         }
         _recordSubmittedPrompt(
           taskId,
@@ -2305,7 +2350,8 @@ final class AppController extends ChangeNotifier {
       } catch (exception) {
         if (steerRequested && _isUncertainSubmissionFailure(exception)) {
           await _settlePrompt(profileId, taskId, pending, 'uncertain');
-          _setLocalUserMessageStatus(taskId, pending, 'uncertain', epoch: epoch);
+          _setLocalUserMessageStatus(taskId, pending, 'uncertain',
+              epoch: epoch);
           return;
         }
         await _settlePrompt(profileId, taskId, pending, 'failed');
@@ -2335,8 +2381,11 @@ final class AppController extends ChangeNotifier {
     final revision = _goalRevisions[taskId] ?? 0;
     try {
       final goal = await api.readThreadGoal(taskId);
-      if (api != _api || epoch != _epoch ||
-          revision != (_goalRevisions[taskId] ?? 0)) return;
+      if (api != _api ||
+          epoch != _epoch ||
+          revision != (_goalRevisions[taskId] ?? 0)) {
+        return;
+      }
       _goals[taskId] = goal;
       notifyListeners();
     } catch (_) {
@@ -2396,18 +2445,25 @@ final class AppController extends ChangeNotifier {
     if (id == null) return;
     final api = _requireApi();
     final epoch = _epoch;
-    final goal = await api.setThreadGoal(id, status: paused ? 'paused' : 'active');
+    final goal =
+        await api.setThreadGoal(id, status: paused ? 'paused' : 'active');
     if (api != _api || epoch != _epoch) return;
     _goals[id] = goal;
     notifyListeners();
   }
 
-  Future<RemoteTaskPage> findTasks({String? query, String? cursor,
-      bool archived = false, bool? pinned}) async {
+  Future<RemoteTaskPage> findTasks(
+      {String? query,
+      String? cursor,
+      bool archived = false,
+      bool? pinned}) async {
     final api = _requireApi();
     final epoch = _epoch;
-    final result = await api.readTaskPage(searchTerm: query, cursor: cursor,
-        archived: archived, isPinned: pinned);
+    final result = await api.readTaskPage(
+        searchTerm: query,
+        cursor: cursor,
+        archived: archived,
+        isPinned: pinned);
     if (api != _api || epoch != _epoch) throw StateError('Connection changed');
     return result;
   }
@@ -2470,8 +2526,8 @@ final class AppController extends ChangeNotifier {
     if (_messageQueue.hasPending(task.id)) {
       throw StateError('Resolve queued messages before reverting history.');
     }
-    await _ensureThreadSubscribed(task.id, api: api, epoch: epoch,
-        attempt: attempt, profileId: host);
+    await _ensureThreadSubscribed(task.id,
+        api: api, epoch: epoch, attempt: attempt, profileId: host);
     if (await api.readActiveTurnId(task.id) != null) {
       throw StateError('Stop the active turn before reverting history.');
     }
@@ -2584,14 +2640,18 @@ final class AppController extends ChangeNotifier {
       if (id != null) {
         _goalRevisions[id] = (_goalRevisions[id] ?? 0) + 1;
         _goals[id] = method.endsWith('/cleared')
-            ? null : CodexRemoteApi.parseGoal(params['goal']);
+            ? null
+            : CodexRemoteApi.parseGoal(params['goal']);
         notifyListeners();
       }
       return;
     }
-    if (method == 'project/changed' || method == 'thread/project/updated' ||
-        method == 'thread/name/updated' || method == 'thread/metadata/updated' ||
-        method == 'thread/archived' || method == 'thread/unarchived') {
+    if (method == 'project/changed' ||
+        method == 'thread/project/updated' ||
+        method == 'thread/name/updated' ||
+        method == 'thread/metadata/updated' ||
+        method == 'thread/archived' ||
+        method == 'thread/unarchived') {
       _projectSyncTimer?.cancel();
       _projectSyncTimer = Timer(const Duration(milliseconds: 250), () {
         if (attempt == _connectionAttempt && isConnected) {
@@ -2763,8 +2823,12 @@ final class AppController extends ChangeNotifier {
   List<TaskRecord> _tasksForIds(List<String> ids) => (ids
       .map((id) => _taskReducer.state.tasks[id])
       .whereType<TaskRecord>()
-      .toList(growable: false))..sort((a, b) =>
-          a.isPinned == b.isPinned ? b.updatedAt.compareTo(a.updatedAt) : a.isPinned ? -1 : 1);
+      .toList(growable: false))
+    ..sort((a, b) => a.isPinned == b.isPinned
+        ? b.updatedAt.compareTo(a.updatedAt)
+        : a.isPinned
+            ? -1
+            : 1);
 
   Future<void> _closeTransport(
       {String reason = 'connection_replaced_or_closed'}) async {

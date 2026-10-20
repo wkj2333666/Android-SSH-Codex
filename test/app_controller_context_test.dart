@@ -23,6 +23,7 @@ final class _Transport implements RpcTransport {
       outgoing.add(request);
     }
   }
+
   @override
   Future<void> close() async {
     if (!incoming.isClosed) await incoming.close();

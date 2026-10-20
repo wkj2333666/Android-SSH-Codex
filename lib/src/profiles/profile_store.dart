@@ -192,6 +192,7 @@ final class MemoryProfileStore implements ProfileStore, WorkspaceStore {
   Future<void> writeWorkspace(Map<String, dynamic> value) async {
     _workspace = (jsonDecode(jsonEncode(value)) as Map).cast<String, dynamic>();
   }
+
   final Map<String, HostProfile> _profiles = {};
   final Map<String, HostSecret> _secrets = {};
   final Map<String, String> _fingerprints = {};

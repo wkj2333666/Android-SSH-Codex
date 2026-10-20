@@ -439,15 +439,19 @@ final class TaskReducer {
     _replaceTaskItems(current, items);
   }
 
-  void updateMetadata(int epoch, String taskId, {String? title, bool? isPinned}) {
+  void updateMetadata(int epoch, String taskId,
+      {String? title, bool? isPinned}) {
     if (epoch != _state.epoch) return;
     final task = _state.tasks[taskId];
     if (task == null) return;
-    _state = TaskState(epoch: _state.epoch,
+    _state = TaskState(
+        epoch: _state.epoch,
         refreshGeneration: _state.refreshGeneration,
         eventRevision: _state.eventRevision,
-        tasks: Map.unmodifiable({..._state.tasks,
-          taskId: task.copyWith(title: title, isPinned: isPinned)}));
+        tasks: Map.unmodifiable({
+          ..._state.tasks,
+          taskId: task.copyWith(title: title, isPinned: isPinned)
+        }));
   }
 
   void prependItems(int epoch, String taskId, List<TaskItem> olderItems) {
