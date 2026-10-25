@@ -765,7 +765,7 @@ final class AppController extends ChangeNotifier {
           if (tunnel != null) boundedConnectionCleanup('tunnel', tunnel.close),
           if (ssh != null)
             boundedConnectionCleanup('ssh',
-                () => ssh.close(reason: 'unpublished_connection_cleanup')),
+                () => ssh!.close(reason: 'unpublished_connection_cleanup')),
         ]);
       }
     }
