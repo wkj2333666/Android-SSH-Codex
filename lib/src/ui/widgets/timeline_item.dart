@@ -77,7 +77,7 @@ class TimelineActivityGroup extends StatelessWidget {
             _ActivityViewport(
               itemCount: items.length,
               itemBuilder: (context, index) => _CompactActivityRow(
-                key: ValueKey(items[index].id),
+                key: PageStorageKey('activity-${items[index].id}'),
                 item: items[index],
               ),
             ),

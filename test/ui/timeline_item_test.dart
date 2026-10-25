@@ -339,6 +339,9 @@ void main() {
         .jumpTo(scrollbar.controller!.position.maxScrollExtent);
     await tester.pumpAndSettle();
     expect(find.text('Tool 39').hitTestable(), findsOneWidget);
+    scrollbar.controller!.jumpTo(0);
+    await tester.pumpAndSettle();
+    expect(find.byType(SelectableText), findsOneWidget);
     await tester.tap(find.text('40 work events'));
     await tester.pumpAndSettle();
     expect(viewport, findsNothing);
