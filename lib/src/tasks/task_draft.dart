@@ -18,8 +18,8 @@ typedef DraftUploader = Future<RemoteAttachment> Function(
 enum AttachmentState { waiting, uploading, uploaded, failed }
 
 final class AttachmentTransfer extends ChangeNotifier {
-  AttachmentTransfer(this.local)
-      : target = AttachmentUploadTarget.forAttachment(local);
+  AttachmentTransfer(this.local, {AttachmentUploadTarget? target})
+      : target = target ?? AttachmentUploadTarget.forAttachment(local);
 
   final LocalAttachment local;
   final AttachmentUploadTarget target;
@@ -41,12 +41,16 @@ final class AttachmentTransfer extends ChangeNotifier {
 /// Owned by the application, not by a task page. Navigating away must not
 /// cancel a transfer, dispose its editor, or lose an in-flight send's rollback.
 final class TaskDraft extends ChangeNotifier {
-  TaskDraft({required DraftUploader upload, bool Function()? canUpload})
+  TaskDraft(
+      {required DraftUploader upload,
+      bool Function()? canUpload,
+      this.retainFilesOnDispose = false})
       : _upload = upload,
         _canUpload = canUpload ?? (() => true);
 
   final DraftUploader _upload;
   final bool Function() _canUpload;
+  final bool retainFilesOnDispose;
   final composer = TextEditingController();
   List<AttachmentTransfer> attachments = [];
   RemoteSkill? skill;
@@ -56,6 +60,69 @@ final class TaskDraft extends ChangeNotifier {
   bool picking = false;
   bool _disposed = false;
   bool get disposed => _disposed;
+
+  Map<String, dynamic> toJson() => {
+        'text': composer.text,
+        'model': settings.model,
+        'effort': settings.effort,
+        'serviceTier': settings.serviceTier,
+        'sendMode': sendMode.name,
+        if (skill case final selected?)
+          'skill': {
+            'name': selected.name,
+            'description': selected.description,
+            'path': selected.path,
+          },
+        'attachments': [
+          for (final file in attachments)
+            {
+              'name': file.local.name,
+              'path': file.local.path,
+              'size': file.local.size,
+              'isImage': file.local.isImage,
+              'token': file.target.token,
+              'remotePath': file.remote?.path,
+            }
+        ],
+      };
+
+  void restore(Map<String, dynamic> value) {
+    composer.text = value['text'] as String? ?? '';
+    settings = TurnSettings(
+        model: value['model'] as String?,
+        effort: value['effort'] as String?,
+        serviceTier: value['serviceTier'] as String? ?? 'default');
+    sendMode = TaskSendMode.values.firstWhere(
+        (mode) => mode.name == value['sendMode'],
+        orElse: () => TaskSendMode.auto);
+    if (value['skill'] case final Map saved) {
+      skill = RemoteSkill(
+          name: saved['name'] as String,
+          description: saved['description'] as String,
+          path: saved['path'] as String);
+    }
+    for (final raw in value['attachments'] as List? ?? const []) {
+      final file = raw as Map;
+      final local = LocalAttachment(
+          name: file['name'] as String,
+          path: file['path'] as String,
+          size: file['size'] as int,
+          isImage: file['isImage'] == true);
+      final transfer = AttachmentTransfer(local,
+          target: AttachmentUploadTarget.restore(
+              file['token'] as String, local.name));
+      final remote = file['remotePath'] as String?;
+      if (remote != null) {
+        transfer.remote =
+            RemoteAttachment(path: remote, isImage: local.isImage);
+        transfer.state = AttachmentState.uploaded;
+        transfer.progress = 1;
+      } else {
+        transfer.state = AttachmentState.waiting;
+      }
+      attachments.add(transfer);
+    }
+  }
 
   void changed() {
     if (!_disposed) notifyListeners();
@@ -170,7 +237,11 @@ final class TaskDraft extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     for (final transfer in attachments.toList()) {
-      removeAttachment(transfer);
+      if (retainFilesOnDispose) {
+        transfer.cancellation.cancel();
+      } else {
+        removeAttachment(transfer);
+      }
     }
     composer.dispose();
     super.dispose();

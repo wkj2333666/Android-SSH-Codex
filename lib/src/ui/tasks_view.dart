@@ -4,6 +4,7 @@ import '../app_controller.dart';
 import '../projects/remote_project.dart';
 import '../tasks/task_reducer.dart';
 import 'task_view.dart';
+import 'task_manager.dart';
 import 'turn_settings_picker.dart';
 import 'widgets/connection_badge.dart';
 
@@ -92,6 +93,9 @@ class _TaskList extends StatelessWidget {
         loadingUnassignedPage: controller.isLoadingUnassignedPage,
       ),
       onRefresh: controller.refreshTasks,
+      onManageTasks: () => showDialog<void>(
+          context: context,
+          builder: (_) => TaskManager(controller: controller)),
       onAddProject: () => _editProject(context),
       onEditProject: () => _editProject(context, controller.selectedProject),
       onDeleteProject: () => _deleteProject(context),
@@ -151,6 +155,7 @@ class _TaskList extends StatelessWidget {
               const SizedBox(height: 12),
               StatefulBuilder(
                 builder: (context, setDialogState) => TurnSettingsPicker(
+                  accountUsage: controller.accountUsage,
                   models: controller.models,
                   value: turnSettings,
                   onChanged: (value) =>
@@ -354,6 +359,7 @@ class TaskListPane extends StatefulWidget {
   const TaskListPane({
     required this.model,
     this.onRefresh,
+    this.onManageTasks,
     this.onAddProject,
     this.onEditProject,
     this.onDeleteProject,
@@ -369,6 +375,7 @@ class TaskListPane extends StatefulWidget {
   });
 
   final TaskListPaneModel model;
+  final VoidCallback? onManageTasks;
   final RefreshCallback? onRefresh;
   final VoidCallback? onAddProject;
   final VoidCallback? onEditProject;
@@ -439,6 +446,11 @@ class _TaskListPaneState extends State<TaskListPane> {
                 onPressed: model.connected ? widget.onRefresh : null,
                 icon: const Icon(Icons.refresh),
               ),
+              if (widget.onManageTasks != null)
+                IconButton(
+                    tooltip: 'Manage tasks',
+                    onPressed: model.connected ? widget.onManageTasks : null,
+                    icon: const Icon(Icons.manage_search)),
               IconButton(
                 tooltip: 'Add project',
                 onPressed: model.connected && _mode == TaskListMode.projects

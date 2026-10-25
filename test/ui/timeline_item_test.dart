@@ -12,6 +12,20 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('message turn actions share the compact copy row',
+      (tester) async {
+    var invoked = false;
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: TimelineItemView(
+      item: const TaskItem(
+          id: 'user', kind: TaskItemKind.user, text: 'Hello', turnId: 'turn'),
+      onTurnAction: () => invoked = true,
+    ))));
+    await tester.tap(find.byTooltip('Turn actions'));
+    expect(invoked, isTrue);
+    expect(find.byTooltip('Copy message'), findsOneWidget);
+  });
   for (final answered in [false, true]) {
     testWidgets('question fallback is not duplicated (answered: $answered)',
         (tester) async {
@@ -274,6 +288,64 @@ void main() {
     expect(find.text('rg TODO'), findsOneWidget);
     expect(find.text('Checking matches'), findsOneWidget);
     expect(find.text('github · get_issue'), findsOneWidget);
+  });
+
+  testWidgets(
+      'large work chains scroll inside a capped box with a fixed header',
+      (tester) async {
+    final outer = ScrollController();
+    addTearDown(outer.dispose);
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: ListView(
+          controller: outer,
+          children: [
+            TimelineActivityGroup(
+                items: List.generate(
+                    40,
+                    (index) => TaskItem(
+                          id: 'tool-$index',
+                          kind: TaskItemKind.command,
+                          title: 'Tool $index',
+                          text: 'command',
+                          detail: List.filled(100, 'long output').join('\n'),
+                        ))),
+            const SizedBox(height: 1000),
+          ],
+        ),
+      ),
+    ));
+    await tester.tap(find.text('40 work events'));
+    await tester.pumpAndSettle();
+    final viewport = find.byKey(const Key('activity-viewport'));
+    expect(tester.getSize(viewport).height, lessThanOrEqualTo(240));
+    final headerPosition = tester.getTopLeft(find.text('40 work events'));
+    await tester.tap(find.text('Tool 0'));
+    await tester.pumpAndSettle();
+    expect(tester.getSize(viewport).height, lessThanOrEqualTo(240));
+    await tester.drag(viewport, const Offset(0, -200));
+    await tester.pumpAndSettle();
+    expect(outer.offset, 0);
+    expect(tester.getTopLeft(find.text('40 work events')), headerPosition);
+    final scrollbar = tester.widget<Scrollbar>(find
+        .descendant(
+          of: viewport,
+          matching: find.byType(Scrollbar),
+        )
+        .first);
+    expect(scrollbar.thumbVisibility, isTrue);
+    expect(scrollbar.controller!.offset, greaterThan(0));
+    scrollbar.controller!
+        .jumpTo(scrollbar.controller!.position.maxScrollExtent);
+    await tester.pumpAndSettle();
+    expect(find.text('Tool 39').hitTestable(), findsOneWidget);
+    scrollbar.controller!.jumpTo(0);
+    await tester.pumpAndSettle();
+    expect(find.byType(SelectableText), findsOneWidget);
+    await tester.tap(find.text('40 work events'));
+    await tester.pumpAndSettle();
+    expect(viewport, findsNothing);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('model replies render selectable Markdown and LaTeX',

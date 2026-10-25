@@ -23,6 +23,7 @@ final class TaskItem {
     this.status,
     this.attachments = const [],
     this.questions = const [],
+    this.turnId,
   });
 
   final String id;
@@ -33,6 +34,7 @@ final class TaskItem {
   final String? status;
   final List<MessageAttachment> attachments;
   final List<TaskQuestion> questions;
+  final String? turnId;
 
   TaskItem copyWith({
     String? text,
@@ -40,6 +42,7 @@ final class TaskItem {
     String? detail,
     String? status,
     List<TaskQuestion>? questions,
+    String? turnId,
   }) =>
       TaskItem(
         id: id,
@@ -50,6 +53,7 @@ final class TaskItem {
         status: status ?? this.status,
         attachments: attachments,
         questions: questions ?? this.questions,
+        turnId: turnId ?? this.turnId,
       );
 }
 
@@ -62,6 +66,7 @@ final class TaskSnapshot {
     required this.updatedAt,
     required this.items,
     this.projectId,
+    this.isPinned = false,
     this.model,
     this.reasoningEffort,
   });
@@ -73,6 +78,7 @@ final class TaskSnapshot {
   final DateTime updatedAt;
   final List<TaskItem> items;
   final String? projectId;
+  final bool isPinned;
   final String? model;
   final String? reasoningEffort;
 }
@@ -87,6 +93,7 @@ final class TaskRecord {
     required this.items,
     required this.ownership,
     required this.revision,
+    this.isPinned = false,
     this.model,
     this.reasoningEffort,
   });
@@ -110,6 +117,7 @@ final class TaskRecord {
   final List<TaskItem> items;
   final TaskOwnership ownership;
   final int revision;
+  final bool isPinned;
   final String? model;
   final String? reasoningEffort;
 
@@ -124,6 +132,7 @@ final class TaskRecord {
     String? model,
     String? reasoningEffort,
     bool replaceTurnSettings = false,
+    bool? isPinned,
   }) =>
       TaskRecord(
         id: id,
@@ -134,6 +143,7 @@ final class TaskRecord {
         items: items ?? this.items,
         ownership: ownership ?? this.ownership,
         revision: revision ?? this.revision,
+        isPinned: isPinned ?? this.isPinned,
         model: replaceTurnSettings ? model : model ?? this.model,
         reasoningEffort: replaceTurnSettings
             ? reasoningEffort
@@ -354,6 +364,7 @@ final class TaskReducer {
       next[snapshot.id] = TaskRecord(
         id: snapshot.id,
         title: snapshot.title,
+        isPinned: snapshot.isPinned,
         status: effectiveStatus,
         cwd: snapshot.cwd,
         updatedAt:
@@ -398,6 +409,7 @@ final class TaskReducer {
       ..[snapshot.id] = TaskRecord(
         id: snapshot.id,
         title: snapshot.title,
+        isPinned: snapshot.isPinned,
         status: status,
         cwd: snapshot.cwd,
         updatedAt:
@@ -425,6 +437,21 @@ final class TaskReducer {
     final current = _state.tasks[taskId] ??
         TaskRecord.placeholder(taskId, _state.eventRevision);
     _replaceTaskItems(current, items);
+  }
+
+  void updateMetadata(int epoch, String taskId,
+      {String? title, bool? isPinned}) {
+    if (epoch != _state.epoch) return;
+    final task = _state.tasks[taskId];
+    if (task == null) return;
+    _state = TaskState(
+        epoch: _state.epoch,
+        refreshGeneration: _state.refreshGeneration,
+        eventRevision: _state.eventRevision,
+        tasks: Map.unmodifiable({
+          ..._state.tasks,
+          taskId: task.copyWith(title: title, isPinned: isPinned)
+        }));
   }
 
   void prependItems(int epoch, String taskId, List<TaskItem> olderItems) {
@@ -688,7 +715,9 @@ String _normalizedUserMessageText(String text) =>
 
 bool _isPendingUserItem(TaskItem item) =>
     item.kind == TaskItemKind.user &&
-    (item.status == 'sending' || item.status == 'sent');
+    (item.status == 'sending' ||
+        item.status == 'sent' ||
+        item.status == 'uncertain');
 
 TaskItem _preferCurrentStreamingItem(TaskItem current, TaskItem latest) {
   if (current.kind == TaskItemKind.agent &&

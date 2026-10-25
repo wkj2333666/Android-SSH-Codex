@@ -23,6 +23,7 @@ class TimelineItemView extends StatelessWidget {
     this.copyText = copyMessageText,
     this.loadImage,
     this.onAnswerQuestions,
+    this.onTurnAction,
     super.key,
   });
 
@@ -30,6 +31,7 @@ class TimelineItemView extends StatelessWidget {
   final MessageTextCopier copyText;
   final Future<Uint8List> Function(String)? loadImage;
   final TaskQuestionSubmitter? onAnswerQuestions;
+  final VoidCallback? onTurnAction;
 
   @override
   Widget build(BuildContext context) {
@@ -39,6 +41,7 @@ class TimelineItemView extends StatelessWidget {
           copyText: copyText,
           loadImage: loadImage,
           onAnswerQuestions: onAnswerQuestions,
+          onTurnAction: onTurnAction,
         ),
       _ => _ActivityCard(item: item),
     };
@@ -71,7 +74,13 @@ class TimelineActivityGroup extends StatelessWidget {
           ),
           childrenPadding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
           children: [
-            for (final item in items) _CompactActivityRow(item: item),
+            _ActivityViewport(
+              itemCount: items.length,
+              itemBuilder: (context, index) => _CompactActivityRow(
+                key: PageStorageKey('activity-${items[index].id}'),
+                item: items[index],
+              ),
+            ),
           ],
         ),
       ),
@@ -79,8 +88,57 @@ class TimelineActivityGroup extends StatelessWidget {
   }
 }
 
+/// Keep the collapse header outside the scrollable details, including when a
+/// single tool output is much taller than the screen.
+class _ActivityViewport extends StatefulWidget {
+  const _ActivityViewport({required this.itemCount, required this.itemBuilder});
+
+  final int itemCount;
+  final IndexedWidgetBuilder itemBuilder;
+
+  @override
+  State<_ActivityViewport> createState() => _ActivityViewportState();
+}
+
+class _ActivityViewportState extends State<_ActivityViewport> {
+  final _scroll = ScrollController();
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final available =
+        media.size.height - media.viewInsets.bottom - media.padding.vertical;
+    return ConstrainedBox(
+      key: const Key('activity-viewport'),
+      constraints: BoxConstraints(maxHeight: (available * 0.4).clamp(80, 360)),
+      child: NotificationListener<ScrollNotification>(
+        // Internal scrolling must not change the chat's follow-latest state.
+        onNotification: (_) => true,
+        child: Scrollbar(
+          controller: _scroll,
+          thumbVisibility: true,
+          child: ListView.builder(
+            controller: _scroll,
+            primary: false,
+            shrinkWrap: true,
+            padding: const EdgeInsets.only(right: 8),
+            itemCount: widget.itemCount,
+            itemBuilder: widget.itemBuilder,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _CompactActivityRow extends StatelessWidget {
-  const _CompactActivityRow({required this.item});
+  const _CompactActivityRow({required this.item, super.key});
 
   final TaskItem item;
 
@@ -111,6 +169,9 @@ class _CompactActivityRow extends StatelessWidget {
       children: detail?.isNotEmpty == true
           ? [
               Align(
+                // SelectableText/Markdown have internal scrollables. Their
+                // saved offsets must not overwrite ExpansionTile's bool state.
+                key: PageStorageKey('activity-detail-${item.id}'),
                 alignment: Alignment.centerLeft,
                 child: item.kind == TaskItemKind.reasoning
                     ? MarkdownContent(text: detail!)
@@ -131,12 +192,14 @@ class _Message extends StatelessWidget {
     required this.copyText,
     this.loadImage,
     this.onAnswerQuestions,
+    this.onTurnAction,
   });
 
   final TaskItem item;
   final MessageTextCopier copyText;
   final Future<Uint8List> Function(String)? loadImage;
   final TaskQuestionSubmitter? onAnswerQuestions;
+  final VoidCallback? onTurnAction;
 
   @override
   Widget build(BuildContext context) {
@@ -192,7 +255,7 @@ class _Message extends StatelessWidget {
                     ),
                 ],
               ),
-            if (sending || copyableText.isNotEmpty) ...[
+            if (sending || copyableText.isNotEmpty || onTurnAction != null) ...[
               const SizedBox(height: 4),
               Row(
                 mainAxisSize: MainAxisSize.min,
@@ -219,6 +282,19 @@ class _Message extends StatelessWidget {
                           _copyMessage(context, copyableText, copyText),
                         ),
                         icon: const Icon(Icons.copy_all_outlined),
+                      ),
+                    ),
+                  if (onTurnAction != null)
+                    SizedBox(
+                      width: 28,
+                      height: 24,
+                      child: IconButton(
+                        tooltip: 'Turn actions',
+                        padding: EdgeInsets.zero,
+                        visualDensity: VisualDensity.compact,
+                        iconSize: 16,
+                        onPressed: onTurnAction,
+                        icon: const Icon(Icons.more_horiz),
                       ),
                     ),
                 ],
@@ -555,14 +631,17 @@ class _ActivityCard extends StatelessWidget {
       showTrailingIcon: expandable,
       childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
       children: [
-        Align(
-          alignment: Alignment.centerLeft,
-          child: item.kind == TaskItemKind.reasoning
-              ? MarkdownContent(text: body)
-              : SelectableText(
-                  body,
-                  style: const TextStyle(fontFamily: 'monospace'),
-                ),
+        _ActivityViewport(
+          itemCount: 1,
+          itemBuilder: (context, index) => Align(
+            alignment: Alignment.centerLeft,
+            child: item.kind == TaskItemKind.reasoning
+                ? MarkdownContent(text: body)
+                : SelectableText(
+                    body,
+                    style: const TextStyle(fontFamily: 'monospace'),
+                  ),
+          ),
         ),
       ],
     );

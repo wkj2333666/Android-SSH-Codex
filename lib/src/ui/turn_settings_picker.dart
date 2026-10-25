@@ -1,8 +1,11 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
 import '../protocol/codex_remote_api.dart';
+import '../account_usage.dart';
+import 'widgets/account_usage_panel.dart';
 
 import '../tasks/turn_settings.dart';
 
@@ -15,6 +18,7 @@ class TurnSettingsPicker extends StatelessWidget {
     required this.onChanged,
     this.enabled = true,
     this.useCatalogDefault = true,
+    this.accountUsage,
     super.key,
   });
 
@@ -23,6 +27,7 @@ class TurnSettingsPicker extends StatelessWidget {
   final ValueChanged<TurnSettings> onChanged;
   final bool enabled;
   final bool useCatalogDefault;
+  final AccountUsageController? accountUsage;
 
   @override
   Widget build(BuildContext context) {
@@ -42,15 +47,18 @@ class TurnSettingsPicker extends StatelessWidget {
           visualDensity: VisualDensity.compact,
           padding: const EdgeInsets.symmetric(horizontal: 10),
         ),
-        onPressed: enabled && models.isNotEmpty
+        onPressed: enabled && (models.isNotEmpty || accountUsage != null)
             ? () async {
                 FocusScope.of(context).unfocus();
+                if (accountUsage != null) unawaited(accountUsage!.refresh());
                 final selection = await showModalBottomSheet<TurnSettings>(
                   context: context,
                   isScrollControlled: true,
                   showDragHandle: true,
-                  builder: (_) =>
-                      _TurnSettingsSheet(models: models, value: settings),
+                  builder: (_) => _TurnSettingsSheet(
+                      models: models,
+                      value: settings,
+                      accountUsage: accountUsage),
                 );
                 if (context.mounted && selection != null) onChanged(selection);
               }
@@ -71,10 +79,12 @@ class TurnSettingsPicker extends StatelessWidget {
 }
 
 class _TurnSettingsSheet extends StatefulWidget {
-  const _TurnSettingsSheet({required this.models, required this.value});
+  const _TurnSettingsSheet(
+      {required this.models, required this.value, this.accountUsage});
 
   final List<RemoteModel> models;
   final TurnSettings value;
+  final AccountUsageController? accountUsage;
 
   @override
   State<_TurnSettingsSheet> createState() => _TurnSettingsSheetState();
@@ -103,6 +113,8 @@ class _TurnSettingsSheetState extends State<_TurnSettingsSheet> {
             Expanded(
               child: ListView(
                 children: [
+                  if (widget.accountUsage != null)
+                    AccountUsagePanel(controller: widget.accountUsage!),
                   if (model == null && _draft.model != null)
                     ListTile(
                         title: Text(_draft.model!),

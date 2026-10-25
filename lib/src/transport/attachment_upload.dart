@@ -72,6 +72,13 @@ String attachmentUploadCommand(String token, String name) {
 final class AttachmentUploadTarget {
   AttachmentUploadTarget._(this.token, this.name);
 
+  factory AttachmentUploadTarget.restore(String token, String name) {
+    if (!RegExp(r'^[a-f0-9]{32}$').hasMatch(token)) {
+      throw ArgumentError('Invalid saved attachment token');
+    }
+    return AttachmentUploadTarget._(token, name);
+  }
+
   factory AttachmentUploadTarget.forAttachment(LocalAttachment attachment) {
     final random = Random.secure();
     final token = List.generate(

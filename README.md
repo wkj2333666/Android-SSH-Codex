@@ -54,19 +54,38 @@ not imply Play approval.
 ## What you can do
 
 - Browse tasks by remote project, with unassigned tasks kept out of the way.
+- Use **Manage tasks** for paginated server search, pinned tasks and archived
+  tasks. Rename, pin/unpin, archive and restore without deleting conversations.
+  Pinning requires a server that supports persisted `isPinned` metadata.
+- Fork a conversation from its menu, or use a message's **⋯** / long-press to fork through
+  that turn or revert from it. Revert removes that turn and later conversation
+  history, **not file changes**; it requires an idle, paginated thread. Fork
+  first to keep a copy. Older servers may not support these operations.
 - Start new tasks and continue existing Codex Desktop or CLI conversations.
 - Follow streaming responses, approvals, tool activity, Markdown, and formulas.
+  Expanded work events have a height limit and their own scrollbar; the collapse
+  header stays outside the scrolling tool/reasoning details.
 - Choose a server-advertised model and reasoning effort for new turns. The
   model panel also offers **Fast** when the server advertises support. Fast
   uses more quota/credits; it applies to new turns (including queued messages),
   not to a turn already running. Turning it off requests standard speed.
+  The model panel shows the connected server account's remaining subscription
+  quota and reset times when provided, with live updates and manual refresh.
+  API-key/custom providers without quota support show **Usage unavailable**,
+  not unlimited usage. Percentages are quota windows, not remaining messages.
 - Browse cached tasks, select cached models, and keep typing while disconnected.
   Attachments picked offline wait for the same host to reconnect before uploading;
-  they can still be removed. Sending becomes available after reconnect.
+  they can still be removed. Text and already-uploaded attachments can be queued
+  offline; pending uploads must finish before submitting their message.
   Draft text, model settings, and attachments are kept separately per host and
-  task while the app is running. Leaving a task does not cancel its uploads.
+  task and saved in secure local storage. Leaving a task does not cancel its uploads.
   Failed uploads remain available to retry from the same resumable target.
-  Drafts do not yet survive force-stop or process death.
+  Drafts, attachment upload targets and queued messages survive process restarts.
+  Explicit disconnect retains the queue and stops automatic reconnect.
+  Messages whose delivery was interrupted are marked **Delivery unknown** and
+  are not automatically resent: check the conversation before retrying or removing
+  them. The protocol does not provide exactly-once submission guarantees.
+  Conversation history itself is still an in-memory cache, not a full offline archive.
 - Send follow-up instructions to a working agent; messages are steered to the
   active turn or queued when the turn is changing state.
   The composer delivery menu offers **Auto**, **Steer** (guide the current turn
@@ -74,6 +93,8 @@ not imply Play approval.
   Queued messages also have a visible **Steer** button. Explicit Steer requires
   an active turn and does not silently start a new one.
 - Use `/goal`, `/compact`, `/skills`, `/interrupt`, and remote skill completion.
+  An existing goal has a compact progress row above the composer. Tap to edit,
+  or pause/resume using its button; status changes preserve accumulated usage.
 - Open very long conversations without loading the entire history at once.
 - Reconnect automatically to the last host unless you explicitly disconnect.
 - Import common OpenSSH configuration, including a one-hop `ProxyJump`.
@@ -181,11 +202,14 @@ temporary network failure. Using **Disconnect** clears that intent.
 ### Shared projects
 
 Projects are stored on the connected Codex server using its project APIs.
-Android reads the shared list on connection, manual refresh, and the foreground
-refresh cycle. Creating, renaming, changing a project's directory, or deleting
+Android reads the shared list on connection, manual refresh, server change
+notifications, and the foreground refresh cycle. Creating, renaming, changing a project's directory, or deleting
 a shared project updates the same records used by compatible Desktop clients.
 Both clients must connect to the same host and Codex data store; a Desktop
 version that only uses its own local folder list cannot display this registry.
+In particular, this does not automatically add a remote folder to a separate
+Desktop installation's sidebar. Add that remote folder on Desktop once; Android
+does not edit another computer's private Desktop settings.
 
 Tasks started inside a project carry its shared project ID. The **Tasks** view
 also shows tasks outside projects. On the first connection after upgrading,

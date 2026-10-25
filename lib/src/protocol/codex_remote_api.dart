@@ -120,6 +120,11 @@ final class CodexRemoteApi {
   Stream<RpcNotification> get notifications => _rpc.notifications;
   Stream<RpcServerRequest> get serverRequests => _rpc.serverRequests;
 
+  Future<Map<String, dynamic>> readAccountRateLimits() async => _map(
+        await _rpc.requestWithTimeout(
+            'account/rateLimits/read', const {}, const Duration(seconds: 10)),
+      );
+
   Future<void> initialize() async {
     await _rpc.request('initialize', {
       'clientInfo': {
@@ -145,10 +150,16 @@ final class CodexRemoteApi {
     String? projectId,
     String? cursor,
     String sortKey = 'recency_at',
+    String? searchTerm,
+    bool archived = false,
+    bool? isPinned,
   }) async {
     final result = _map(await _rpc.request('thread/list', {
       'limit': 20,
-      'archived': false,
+      'archived': archived,
+      if (searchTerm != null && searchTerm.trim().isNotEmpty)
+        'searchTerm': searchTerm.trim(),
+      if (isPinned != null) 'isPinned': isPinned,
       'sortKey': sortKey,
       'sortDirection': 'desc',
       if (cwd != null) 'cwd': cwd,
@@ -303,7 +314,9 @@ final class CodexRemoteApi {
     final items = <TaskItem>[];
     for (final entry in entries.reversed) {
       final item = _parseItem(_map(_map(entry)['item']));
-      if (item != null) items.add(item);
+      if (item != null) {
+        items.add(item.copyWith(turnId: _map(entry)['turnId'] as String?));
+      }
     }
     return RemoteTurnPage(
       items: List.unmodifiable(items),
@@ -433,20 +446,57 @@ final class CodexRemoteApi {
 
   Future<RemoteThreadGoal> setThreadGoal(
     String threadId, {
-    required String objective,
+    String? objective,
     int? tokenBudget,
+    String? status = 'active',
   }) async {
     final result = _map(await _rpc.request('thread/goal/set', {
       'threadId': threadId,
-      'objective': objective,
-      'status': 'active',
+      'origin': 'user',
+      if (objective != null) 'objective': objective,
+      if (status != null) 'status': status,
       if (tokenBudget != null) 'tokenBudget': tokenBudget,
     }));
     return _parseGoal(result['goal'])!;
   }
 
   Future<void> clearThreadGoal(String threadId) async {
-    await _rpc.request('thread/goal/clear', {'threadId': threadId});
+    await _rpc
+        .request('thread/goal/clear', {'threadId': threadId, 'origin': 'user'});
+  }
+
+  static RemoteThreadGoal? parseGoal(Object? value) => _parseGoal(value);
+
+  Future<void> renameThread(String id, String name) async {
+    await _rpc.request('thread/name/set', {'threadId': id, 'name': name});
+  }
+
+  Future<void> pinThread(String id, bool pinned) async {
+    final result = _map(await _rpc.request(
+        'thread/metadata/update', {'threadId': id, 'isPinned': pinned}));
+    if (_map(result['thread'])['isPinned'] != pinned) {
+      throw UnsupportedError(
+          'This server did not confirm pinning. Update remote Codex.');
+    }
+  }
+
+  Future<void> archiveThread(String id, {required bool archived}) async {
+    await _rpc.request(
+        archived ? 'thread/archive' : 'thread/unarchive', {'threadId': id});
+  }
+
+  Future<TaskSnapshot> forkThread(String id, {String? lastTurnId}) async {
+    final result = _map(await _rpc.request('thread/fork', {
+      'threadId': id,
+      'excludeTurns': true,
+      if (lastTurnId != null) 'lastTurnId': lastTurnId,
+    }));
+    return parseThread(_map(result['thread']));
+  }
+
+  Future<void> revertThread(String id, String turnId) async {
+    await _rpc
+        .request('thread/revert', {'threadId': id, 'beforeTurnId': turnId});
   }
 
   Future<void> compactThread(String threadId) async {
@@ -488,7 +538,9 @@ final class CodexRemoteApi {
       final turn = _map(rawTurn);
       for (final rawItem in turn['items'] as List<dynamic>? ?? const []) {
         final item = _parseItem(_map(rawItem));
-        if (item != null) items.add(item);
+        if (item != null) {
+          items.add(item.copyWith(turnId: turn['id'] as String?));
+        }
       }
     }
     final title = _firstText(
@@ -507,6 +559,7 @@ final class CodexRemoteApi {
       status: _parseStatus(thread['status']),
       cwd: thread['cwd'] as String? ?? '',
       projectId: thread['projectId'] as String?,
+      isPinned: thread['isPinned'] == true,
       updatedAt: _parseTime(
         thread['updatedAt'] ?? thread['createdAt'] ?? thread['updated_at'],
       ),
@@ -545,7 +598,10 @@ final class CodexRemoteApi {
       case 'item/completed':
         final item = _map(params['item']);
         final parsed = _parseItem(item);
-        return parsed == null ? null : TaskEvent.itemChanged(threadId, parsed);
+        return parsed == null
+            ? null
+            : TaskEvent.itemChanged(
+                threadId, parsed.copyWith(turnId: params['turnId'] as String?));
       default:
         return null;
     }
