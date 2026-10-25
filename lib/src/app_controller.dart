@@ -26,6 +26,7 @@ import 'tasks/task_operation_lock.dart';
 import 'tasks/task_reducer.dart';
 import 'tasks/task_refresh_lock.dart';
 import 'transport/codex_daemon.dart';
+import 'transport/connection_setup.dart';
 import 'transport/attachment_upload.dart';
 import 'transport/file_download.dart' as downloads;
 import 'transport/resumable_download.dart';
@@ -259,7 +260,7 @@ final class AppController extends ChangeNotifier {
   Timer? _reconnectTimer;
   bool _inBackground = false;
   bool _expediteReconnect = false;
-  int? _openingAttempt;
+  ConnectionSetup? _openingAttempt;
   CodexRemoteApi? _foregroundProbeApi;
   var _epoch = 0;
   var _connectionAttempt = 0;
@@ -511,6 +512,7 @@ final class AppController extends ChangeNotifier {
     cancelDownload();
     final preserveWorkspace = _workspaceHostId == profile.id;
     final attempt = ++_connectionAttempt;
+    _openingAttempt?.cancel(StateError('Connection replaced'));
     _cancelHostKeyPrompt();
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
@@ -544,7 +546,8 @@ final class AppController extends ChangeNotifier {
     required bool reconnecting,
     bool preserveWorkspace = false,
   }) async {
-    _openingAttempt = attempt;
+    final setup = ConnectionSetup(attempt);
+    _openingAttempt = setup;
     Diagnostics.record('connection.open', {
       'attempt': attempt,
       'reconnecting': reconnecting,
@@ -567,12 +570,16 @@ final class AppController extends ChangeNotifier {
     var published = false;
     var stage = ConnectionStage.profile;
     try {
-      if (!_inBackground) await _setKeepAlive(true);
+      if (!_inBackground) {
+        await setup.run('keepAlive', () => _setKeepAlive(true));
+      }
       if (attempt != _connectionAttempt) return;
-      final secret = await _store.readSecret(profile.id);
+      final secret = await setup.run(
+          'profileSecret', () => _store.readSecret(profile.id));
       final projects = reconnecting || preserveWorkspace
           ? _projects
-          : await _store.readProjects(profile.id);
+          : await setup.run(
+              'profileProjects', () => _store.readProjects(profile.id));
       if (attempt != _connectionAttempt) return;
       if (!reconnecting && !preserveWorkspace) {
         _projectActivityByCwd.clear();
@@ -582,15 +589,26 @@ final class AppController extends ChangeNotifier {
         _historyLoadState.clear();
       }
       stage = ConnectionStage.ssh;
-      ssh = await _connector.connect(
-        profile,
-        secret,
-        prompt: _promptForHostKey,
-        diagnosticAttempt: attempt,
+      ssh = await setup.run(
+        stage.name,
+        () => _connector.connect(
+          profile,
+          secret,
+          prompt: (challenge) {
+            if (attempt != _connectionAttempt) return Future.value(false);
+            return _promptForHostKey(challenge);
+          },
+          diagnosticAttempt: attempt,
+          setup: setup,
+        ),
+        timeout: const Duration(seconds: 90),
+        closeLateResult: (connection) => connection.close(
+            reason: 'late_connection_setup_result'),
       );
+      if (attempt != _connectionAttempt) return;
       stage = ConnectionStage.remoteAppServer;
       final client = ssh.client;
-      final socketPath = await resolveCodexSocketForProfile(
+      final socketPath = await setup.run(stage.name, () => resolveCodexSocketForProfile(
         (command, {environment}) async {
           final commandWatch = Stopwatch()..start();
           final result = await client.runWithResult(
@@ -614,27 +632,25 @@ final class AppController extends ChangeNotifier {
           );
         },
         profile,
-      );
+      ));
       if (attempt != _connectionAttempt) return;
       stage = ConnectionStage.unixTunnel;
-      tunnel = await SshUnixTunnel.start(
-        ssh.client,
+      tunnel = await setup.run(stage.name, () => SshUnixTunnel.start(
+        client,
         socketPath,
         environment: profile.environment,
-      );
+      ), closeLateResult: (value) => value.close());
+      if (attempt != _connectionAttempt) return;
       stage = ConnectionStage.rpcTunnel;
-      final tunnelFailure = tunnel.firstFailure.then<WebSocketRpcTransport>(
-        (_) => throw StateError(
-          'Remote Codex tunnel stopped without reporting a failure.',
+      final activeTunnel = tunnel;
+      setup.watchClosed(activeTunnel.firstFailure, () {});
+      final transport = await setup.run(stage.name,
+        () => WebSocketRpcTransport.connect(
+          Uri.parse('ws://127.0.0.1:${activeTunnel.localPort}/'),
         ),
-      );
-      final transport = await Future.any<WebSocketRpcTransport>([
-        WebSocketRpcTransport.connect(
-          Uri.parse('ws://127.0.0.1:${tunnel.localPort}/'),
-        ),
-        tunnelFailure,
-      ]);
+        closeLateResult: (value) => boundedConnectionCleanup('lateWebSocket', value.close));
       rpc = JsonRpcClient(transport)..start();
+      setup.watchClosed(rpc.done, () {});
       final api = CodexRemoteApi(rpc);
       notifications = api.notifications.listen(
         (notification) => _handleNotification(attempt, notification),
@@ -643,15 +659,18 @@ final class AppController extends ChangeNotifier {
         (request) => _handleServerRequest(attempt, request),
       );
       stage = ConnectionStage.initialize;
-      await api.initialize();
+      await setup.run(stage.name, api.initialize);
       if (attempt != _connectionAttempt) return;
-      try {
-        final catalog = await api.readModelCatalog();
-        if (attempt != _connectionAttempt) return;
-        _models = catalog;
-      } catch (exception) {
-        debugPrint('Could not read remote model catalog: $exception');
-      }
+      final catalog = await setup.run('modelCatalog', () async {
+        try {
+          return await api.readModelCatalog();
+        } catch (exception) {
+          debugPrint('Could not read remote model catalog: $exception');
+          return _models;
+        }
+      });
+      if (attempt != _connectionAttempt) return;
+      _models = catalog;
       if (attempt != _connectionAttempt) return;
 
       _ssh = ssh;
@@ -664,9 +683,12 @@ final class AppController extends ChangeNotifier {
       published = true;
       unawaited(rpc.done.then((_) => _handleTransportLoss(attempt, profile)));
       stage = ConnectionStage.refresh;
-      await refreshTasks(throwOnError: true, resetPages: true);
+      await setup.run(stage.name,
+          () => refreshTasks(throwOnError: true, resetPages: true));
       if (attempt != _connectionAttempt) return;
       _connectionPhase = RemoteConnectionPhase.connected;
+      setup.dispose();
+      if (identical(_openingAttempt, setup)) _openingAttempt = null;
       accountUsage.bind(api);
       unawaited(accountUsage.refresh());
       Diagnostics.record('connection.ready', {'attempt': attempt});
@@ -700,6 +722,7 @@ final class AppController extends ChangeNotifier {
       }
     } catch (exception, stackTrace) {
       if (attempt != _connectionAttempt) return;
+      _cancelHostKeyPrompt();
       Diagnostics.record('connection.failed', {
         'attempt': attempt,
         'stage': stage.name,
@@ -723,13 +746,20 @@ final class AppController extends ChangeNotifier {
         await _setKeepAlive(false);
       }
     } finally {
-      if (_openingAttempt == attempt) _openingAttempt = null;
+      setup.dispose();
+      if (identical(_openingAttempt, setup)) _openingAttempt = null;
       if (!published) {
-        await notifications?.cancel();
-        await requests?.cancel();
-        await rpc?.close();
-        await tunnel?.close();
-        await ssh?.close(reason: 'unpublished_connection_cleanup');
+        await Future.wait([
+          if (notifications != null)
+            boundedConnectionCleanup('notifications', notifications.cancel),
+          if (requests != null)
+            boundedConnectionCleanup('requests', requests.cancel),
+          if (rpc != null) boundedConnectionCleanup('rpc', rpc.close),
+          if (tunnel != null) boundedConnectionCleanup('tunnel', tunnel.close),
+          if (ssh != null)
+            boundedConnectionCleanup('ssh', () => ssh!.close(
+                reason: 'unpublished_connection_cleanup')),
+        ]);
       }
     }
     notifyListeners();
@@ -810,7 +840,11 @@ final class AppController extends ChangeNotifier {
       return;
     }
     final profile = _profiles.where((p) => p.id == _selectedHostId).firstOrNull;
-    if (profile == null || _openingAttempt != null) return;
+    if (profile == null) return;
+    if (_openingAttempt case final setup?) {
+      setup.checkDeadline();
+      return;
+    }
     if (_connectionPhase == RemoteConnectionPhase.reconnecting) {
       _reconnectTimer?.cancel();
       _reconnectTimer = null;
@@ -892,7 +926,11 @@ final class AppController extends ChangeNotifier {
     final profile =
         _profiles.where((profile) => profile.id == _selectedHostId).firstOrNull;
     // Respect explicit disconnect, and never overlap an in-flight connection.
-    if (profile == null || _openingAttempt != null) return;
+    if (profile == null) return;
+    if (_openingAttempt case final setup?) {
+      setup.checkDeadline();
+      return;
+    }
     if (_connectionPhase != RemoteConnectionPhase.disconnected) {
       final attempt = _connectionAttempt;
       await _setKeepAlive(true);
@@ -2824,6 +2862,7 @@ final class AppController extends ChangeNotifier {
     Diagnostics.record('connection.userDisconnect');
     _expediteReconnect = false;
     _connectionAttempt++;
+    _openingAttempt?.cancel(StateError('User disconnected'));
     final stoppingKeepAlive = _setKeepAlive(false);
     _cancelHostKeyPrompt();
     _reconnectTimer?.cancel();
@@ -2908,11 +2947,16 @@ final class AppController extends ChangeNotifier {
     _api = null;
     _tunnel = null;
     _ssh = null;
-    await notificationSubscription?.cancel();
-    await requestSubscription?.cancel();
-    await rpc?.close();
-    await tunnel?.close();
-    await ssh?.close(reason: reason);
+    await Future.wait([
+      if (notificationSubscription != null)
+        boundedConnectionCleanup('notifications', notificationSubscription.cancel),
+      if (requestSubscription != null)
+        boundedConnectionCleanup('requests', requestSubscription.cancel),
+      if (rpc != null) boundedConnectionCleanup('rpc', rpc.close),
+      if (tunnel != null) boundedConnectionCleanup('tunnel', tunnel.close),
+      if (ssh != null)
+        boundedConnectionCleanup('ssh', () => ssh.close(reason: reason)),
+    ]);
   }
 
   void clearError() {
@@ -2936,6 +2980,7 @@ final class AppController extends ChangeNotifier {
     cancelDownload();
     _network.dispose();
     _connectionAttempt++;
+    _openingAttempt?.cancel(StateError('Controller disposed'));
     _cancelHostKeyPrompt();
     _reconnectTimer?.cancel();
     _refreshTimer?.cancel();
