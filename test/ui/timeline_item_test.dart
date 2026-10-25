@@ -290,7 +290,8 @@ void main() {
     expect(find.text('github · get_issue'), findsOneWidget);
   });
 
-  testWidgets('large work chains scroll inside a capped box with a fixed header',
+  testWidgets(
+      'large work chains scroll inside a capped box with a fixed header',
       (tester) async {
     final outer = ScrollController();
     addTearDown(outer.dispose);
@@ -299,13 +300,16 @@ void main() {
         body: ListView(
           controller: outer,
           children: [
-            TimelineActivityGroup(items: List.generate(40, (index) => TaskItem(
-              id: 'tool-$index',
-              kind: TaskItemKind.command,
-              title: 'Tool $index',
-              text: 'command',
-              detail: List.filled(100, 'long output').join('\n'),
-            ))),
+            TimelineActivityGroup(
+                items: List.generate(
+                    40,
+                    (index) => TaskItem(
+                          id: 'tool-$index',
+                          kind: TaskItemKind.command,
+                          title: 'Tool $index',
+                          text: 'command',
+                          detail: List.filled(100, 'long output').join('\n'),
+                        ))),
             const SizedBox(height: 1000),
           ],
         ),
@@ -323,12 +327,16 @@ void main() {
     await tester.pumpAndSettle();
     expect(outer.offset, 0);
     expect(tester.getTopLeft(find.text('40 work events')), headerPosition);
-    final scrollbar = tester.widget<Scrollbar>(find.descendant(
-      of: viewport, matching: find.byType(Scrollbar),
-    ).first);
+    final scrollbar = tester.widget<Scrollbar>(find
+        .descendant(
+          of: viewport,
+          matching: find.byType(Scrollbar),
+        )
+        .first);
     expect(scrollbar.thumbVisibility, isTrue);
     expect(scrollbar.controller!.offset, greaterThan(0));
-    scrollbar.controller!.jumpTo(scrollbar.controller!.position.maxScrollExtent);
+    scrollbar.controller!
+        .jumpTo(scrollbar.controller!.position.maxScrollExtent);
     await tester.pumpAndSettle();
     expect(find.text('Tool 39').hitTestable(), findsOneWidget);
     await tester.tap(find.text('40 work events'));

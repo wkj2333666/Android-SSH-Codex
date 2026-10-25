@@ -7,6 +7,7 @@ import 'package:android_ssh_codex/src/protocol/codex_remote_api.dart';
 import 'package:android_ssh_codex/src/protocol/json_rpc_client.dart';
 import 'package:android_ssh_codex/src/protocol/rpc_transport.dart';
 import 'package:android_ssh_codex/src/ui/widgets/account_usage_panel.dart';
+import 'package:android_ssh_codex/src/ui/turn_settings_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -17,8 +18,8 @@ class _Transport implements RpcTransport {
   Stream<String> get messages => input.stream;
   @override
   void send(String message) => calls.add(jsonDecode(message));
-  void reply(Map<String, dynamic> result, {int? id}) => input.add(
-      jsonEncode({'id': id ?? calls.last['id'], 'result': result}));
+  void reply(Map<String, dynamic> result, {int? id}) =>
+      input.add(jsonEncode({'id': id ?? calls.last['id'], 'result': result}));
   void notify(String method, Map<String, dynamic> params) =>
       input.add(jsonEncode({'method': method, 'params': params}));
   @override
@@ -42,7 +43,8 @@ Map<String, dynamic> quota(num used, {String id = 'codex'}) => {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('quota parser preserves unknown values and prefers multi-bucket data', () {
+  test('quota parser preserves unknown values and prefers multi-bucket data',
+      () {
     final result = UsageBucket.parse({
       ...quota(99),
       'rateLimitsByLimitId': {
@@ -67,7 +69,8 @@ void main() {
     expect(UsageWindow.parse({'usedPercent': -2})!.remainingPercent, 100);
   });
 
-  test('reads use empty params; pushed quotas beat an older in-flight read', () async {
+  test('reads use empty params; pushed quotas beat an older in-flight read',
+      () async {
     final transport = _Transport();
     final rpc = JsonRpcClient(transport)..start();
     final controller = AppController.connectedForTesting(rpc: rpc);
@@ -90,7 +93,8 @@ void main() {
     await rpc.close();
   });
 
-  test('connection/account changes discard old quotas and pending reads', () async {
+  test('connection/account changes discard old quotas and pending reads',
+      () async {
     final transport = _Transport();
     final rpc = JsonRpcClient(transport)..start();
     final controller = AppController.connectedForTesting(rpc: rpc);
@@ -118,7 +122,9 @@ void main() {
     await rpc.close();
   });
 
-  testWidgets('usage failure/timeout does not disconnect RPC or imply unlimited', (tester) async {
+  testWidgets(
+      'usage failure/timeout does not disconnect RPC or imply unlimited',
+      (tester) async {
     final transport = _Transport();
     final rpc = JsonRpcClient(transport)..start();
     final usage = AccountUsageController()..bind(CodexRemoteApi(rpc));
@@ -140,14 +146,64 @@ void main() {
     expect(find.text('5h · 75% left'), findsOneWidget);
     expect(find.textContaining('Resets '), findsOneWidget);
     expect(find.text('codex · plus'), findsOneWidget);
-    expect(tester.widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator)).value, 0.75);
+    expect(
+        tester
+            .widget<LinearProgressIndicator>(
+                find.byType(LinearProgressIndicator))
+            .value,
+        0.75);
     usage.update(quota(80));
     await tester.pumpAndSettle();
     expect(find.text('5h · 20% left'), findsOneWidget);
     usage.bind(null);
     await tester.pumpAndSettle();
-    expect(find.text('Connect to view the remote account usage.'), findsOneWidget);
+    expect(
+        find.text('Connect to view the remote account usage.'), findsOneWidget);
     expect(find.text('5h · 20% left'), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+    usage.dispose();
+    await tester.runAsync(rpc.close);
+  });
+
+  testWidgets('usage remains scrollable in the model panel on a small screen',
+      (tester) async {
+    tester.view.physicalSize = const Size(320, 480);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final transport = _Transport();
+    final rpc = JsonRpcClient(transport)..start();
+    final usage = AccountUsageController()..bind(CodexRemoteApi(rpc));
+    TurnSettings? selected;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+          body: TurnSettingsPicker(
+        accountUsage: usage,
+        models: const [
+          RemoteModel(
+            id: 'model',
+            model: 'model',
+            displayName: 'Model',
+            description: '',
+            isDefault: true,
+            defaultReasoningEffort: 'high',
+            supportedReasoningEfforts: [],
+          ),
+        ],
+        value: const TurnSettings(),
+        onChanged: (value) => selected = value,
+      )),
+    ));
+    await tester.tap(find.byKey(const Key('turn-settings-selector')));
+    transport.reply(quota(25));
+    await tester.pumpAndSettle();
+    expect(find.text('Subscription usage'), findsOneWidget);
+    expect(find.text('5h · 75% left'), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const Key('turn-settings-apply')));
+    await tester.tap(find.byKey(const Key('turn-settings-apply')));
+    await tester.pumpAndSettle();
+    expect(selected!.model, 'model');
+    expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
     usage.dispose();
     await tester.runAsync(rpc.close);

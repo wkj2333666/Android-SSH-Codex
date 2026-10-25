@@ -56,7 +56,9 @@ class TurnSettingsPicker extends StatelessWidget {
                   isScrollControlled: true,
                   showDragHandle: true,
                   builder: (_) => _TurnSettingsSheet(
-                      models: models, value: settings, accountUsage: accountUsage),
+                      models: models,
+                      value: settings,
+                      accountUsage: accountUsage),
                 );
                 if (context.mounted && selection != null) onChanged(selection);
               }

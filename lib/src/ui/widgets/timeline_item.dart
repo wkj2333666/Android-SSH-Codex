@@ -112,7 +112,8 @@ class _ActivityViewportState extends State<_ActivityViewport> {
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
-    final available = media.size.height - media.viewInsets.bottom - media.padding.vertical;
+    final available =
+        media.size.height - media.viewInsets.bottom - media.padding.vertical;
     return ConstrainedBox(
       key: const Key('activity-viewport'),
       constraints: BoxConstraints(maxHeight: (available * 0.4).clamp(80, 360)),
@@ -630,13 +631,13 @@ class _ActivityCard extends StatelessWidget {
         _ActivityViewport(
           itemCount: 1,
           itemBuilder: (context, index) => Align(
-          alignment: Alignment.centerLeft,
-          child: item.kind == TaskItemKind.reasoning
-              ? MarkdownContent(text: body)
-              : SelectableText(
-                  body,
-                  style: const TextStyle(fontFamily: 'monospace'),
-                ),
+            alignment: Alignment.centerLeft,
+            child: item.kind == TaskItemKind.reasoning
+                ? MarkdownContent(text: body)
+                : SelectableText(
+                    body,
+                    style: const TextStyle(fontFamily: 'monospace'),
+                  ),
           ),
         ),
       ],

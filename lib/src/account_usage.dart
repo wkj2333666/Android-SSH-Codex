@@ -17,7 +17,9 @@ final class UsageWindow {
     final reset = value['resetsAt'];
     return UsageWindow(
       (100 - used.toDouble()).clamp(0, 100).toDouble(),
-      minutes is num && minutes.isFinite && minutes > 0 ? minutes.toInt() : null,
+      minutes is num && minutes.isFinite && minutes > 0
+          ? minutes.toInt()
+          : null,
       reset is num && reset.isFinite && reset > 0 && reset < 8640000000000
           ? DateTime.fromMillisecondsSinceEpoch(reset.toInt() * 1000)
           : null,
