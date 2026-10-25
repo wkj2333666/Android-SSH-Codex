@@ -63,10 +63,16 @@ not imply Play approval.
   first to keep a copy. Older servers may not support these operations.
 - Start new tasks and continue existing Codex Desktop or CLI conversations.
 - Follow streaming responses, approvals, tool activity, Markdown, and formulas.
+  Expanded work events have a height limit and their own scrollbar; the collapse
+  header stays outside the scrolling tool/reasoning details.
 - Choose a server-advertised model and reasoning effort for new turns. The
   model panel also offers **Fast** when the server advertises support. Fast
   uses more quota/credits; it applies to new turns (including queued messages),
   not to a turn already running. Turning it off requests standard speed.
+  The model panel shows the connected server account's remaining subscription
+  quota and reset times when provided, with live updates and manual refresh.
+  API-key/custom providers without quota support show **Usage unavailable**,
+  not unlimited usage. Percentages are quota windows, not remaining messages.
 - Browse cached tasks, select cached models, and keep typing while disconnected.
   Attachments picked offline wait for the same host to reconnect before uploading;
   they can still be removed. Text and already-uploaded attachments can be queued

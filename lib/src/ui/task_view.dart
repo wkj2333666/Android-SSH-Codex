@@ -302,6 +302,7 @@ class _TaskViewState extends State<TaskView> {
           child: Row(children: [
             Expanded(
                 child: TurnSettingsPicker(
+              accountUsage: widget.controller.accountUsage,
               models: widget.controller.models,
               value: resolveTurnSettings(
                   widget.controller.models, _turnSettings,

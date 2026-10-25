@@ -290,6 +290,53 @@ void main() {
     expect(find.text('github · get_issue'), findsOneWidget);
   });
 
+  testWidgets('large work chains scroll inside a capped box with a fixed header',
+      (tester) async {
+    final outer = ScrollController();
+    addTearDown(outer.dispose);
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: ListView(
+          controller: outer,
+          children: [
+            TimelineActivityGroup(items: List.generate(40, (index) => TaskItem(
+              id: 'tool-$index',
+              kind: TaskItemKind.command,
+              title: 'Tool $index',
+              text: 'command',
+              detail: List.filled(100, 'long output').join('\n'),
+            ))),
+            const SizedBox(height: 1000),
+          ],
+        ),
+      ),
+    ));
+    await tester.tap(find.text('40 work events'));
+    await tester.pumpAndSettle();
+    final viewport = find.byKey(const Key('activity-viewport'));
+    expect(tester.getSize(viewport).height, lessThanOrEqualTo(240));
+    final headerPosition = tester.getTopLeft(find.text('40 work events'));
+    await tester.tap(find.text('Tool 0'));
+    await tester.pumpAndSettle();
+    expect(tester.getSize(viewport).height, lessThanOrEqualTo(240));
+    await tester.drag(viewport, const Offset(0, -200));
+    await tester.pumpAndSettle();
+    expect(outer.offset, 0);
+    expect(tester.getTopLeft(find.text('40 work events')), headerPosition);
+    final scrollbar = tester.widget<Scrollbar>(find.descendant(
+      of: viewport, matching: find.byType(Scrollbar),
+    ).first);
+    expect(scrollbar.thumbVisibility, isTrue);
+    expect(scrollbar.controller!.offset, greaterThan(0));
+    scrollbar.controller!.jumpTo(scrollbar.controller!.position.maxScrollExtent);
+    await tester.pumpAndSettle();
+    expect(find.text('Tool 39').hitTestable(), findsOneWidget);
+    await tester.tap(find.text('40 work events'));
+    await tester.pumpAndSettle();
+    expect(viewport, findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('model replies render selectable Markdown and LaTeX',
       (tester) async {
     await tester.pumpWidget(const MaterialApp(

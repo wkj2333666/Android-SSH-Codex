@@ -120,6 +120,11 @@ final class CodexRemoteApi {
   Stream<RpcNotification> get notifications => _rpc.notifications;
   Stream<RpcServerRequest> get serverRequests => _rpc.serverRequests;
 
+  Future<Map<String, dynamic>> readAccountRateLimits() async => _map(
+        await _rpc.requestWithTimeout('account/rateLimits/read', const {},
+            const Duration(seconds: 10)),
+      );
+
   Future<void> initialize() async {
     await _rpc.request('initialize', {
       'clientInfo': {

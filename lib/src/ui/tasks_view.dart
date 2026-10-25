@@ -155,6 +155,7 @@ class _TaskList extends StatelessWidget {
               const SizedBox(height: 12),
               StatefulBuilder(
                 builder: (context, setDialogState) => TurnSettingsPicker(
+                  accountUsage: controller.accountUsage,
                   models: controller.models,
                   value: turnSettings,
                   onChanged: (value) =>

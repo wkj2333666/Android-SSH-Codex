@@ -74,7 +74,13 @@ class TimelineActivityGroup extends StatelessWidget {
           ),
           childrenPadding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
           children: [
-            for (final item in items) _CompactActivityRow(item: item),
+            _ActivityViewport(
+              itemCount: items.length,
+              itemBuilder: (context, index) => _CompactActivityRow(
+                key: ValueKey(items[index].id),
+                item: items[index],
+              ),
+            ),
           ],
         ),
       ),
@@ -82,8 +88,56 @@ class TimelineActivityGroup extends StatelessWidget {
   }
 }
 
+/// Keep the collapse header outside the scrollable details, including when a
+/// single tool output is much taller than the screen.
+class _ActivityViewport extends StatefulWidget {
+  const _ActivityViewport({required this.itemCount, required this.itemBuilder});
+
+  final int itemCount;
+  final IndexedWidgetBuilder itemBuilder;
+
+  @override
+  State<_ActivityViewport> createState() => _ActivityViewportState();
+}
+
+class _ActivityViewportState extends State<_ActivityViewport> {
+  final _scroll = ScrollController();
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final available = media.size.height - media.viewInsets.bottom - media.padding.vertical;
+    return ConstrainedBox(
+      key: const Key('activity-viewport'),
+      constraints: BoxConstraints(maxHeight: (available * 0.4).clamp(80, 360)),
+      child: NotificationListener<ScrollNotification>(
+        // Internal scrolling must not change the chat's follow-latest state.
+        onNotification: (_) => true,
+        child: Scrollbar(
+          controller: _scroll,
+          thumbVisibility: true,
+          child: ListView.builder(
+            controller: _scroll,
+            primary: false,
+            shrinkWrap: true,
+            padding: const EdgeInsets.only(right: 8),
+            itemCount: widget.itemCount,
+            itemBuilder: widget.itemBuilder,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _CompactActivityRow extends StatelessWidget {
-  const _CompactActivityRow({required this.item});
+  const _CompactActivityRow({required this.item, super.key});
 
   final TaskItem item;
 
@@ -573,7 +627,9 @@ class _ActivityCard extends StatelessWidget {
       showTrailingIcon: expandable,
       childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
       children: [
-        Align(
+        _ActivityViewport(
+          itemCount: 1,
+          itemBuilder: (context, index) => Align(
           alignment: Alignment.centerLeft,
           child: item.kind == TaskItemKind.reasoning
               ? MarkdownContent(text: body)
@@ -581,6 +637,7 @@ class _ActivityCard extends StatelessWidget {
                   body,
                   style: const TextStyle(fontFamily: 'monospace'),
                 ),
+          ),
         ),
       ],
     );

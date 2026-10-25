@@ -12,6 +12,7 @@ import 'profiles/profile_store.dart';
 import 'projects/remote_project.dart';
 import 'projects/shared_project_sync.dart';
 import 'protocol/codex_remote_api.dart';
+import 'account_usage.dart';
 import 'protocol/user_input_request.dart';
 import 'protocol/foreground_probe.dart';
 import 'protocol/json_rpc_client.dart';
@@ -183,6 +184,7 @@ final class AppController extends ChangeNotifier {
         AppController.memory(cachedTasks: cachedTasks, store: store);
     controller._rpc = rpc;
     controller._api = CodexRemoteApi(rpc);
+    controller.accountUsage.bind(controller._api);
     controller._selectedHostId = hostId;
     controller._workspaceHostId = hostId;
     controller._connectionPhase = RemoteConnectionPhase.connected;
@@ -223,6 +225,7 @@ final class AppController extends ChangeNotifier {
   List<HostProfile> _profiles = const [];
   List<RemoteProject> _projects = const [];
   List<RemoteModel> _models = const [];
+  final AccountUsageController accountUsage = AccountUsageController();
   AppSection _section = AppSection.hosts;
   RemoteConnectionPhase _connectionPhase = RemoteConnectionPhase.disconnected;
   String? _selectedHostId;
@@ -664,6 +667,8 @@ final class AppController extends ChangeNotifier {
       await refreshTasks(throwOnError: true, resetPages: true);
       if (attempt != _connectionAttempt) return;
       _connectionPhase = RemoteConnectionPhase.connected;
+      accountUsage.bind(api);
+      unawaited(accountUsage.refresh());
       Diagnostics.record('connection.ready', {'attempt': attempt});
       _reconnectAttempt = 0;
       _expediteReconnect = false;
@@ -2663,6 +2668,15 @@ final class AppController extends ChangeNotifier {
     if (attempt != _connectionAttempt) return;
     final method = notification.method;
     final params = notification.params;
+    if (method == 'account/rateLimits/updated') {
+      accountUsage.update(params);
+      return;
+    }
+    if (method == 'account/updated') {
+      accountUsage.bind(_api);
+      unawaited(accountUsage.refresh());
+      return;
+    }
     if (method == 'thread/name/updated') {
       final id = params['threadId'] as String?;
       final name = params['threadName'] as String?;
@@ -2868,6 +2882,7 @@ final class AppController extends ChangeNotifier {
 
   Future<void> _closeTransport(
       {String reason = 'connection_replaced_or_closed'}) async {
+    accountUsage.bind(null);
     _userInputRequests = const [];
     Diagnostics.record('connection.closeRequested', {'closeReason': reason});
     _refreshTimer?.cancel();
@@ -2926,6 +2941,7 @@ final class AppController extends ChangeNotifier {
     _refreshTimer?.cancel();
     _agentDeltaBatcher.dispose();
     unawaited(_closeTransport(reason: 'controller_disposed'));
+    accountUsage.dispose();
     unawaited(_setKeepAlive(false));
     super.dispose();
   }
