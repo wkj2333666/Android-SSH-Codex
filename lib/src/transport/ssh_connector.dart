@@ -149,8 +149,9 @@ final class SshConnector {
           prompt: prompt,
         );
         unownedSocket = null;
-        setup?.watchClosed(jumpClient.done,
-            () => _requestSshClose(jumpClient!, 'connection_setup_aborted'));
+        final openingJump = jumpClient;
+        setup?.watchClosed(openingJump.done,
+            () => _requestSshClose(openingJump, 'connection_setup_aborted'));
         await jumpClient.authenticated;
         unownedSocket =
             await jumpClient.forwardLocal(profile.hostName, profile.port);
@@ -168,8 +169,9 @@ final class SshConnector {
         prompt: prompt,
       );
       unownedSocket = null;
-      setup?.watchClosed(targetClient.done,
-          () => _requestSshClose(targetClient!, 'connection_setup_aborted'));
+      final openingTarget = targetClient;
+      setup?.watchClosed(openingTarget.done,
+          () => _requestSshClose(openingTarget, 'connection_setup_aborted'));
       await targetClient.authenticated;
       return SshConnection(client: targetClient, jumpClient: jumpClient);
     } catch (_) {

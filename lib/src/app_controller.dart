@@ -574,8 +574,8 @@ final class AppController extends ChangeNotifier {
         await setup.run('keepAlive', () => _setKeepAlive(true));
       }
       if (attempt != _connectionAttempt) return;
-      final secret = await setup.run(
-          'profileSecret', () => _store.readSecret(profile.id));
+      final secret =
+          await setup.run('profileSecret', () => _store.readSecret(profile.id));
       final projects = reconnecting || preserveWorkspace
           ? _projects
           : await setup.run(
@@ -589,7 +589,7 @@ final class AppController extends ChangeNotifier {
         _historyLoadState.clear();
       }
       stage = ConnectionStage.ssh;
-      ssh = await setup.run(
+      ssh = await setup.run<SshConnection>(
         stage.name,
         () => _connector.connect(
           profile,
@@ -602,53 +602,60 @@ final class AppController extends ChangeNotifier {
           setup: setup,
         ),
         timeout: const Duration(seconds: 90),
-        closeLateResult: (connection) => connection.close(
-            reason: 'late_connection_setup_result'),
+        closeLateResult: (connection) =>
+            connection.close(reason: 'late_connection_setup_result'),
       );
       if (attempt != _connectionAttempt) return;
       stage = ConnectionStage.remoteAppServer;
       final client = ssh.client;
-      final socketPath = await setup.run(stage.name, () => resolveCodexSocketForProfile(
-        (command, {environment}) async {
-          final commandWatch = Stopwatch()..start();
-          final result = await client.runWithResult(
-            command,
-            environment: environment,
-          );
-          Diagnostics.record('bootstrap.commandResult', {
-            'attempt': attempt,
-            'mode': profile.appServerMode.name,
-            'durationMs': commandWatch.elapsedMilliseconds,
-            'exitCode': result.exitCode,
-            'exitSignal': result.exitSignal?.signalName,
-            'stdoutBytes': result.stdout.length,
-            'stderrBytes': result.stderr.length,
-          });
-          return SshCommandResult(
-            stdout: result.stdout,
-            stderr: result.stderr,
-            exitCode: result.exitCode,
-            exitSignal: result.exitSignal?.signalName,
-          );
-        },
-        profile,
-      ));
+      final socketPath = await setup.run(
+          stage.name,
+          () => resolveCodexSocketForProfile(
+                (command, {environment}) async {
+                  final commandWatch = Stopwatch()..start();
+                  final result = await client.runWithResult(
+                    command,
+                    environment: environment,
+                  );
+                  Diagnostics.record('bootstrap.commandResult', {
+                    'attempt': attempt,
+                    'mode': profile.appServerMode.name,
+                    'durationMs': commandWatch.elapsedMilliseconds,
+                    'exitCode': result.exitCode,
+                    'exitSignal': result.exitSignal?.signalName,
+                    'stdoutBytes': result.stdout.length,
+                    'stderrBytes': result.stderr.length,
+                  });
+                  return SshCommandResult(
+                    stdout: result.stdout,
+                    stderr: result.stderr,
+                    exitCode: result.exitCode,
+                    exitSignal: result.exitSignal?.signalName,
+                  );
+                },
+                profile,
+              ));
       if (attempt != _connectionAttempt) return;
       stage = ConnectionStage.unixTunnel;
-      tunnel = await setup.run(stage.name, () => SshUnixTunnel.start(
-        client,
-        socketPath,
-        environment: profile.environment,
-      ), closeLateResult: (value) => value.close());
+      tunnel = await setup.run<SshUnixTunnel>(
+          stage.name,
+          () => SshUnixTunnel.start(
+                client,
+                socketPath,
+                environment: profile.environment,
+              ),
+          closeLateResult: (value) => value.close());
       if (attempt != _connectionAttempt) return;
       stage = ConnectionStage.rpcTunnel;
       final activeTunnel = tunnel;
       setup.watchClosed(activeTunnel.firstFailure, () {});
-      final transport = await setup.run(stage.name,
-        () => WebSocketRpcTransport.connect(
-          Uri.parse('ws://127.0.0.1:${activeTunnel.localPort}/'),
-        ),
-        closeLateResult: (value) => boundedConnectionCleanup('lateWebSocket', value.close));
+      final transport = await setup.run(
+          stage.name,
+          () => WebSocketRpcTransport.connect(
+                Uri.parse('ws://127.0.0.1:${activeTunnel.localPort}/'),
+              ),
+          closeLateResult: (value) =>
+              boundedConnectionCleanup('lateWebSocket', value.close));
       rpc = JsonRpcClient(transport)..start();
       setup.watchClosed(rpc.done, () {});
       final api = CodexRemoteApi(rpc);
@@ -683,8 +690,8 @@ final class AppController extends ChangeNotifier {
       published = true;
       unawaited(rpc.done.then((_) => _handleTransportLoss(attempt, profile)));
       stage = ConnectionStage.refresh;
-      await setup.run(stage.name,
-          () => refreshTasks(throwOnError: true, resetPages: true));
+      await setup.run(
+          stage.name, () => refreshTasks(throwOnError: true, resetPages: true));
       if (attempt != _connectionAttempt) return;
       _connectionPhase = RemoteConnectionPhase.connected;
       setup.dispose();
@@ -757,8 +764,8 @@ final class AppController extends ChangeNotifier {
           if (rpc != null) boundedConnectionCleanup('rpc', rpc.close),
           if (tunnel != null) boundedConnectionCleanup('tunnel', tunnel.close),
           if (ssh != null)
-            boundedConnectionCleanup('ssh', () => ssh!.close(
-                reason: 'unpublished_connection_cleanup')),
+            boundedConnectionCleanup('ssh',
+                () => ssh.close(reason: 'unpublished_connection_cleanup')),
         ]);
       }
     }
@@ -2949,7 +2956,8 @@ final class AppController extends ChangeNotifier {
     _ssh = null;
     await Future.wait([
       if (notificationSubscription != null)
-        boundedConnectionCleanup('notifications', notificationSubscription.cancel),
+        boundedConnectionCleanup(
+            'notifications', notificationSubscription.cancel),
       if (requestSubscription != null)
         boundedConnectionCleanup('requests', requestSubscription.cancel),
       if (rpc != null) boundedConnectionCleanup('rpc', rpc.close),

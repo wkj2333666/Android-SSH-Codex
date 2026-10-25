@@ -6,7 +6,8 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('SSH failure releases a bootstrap command that never completes', () async {
+  test('SSH failure releases a bootstrap command that never completes',
+      () async {
     final setup = ConnectionSetup(11);
     final done = Completer<void>();
     var closed = 0;
@@ -20,7 +21,8 @@ void main() {
     setup.dispose();
   });
 
-  test('EOF during setup also fails without waiting for an RPC timeout', () async {
+  test('EOF during setup also fails without waiting for an RPC timeout',
+      () async {
     final setup = ConnectionSetup(1);
     final done = Completer<void>();
     setup.watchClosed(done.future, () {});
@@ -67,7 +69,8 @@ void main() {
     setup.dispose();
   });
 
-  test('cancelled socket arriving late is closed and never published', () async {
+  test('cancelled socket arriving late is closed and never published',
+      () async {
     final setup = ConnectionSetup(1);
     final socket = Completer<int>();
     var lateClosed = 0;
@@ -95,9 +98,11 @@ void main() {
     final setup = ConnectionSetup(1);
     setup.cancel(StateError('Superseded'));
     var started = false;
-    await expectLater(setup.run('bootstrap', () async {
-      started = true;
-    }), throwsStateError);
+    await expectLater(
+        setup.run('bootstrap', () async {
+          started = true;
+        }),
+        throwsStateError);
     expect(started, isFalse);
     setup.dispose();
   });
@@ -116,7 +121,8 @@ void main() {
     current.dispose();
   });
 
-  testWidgets('hung cleanup cannot hold up the next connection', (tester) async {
+  testWidgets('hung cleanup cannot hold up the next connection',
+      (tester) async {
     var finished = false;
     final cleanup = boundedConnectionCleanup(
       'testSocket',

@@ -18,8 +18,9 @@ final class WebSocketRpcTransport implements RpcTransport {
     try {
       await channel.ready.timeout(const Duration(seconds: 12));
     } catch (_) {
-      unawaited(boundedConnectionCleanup(
-          'failedWebSocket', () async { await channel.sink.close(); }));
+      unawaited(boundedConnectionCleanup('failedWebSocket', () async {
+        await channel.sink.close();
+      }));
       rethrow;
     }
     return WebSocketRpcTransport._(channel);
