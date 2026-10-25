@@ -169,6 +169,9 @@ class _CompactActivityRow extends StatelessWidget {
       children: detail?.isNotEmpty == true
           ? [
               Align(
+                // SelectableText/Markdown have internal scrollables. Their
+                // saved offsets must not overwrite ExpansionTile's bool state.
+                key: PageStorageKey('activity-detail-${item.id}'),
                 alignment: Alignment.centerLeft,
                 child: item.kind == TaskItemKind.reasoning
                     ? MarkdownContent(text: detail!)
