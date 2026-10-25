@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../diagnostics.dart';
+import '../transport/connection_setup.dart';
 import 'rpc_transport.dart';
 
 final class WebSocketRpcTransport implements RpcTransport {
@@ -14,7 +15,14 @@ final class WebSocketRpcTransport implements RpcTransport {
 
   static Future<WebSocketRpcTransport> connect(Uri uri) async {
     final channel = WebSocketChannel.connect(uri);
-    await channel.ready.timeout(const Duration(seconds: 12));
+    try {
+      await channel.ready.timeout(const Duration(seconds: 12));
+    } catch (_) {
+      unawaited(boundedConnectionCleanup('failedWebSocket', () async {
+        await channel.sink.close();
+      }));
+      rethrow;
+    }
     return WebSocketRpcTransport._(channel);
   }
 

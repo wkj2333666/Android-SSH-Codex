@@ -7,6 +7,7 @@ import '../diagnostics.dart';
 import '../profiles/host_profile.dart';
 import '../profiles/profile_store.dart';
 import 'ssh_health_monitor.dart';
+import 'connection_setup.dart';
 
 final class HostKeyChallenge {
   const HostKeyChallenge({
@@ -97,9 +98,12 @@ final class SshConnection {
 
   Future<void> close({String reason = 'transport_cleanup'}) async {
     _requestSshClose(client, reason);
-    await client.done.catchError((_) {});
     if (jumpClient != null) _requestSshClose(jumpClient!, reason);
-    await jumpClient?.done.catchError((_) {});
+    await Future.wait([
+      boundedConnectionCleanup('sshClient', () => client.done),
+      if (jumpClient != null)
+        boundedConnectionCleanup('jumpClient', () => jumpClient!.done),
+    ]);
   }
 }
 
@@ -114,6 +118,7 @@ final class SshConnector {
     required HostKeyPrompt prompt,
     int? diagnosticAttempt,
     String diagnosticRole = 'target',
+    ConnectionSetup? setup,
   }) async {
     SSHClient? jumpClient;
     SSHClient? targetClient;
@@ -144,6 +149,9 @@ final class SshConnector {
           prompt: prompt,
         );
         unownedSocket = null;
+        final openingJump = jumpClient;
+        setup?.watchClosed(openingJump.done,
+            () => _requestSshClose(openingJump, 'connection_setup_aborted'));
         await jumpClient.authenticated;
         unownedSocket =
             await jumpClient.forwardLocal(profile.hostName, profile.port);
@@ -161,6 +169,9 @@ final class SshConnector {
         prompt: prompt,
       );
       unownedSocket = null;
+      final openingTarget = targetClient;
+      setup?.watchClosed(openingTarget.done,
+          () => _requestSshClose(openingTarget, 'connection_setup_aborted'));
       await targetClient.authenticated;
       return SshConnection(client: targetClient, jumpClient: jumpClient);
     } catch (_) {
@@ -249,5 +260,5 @@ final class SshConnector {
 Future<void> _closeClient(SSHClient? client) async {
   if (client == null) return;
   _requestSshClose(client, 'connection_setup_failed');
-  await client.done.catchError((_) {});
+  await boundedConnectionCleanup('unpublishedSshClient', () => client.done);
 }
