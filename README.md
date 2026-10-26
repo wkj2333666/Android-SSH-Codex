@@ -138,14 +138,19 @@ access to your source repository.
 
 Codex is resolved in the SSH command environment, which may differ from your
 interactive terminal. The app honors an existing `codex` on `PATH` first. If it
-is missing, Shared startup, the proxy, and Isolated startup also check
+is missing, Shared startup, the proxy, and Isolated startup first run an isolated
+`bash --noprofile -ic` probe to read the SSH user's `.bashrc` PATH (including
+interactive-only setup). Only PATH and the resolved executable are imported;
+aliases/functions and other shell variables are not. Startup output is discarded
+and stdin is disconnected from the proxy. Bash and `timeout` are required for
+this optional probe, which is bounded to approximately five seconds.
+If probing fails or is unavailable, the app checks
 `CODEX_INSTALL_DIR` (when set), the provider-switcher wrapper directory,
 `~/.local/bin`, `~/bin`, `~/.npm-global/bin`, `~/.local/share/pnpm`,
 `~/.bun/bin`, and `~/.codex/packages/standalone/current/bin`.
-These fallback directories are added to the child process PATH. Shell startup
-files are not sourced, and your server configuration is not modified. For a
-different installation location, make it available in the SSH user's
-non-interactive PATH.
+These fallback directories are added to the child process PATH. Your server
+configuration is not modified. `.bashrc` runs only inside the separate probe,
+not inside the long-lived proxy or daemon process.
 
 ## Install
 
