@@ -80,12 +80,50 @@ final class CodexDaemon {
         'exec "\$codex_executable" app-server proxy --sock ${_shellQuote(socketPath)}',
       );
 
-  // SSH exec channels need not inherit a login-shell PATH. Do not source shell
-  // startup files: they may print to stdout, attach a terminal, or replace stdin.
-  // Keep explicitly configured PATH precedence; supplement it only if needed.
+  // Keep an existing SSH PATH selection. Otherwise probe interactive Bash in
+  // isolation: .bashrc output and reads must never touch the proxy's stdin or
+  // stdout. Import only PATH and an executable, not arbitrary shell commands.
   static const executableResolutionScript = r'''
 set -eu
 if ! codex_executable=$(command -v codex 2>/dev/null) || [ ! -x "$codex_executable" ] || [ -d "$codex_executable" ]; then
+  codex_probe_bashrc() {
+    codex_bash=/bin/bash
+    [ -x "$codex_bash" ] || codex_bash=/usr/bin/bash
+    codex_timeout=/usr/bin/timeout
+    [ -x "$codex_timeout" ] || codex_timeout=/bin/timeout
+    [ -x "$codex_bash" ] && [ -x "$codex_timeout" ] || return 1
+    codex_probe_dir=$(PATH=/usr/bin:/bin mktemp -d /tmp/android-ssh-codex-path.XXXXXXXX 2>/dev/null) || return 1
+    trap 'PATH=/usr/bin:/bin rm -rf -- "$codex_probe_dir"' 0
+    # Bound startup even when .bashrc waits, exits or replaces the shell.
+    # A separate process group lets timeout terminate ordinary child processes.
+    if "$codex_timeout" -k 1s 4s "$codex_bash" --noprofile -ic '
+      codex_probe_executable=$(builtin type -P codex) || exit 1
+      case "$codex_probe_executable" in /*) ;; *) exit 1 ;; esac
+      [ -f "$codex_probe_executable" ] && [ -x "$codex_probe_executable" ] || exit 1
+      builtin printf "%s\n" "$PATH" > "$1/path"
+      builtin printf "%s\n" "$codex_probe_executable" > "$1/executable"
+    ' android-ssh-codex-path "$codex_probe_dir" </dev/null >/dev/null 2>&1; then
+      codex_probe_path=$(PATH=/usr/bin:/bin cat "$codex_probe_dir/path" 2>/dev/null) || codex_probe_path=
+      codex_probe_executable=$(PATH=/usr/bin:/bin cat "$codex_probe_dir/executable" 2>/dev/null) || codex_probe_executable=
+      if [ -n "$codex_probe_path" ] && [ -f "$codex_probe_executable" ] && [ -x "$codex_probe_executable" ]; then
+        PATH=$codex_probe_path
+        export PATH
+        codex_executable=$codex_probe_executable
+        PATH=/usr/bin:/bin rm -rf -- "$codex_probe_dir"
+        trap - 0
+        return 0
+      fi
+    else
+      codex_probe_status=$?
+      case "$codex_probe_status" in
+        124|137) printf '%s\n' 'android-ssh-codex: bashrc PATH probe timed out; trying fallback directories.' >&2 ;;
+      esac
+    fi
+    PATH=/usr/bin:/bin rm -rf -- "$codex_probe_dir"
+    trap - 0
+    return 1
+  }
+  if ! codex_probe_bashrc; then
   codex_search_path=${PATH:-/usr/local/bin:/usr/bin:/bin}
   codex_add_directory() {
     if [ -n "$1" ] && [ -d "$1" ]; then
@@ -110,8 +148,9 @@ if ! codex_executable=$(command -v codex 2>/dev/null) || [ ! -x "$codex_executab
   PATH=$codex_search_path
   export PATH
   if ! codex_executable=$(command -v codex 2>/dev/null) || [ ! -x "$codex_executable" ] || [ -d "$codex_executable" ]; then
-    printf '%s\n' 'android-ssh-codex: codex executable not found in SSH PATH or supported user install directories. Install Codex for this SSH user or configure its non-interactive PATH.' >&2
+    printf '%s\n' 'android-ssh-codex: codex executable not found in SSH PATH, bashrc PATH probe or supported user install directories. Install Codex for this SSH user or configure its PATH.' >&2
     exit 127
+  fi
   fi
 fi
 ''';

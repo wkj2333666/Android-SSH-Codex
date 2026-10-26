@@ -45,6 +45,7 @@ void main() {
   });
 
   test('an existing PATH selection wins over fallback installations', () async {
+    await File('$userHome/.bashrc').writeAsString('echo unwanted; exit 99\n');
     await executable(initialPath, "printf '%s\\n' selected");
     await executable('$userHome/.local/bin', 'exit 99');
     await executable(
@@ -82,6 +83,62 @@ void main() {
     expect(result.stdout, 'custom\n');
   });
 
+  test('interactive bashrc PATH and launcher dependencies are imported',
+      () async {
+    await executable('$userHome/managed bin', 'exec codex-test-helper');
+    await executable('$userHome/managed bin', "printf '%s\\n' from-bashrc",
+        name: 'codex-test-helper');
+    await File('$userHome/.bashrc').writeAsString(r'''
+case $- in *i*) ;; *) return ;; esac
+printf 'startup noise\n'
+printf 'startup stderr\n' >&2
+export PATH="$HOME/managed bin:$PATH"
+''');
+    final result = await run(CodexDaemon.sharedStartCommand);
+    expect(result.exitCode, 0, reason: result.stderr.toString());
+    expect(result.stdout, 'from-bashrc\n');
+    expect(result.stderr, isEmpty);
+  });
+
+  test('bashrc selection precedes guessed installation directories', () async {
+    await executable('$userHome/managed bin', "printf '%s\\n' managed");
+    await executable('$userHome/.local/bin', 'exit 99');
+    await File('$userHome/.bashrc')
+        .writeAsString('export PATH="\$HOME/managed bin:\$PATH"\n');
+    final result = await run(CodexDaemon.sharedStartCommand);
+    expect(result.exitCode, 0);
+    expect(result.stdout, 'managed\n');
+  });
+
+  test('alias and function are not mistaken for executable paths', () async {
+    await executable('$userHome/.local/bin', "printf '%s\\n' fallback");
+    await File('$userHome/.bashrc').writeAsString(r'''
+codex() { echo function-output; }
+alias codex='echo alias-output'
+''');
+    final result = await run(CodexDaemon.sharedStartCommand);
+    expect(result.exitCode, 0);
+    expect(result.stdout, 'fallback\n');
+  });
+
+  test('blocking bashrc is bounded and falls back with a diagnostic', () async {
+    await executable('$userHome/.local/bin', "printf '%s\\n' fallback");
+    await File('$userHome/.bashrc').writeAsString('exec /bin/sleep 30\n');
+    final result = await run(CodexDaemon.sharedStartCommand)
+        .timeout(const Duration(seconds: 10));
+    expect(result.exitCode, 0);
+    expect(result.stdout, 'fallback\n');
+    expect(result.stderr, contains('bashrc PATH probe timed out'));
+  });
+
+  test('early bashrc exit leaves existing fallback usable', () async {
+    await executable('$userHome/.local/bin', "printf '%s\\n' fallback");
+    await File('$userHome/.bashrc').writeAsString('exit 0\n');
+    final result = await run(CodexDaemon.sharedStartCommand);
+    expect(result.exitCode, 0);
+    expect(result.stdout, 'fallback\n');
+  });
+
   test(
       'missing or non-executable Codex fails clearly without shell startup files',
       () async {
@@ -95,8 +152,13 @@ void main() {
     expect(result.stderr, isNot(contains(userHome)));
   });
 
-  test('proxy fallback does not consume downstream stdin', () async {
-    await executable('$userHome/.local/bin', r'''
+  test('bashrc probe does not consume downstream proxy stdin', () async {
+    await File('$userHome/.bashrc').writeAsString(r'''
+read -r ignored
+printf 'startup noise\n'
+export PATH="$HOME/managed bin:$PATH"
+''');
+    await executable('$userHome/managed bin', r'''
 IFS= read -r line || exit 3
 printf 'socket=%s\ninput=%s\n' "$4" "$line"
 ''');
