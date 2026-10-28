@@ -36,21 +36,37 @@ List<MessageAttachment> outputImageAttachments(Map<String, dynamic> item) {
     for (final block in raw) {
       if (block is! Map) continue;
       final type = block['type'];
-      if (type != 'image' && type != 'localImage' && type != 'inputImage' && type != 'image_url') continue;
+      if (type != 'image' &&
+          type != 'localImage' &&
+          type != 'inputImage' &&
+          type != 'image_url') continue;
       String? source;
       final data = block['data'];
       final mime = block['mimeType'];
-      if (data is String && data.length <= 14 * 1024 * 1024 &&
-          const ['image/png', 'image/jpeg', 'image/webp', 'image/gif'].contains(mime)) {
+      if (data is String &&
+          data.length <= 14 * 1024 * 1024 &&
+          const ['image/png', 'image/jpeg', 'image/webp', 'image/gif']
+              .contains(mime)) {
         source = 'data:$mime;base64,$data';
       } else {
-        final value = block['path'] ?? block['url'] ?? block['imageUrl'] ?? block['image_url'];
-        source = value is String ? value : value is Map && value['url'] is String ? value['url'] as String : null;
+        final value = block['path'] ??
+            block['url'] ??
+            block['imageUrl'] ??
+            block['image_url'];
+        source = value is String
+            ? value
+            : value is Map && value['url'] is String
+                ? value['url'] as String
+                : null;
       }
       if (source == null || source.isEmpty || !seen.add(source)) continue;
-      images.add(MessageAttachment(path: source, name: source.startsWith('/') ? null : 'Image', isImage: true));
+      images.add(MessageAttachment(
+          path: source,
+          name: source.startsWith('/') ? null : 'Image',
+          isImage: true));
     }
   }
+
   blocks(item['content']);
   blocks(item['contentItems']);
   final result = item['result'];

@@ -106,15 +106,23 @@ class MarkdownContent extends StatelessWidget {
       imageBuilder: (uri, title, alt) {
         final path = remoteFilePath(uri.toString(), '/');
         final loader = ImagePreviewScope.maybeOf(context);
-        if ((path != null && loader != null) || uri.toString().startsWith('data:image/')) {
+        if ((path != null && loader != null) ||
+            uri.toString().startsWith('data:image/')) {
           return Column(mainAxisSize: MainAxisSize.min, children: [
             InlineAttachmentImage(
               key: ValueKey(uri.toString()),
-              attachment: MessageAttachment(path: path ?? uri.toString(), name: alt ?? 'Image', isImage: true),
+              attachment: MessageAttachment(
+                  path: path ?? uri.toString(),
+                  name: alt ?? 'Image',
+                  isImage: true),
               loadImage: loader,
             ),
             if (path != null && RemoteFileActions.maybeOf(context) != null)
-              TextButton.icon(onPressed: () => unawaited(showRemoteFileDownload(context, path)), icon: const Icon(Icons.download_outlined), label: const Text('Download image')),
+              TextButton.icon(
+                  onPressed: () =>
+                      unawaited(showRemoteFileDownload(context, path)),
+                  icon: const Icon(Icons.download_outlined),
+                  label: const Text('Download image')),
           ]);
         }
         if (RemoteFileActions.maybeOf(context) != null &&

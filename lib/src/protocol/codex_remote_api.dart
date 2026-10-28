@@ -803,9 +803,14 @@ Object? _imageSafeDetail(Object? value) {
   if (value is List) return value.map(_imageSafeDetail).toList();
   if (value is Map) {
     if (const ['image', 'inputImage', 'image_url'].contains(value['type'])) {
-      return {'type': value['type'], 'mimeType': value['mimeType'], 'preview': 'Image displayed separately'};
+      return {
+        'type': value['type'],
+        'mimeType': value['mimeType'],
+        'preview': 'Image displayed separately'
+      };
     }
-    return value.map((key, entry) => MapEntry(key.toString(), _imageSafeDetail(entry)));
+    return value
+        .map((key, entry) => MapEntry(key.toString(), _imageSafeDetail(entry)));
   }
   return value;
 }

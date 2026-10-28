@@ -34,20 +34,25 @@ class TimelineItemView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ImagePreviewScope(loadImage: loadImage, child: switch (item.kind) {
-      TaskItemKind.user || TaskItemKind.agent => _Message(
-          item: item,
-          copyText: copyText,
-          loadImage: loadImage,
-          onAnswerQuestions: onAnswerQuestions,
-          onTurnAction: onTurnAction,
-        ),
-      _ => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _ActivityCard(item: item),
-        for (final attachment in item.attachments)
-          _AttachmentCard(attachment: attachment, copyText: copyText, loadImage: loadImage),
-      ]),
-    });
+    return ImagePreviewScope(
+        loadImage: loadImage,
+        child: switch (item.kind) {
+          TaskItemKind.user || TaskItemKind.agent => _Message(
+              item: item,
+              copyText: copyText,
+              loadImage: loadImage,
+              onAnswerQuestions: onAnswerQuestions,
+              onTurnAction: onTurnAction,
+            ),
+          _ => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              _ActivityCard(item: item),
+              for (final attachment in item.attachments)
+                _AttachmentCard(
+                    attachment: attachment,
+                    copyText: copyText,
+                    loadImage: loadImage),
+            ]),
+        });
   }
 }
 
@@ -60,41 +65,47 @@ class TimelineActivityGroup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final count = items.length;
-    return ImagePreviewScope(loadImage: loadImage, child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Card(
-        key: const Key('activity-group'),
-        margin: EdgeInsets.zero,
-        clipBehavior: Clip.antiAlias,
-        child: ExpansionTile(
-          dense: true,
-          visualDensity: const VisualDensity(vertical: -3),
-          leading: const Icon(Icons.build_circle_outlined, size: 19),
-          title: Text('$count work ${count == 1 ? 'event' : 'events'}'),
-          subtitle: Text(
-            items.map((item) => item.title ?? _activityLabel(item)).join(' · '),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          childrenPadding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-          children: [
-            _ActivityViewport(
-              itemCount: items.length,
-              itemBuilder: (context, index) => _CompactActivityRow(
-                key: PageStorageKey('activity-${items[index].id}'),
-                item: items[index],
+    return ImagePreviewScope(
+        loadImage: loadImage,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 3),
+            child: Card(
+              key: const Key('activity-group'),
+              margin: EdgeInsets.zero,
+              clipBehavior: Clip.antiAlias,
+              child: ExpansionTile(
+                dense: true,
+                visualDensity: const VisualDensity(vertical: -3),
+                leading: const Icon(Icons.build_circle_outlined, size: 19),
+                title: Text('$count work ${count == 1 ? 'event' : 'events'}'),
+                subtitle: Text(
+                  items
+                      .map((item) => item.title ?? _activityLabel(item))
+                      .join(' · '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                childrenPadding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                children: [
+                  _ActivityViewport(
+                    itemCount: items.length,
+                    itemBuilder: (context, index) => _CompactActivityRow(
+                      key: PageStorageKey('activity-${items[index].id}'),
+                      item: items[index],
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
-      ),
-    ),
-    for (final item in items)
-      for (final attachment in item.attachments)
-        _AttachmentCard(attachment: attachment, copyText: copyMessageText, loadImage: loadImage),
-    ]));
+          ),
+          for (final item in items)
+            for (final attachment in item.attachments)
+              _AttachmentCard(
+                  attachment: attachment,
+                  copyText: copyMessageText,
+                  loadImage: loadImage),
+        ]));
   }
 }
 
@@ -253,7 +264,10 @@ class _Message extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   for (final attachment in item.attachments)
-                    _AttachmentCard(attachment: attachment, copyText: copyText, loadImage: loadImage),
+                    _AttachmentCard(
+                        attachment: attachment,
+                        copyText: copyText,
+                        loadImage: loadImage),
                   if (agentText.trim().isNotEmpty)
                     CodexDirectiveContent(
                       text: agentText,
@@ -458,7 +472,6 @@ class _AttachmentCard extends StatelessWidget {
     );
   }
 }
-
 
 String _copyableMessageText(TaskItem item) {
   if (item.kind != TaskItemKind.agent) return item.text;

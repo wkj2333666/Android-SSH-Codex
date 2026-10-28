@@ -7,15 +7,19 @@ import 'package:flutter/material.dart';
 import '../../tasks/message_attachments.dart';
 
 class ImagePreviewScope extends InheritedWidget {
-  const ImagePreviewScope({required this.loadImage, required super.child, super.key});
+  const ImagePreviewScope(
+      {required this.loadImage, required super.child, super.key});
 
   final Future<Uint8List> Function(String)? loadImage;
 
   static Future<Uint8List> Function(String)? maybeOf(BuildContext context) =>
-      context.dependOnInheritedWidgetOfExactType<ImagePreviewScope>()?.loadImage;
+      context
+          .dependOnInheritedWidgetOfExactType<ImagePreviewScope>()
+          ?.loadImage;
 
   @override
-  bool updateShouldNotify(ImagePreviewScope oldWidget) => loadImage != oldWidget.loadImage;
+  bool updateShouldNotify(ImagePreviewScope oldWidget) =>
+      loadImage != oldWidget.loadImage;
 }
 
 class InlineAttachmentImage extends StatefulWidget {
