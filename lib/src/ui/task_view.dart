@@ -1479,7 +1479,7 @@ class _TaskTimelineState extends State<TaskTimeline>
                               : null,
                         )),
                     TimelineActivityEntry(:final items) =>
-                      TimelineActivityGroup(items: items),
+                      TimelineActivityGroup(items: items, loadImage: widget.loadImage),
                   };
                 },
               ),

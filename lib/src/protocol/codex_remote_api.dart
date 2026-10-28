@@ -666,21 +666,8 @@ TaskItem? _parseItem(Map<String, dynamic> item) {
     'reasoning' => TaskItemKind.reasoning,
     _ => TaskItemKind.notice,
   };
-  final attachments = <MessageAttachment>[];
+  final attachments = outputImageAttachments(item);
   final questions = <TaskQuestion>[];
-  if (kind == TaskItemKind.user && item['content'] is List) {
-    for (final raw in item['content'] as List) {
-      final part = _map(raw);
-      if (part['type'] == 'localImage' || part['type'] == 'image') {
-        final path = part['path'] ?? part['url'] ?? part['imageUrl'];
-        attachments.add(MessageAttachment(
-          path: path is String ? path : '',
-          name: path is String && path.startsWith('/') ? null : 'Image',
-          isImage: true,
-        ));
-      }
-    }
-  }
   if (kind == TaskItemKind.agent && item['questions'] is List) {
     for (final raw in item['questions'] as List) {
       final question = _map(raw);
@@ -806,10 +793,21 @@ String _readTextBlocks(Object? raw) {
 String? _jsonDetail(Map<String, dynamic> item, List<String> keys) {
   final detail = <String, dynamic>{};
   for (final key in keys) {
-    if (item[key] != null) detail[key] = item[key];
+    if (item[key] != null) detail[key] = _imageSafeDetail(item[key]);
   }
   if (detail.isEmpty) return null;
   return const JsonEncoder.withIndent('  ').convert(detail);
+}
+
+Object? _imageSafeDetail(Object? value) {
+  if (value is List) return value.map(_imageSafeDetail).toList();
+  if (value is Map) {
+    if (const ['image', 'inputImage', 'image_url'].contains(value['type'])) {
+      return {'type': value['type'], 'mimeType': value['mimeType'], 'preview': 'Image displayed separately'};
+    }
+    return value.map((key, entry) => MapEntry(key.toString(), _imageSafeDetail(entry)));
+  }
+  return value;
 }
 
 final class _ItemPresentation {

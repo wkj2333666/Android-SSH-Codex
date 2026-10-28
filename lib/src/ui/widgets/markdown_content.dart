@@ -7,7 +7,9 @@ import 'package:markdown/markdown.dart' as md;
 import 'package:url_launcher/url_launcher.dart';
 
 import 'formula_markdown.dart';
+import 'inline_attachment_image.dart';
 import 'remote_file_actions.dart';
+import '../../tasks/message_attachments.dart';
 import '../../transport/file_download.dart';
 
 typedef ExternalLinkOpener = Future<bool> Function(Uri uri);
@@ -102,6 +104,19 @@ class MarkdownContent extends StatelessWidget {
         }
       },
       imageBuilder: (uri, title, alt) {
+        final path = remoteFilePath(uri.toString(), '/');
+        final loader = ImagePreviewScope.maybeOf(context);
+        if ((path != null && loader != null) || uri.toString().startsWith('data:image/')) {
+          return Column(mainAxisSize: MainAxisSize.min, children: [
+            InlineAttachmentImage(
+              key: ValueKey(uri.toString()),
+              attachment: MessageAttachment(path: path ?? uri.toString(), name: alt ?? 'Image', isImage: true),
+              loadImage: loader,
+            ),
+            if (path != null && RemoteFileActions.maybeOf(context) != null)
+              TextButton.icon(onPressed: () => unawaited(showRemoteFileDownload(context, path)), icon: const Icon(Icons.download_outlined), label: const Text('Download image')),
+          ]);
+        }
         if (RemoteFileActions.maybeOf(context) != null &&
             remoteFilePath(uri.toString(), '/') != null) {
           return OutlinedButton.icon(
