@@ -24,6 +24,42 @@ final class _RecordingTransport implements RpcTransport {
 }
 
 void main() {
+  for (final type in ['mcpToolCall', 'dynamicToolCall', 'agentMessage']) {
+    test('$type retains native output images without base64 in tool details',
+        () {
+      const data = 'aW1hZ2U=';
+      final blocks = [
+        {'type': 'image', 'mimeType': 'image/png', 'data': data},
+      ];
+      final snapshot = CodexRemoteApi.parseThread({
+        'id': 'thread',
+        'turns': [
+          {
+            'items': [
+              {
+                'id': 'image',
+                'type': type,
+                if (type == 'mcpToolCall') 'result': {'content': blocks},
+                if (type == 'dynamicToolCall')
+                  'contentItems': [
+                    {
+                      'type': 'inputImage',
+                      'imageUrl': 'data:image/png;base64,$data'
+                    },
+                  ],
+                if (type == 'agentMessage') 'content': blocks,
+              },
+            ],
+          },
+        ],
+      });
+      final item = snapshot.items.single;
+      expect(item.attachments.single.path, 'data:image/png;base64,$data');
+      expect(item.attachments.single.isImage, isTrue);
+      expect(item.detail ?? '', isNot(contains(data)));
+    });
+  }
+
   test('agent messages retain async questions from current Codex protocol', () {
     final snapshot = CodexRemoteApi.parseThread({
       'id': 'thread',

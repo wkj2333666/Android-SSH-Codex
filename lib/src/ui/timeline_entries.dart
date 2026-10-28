@@ -34,7 +34,9 @@ List<TimelineEntry> buildTimelineEntries(List<TaskItem> items) {
       continue;
     }
     flushActivities();
-    if (item.text.trim().isNotEmpty) {
+    if (item.text.trim().isNotEmpty ||
+        item.attachments.isNotEmpty ||
+        item.questions.isNotEmpty) {
       entries.add(TimelineMessageEntry(item));
     }
   }

@@ -306,7 +306,10 @@ PNG, JPEG, WebP and GIF are accepted as images (up to 64
 megapixels and 16,384 pixels per side); other formats can be sent
 as files. Queued messages and steering preserve image attachments.
 
-Sent images appear as bounded inline thumbnails in the conversation. Tap a
+Sent images, native MCP/dynamic-tool image results, and remote Markdown images
+in replies appear as bounded inline thumbnails without a save dialog. Tool
+image previews stay visible outside collapsed work events; raw image Base64
+is not printed in tool details. External HTTP images remain blocked. Tap a
 thumbnail to zoom; if loading fails, use Retry. Only mounted timeline images
 are requested, and inline remote previews remain capped at 10 MiB.
 Question prompts and answer options support Markdown formatting.
