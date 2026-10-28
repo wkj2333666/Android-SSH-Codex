@@ -39,7 +39,9 @@ List<MessageAttachment> outputImageAttachments(Map<String, dynamic> item) {
       if (type != 'image' &&
           type != 'localImage' &&
           type != 'inputImage' &&
-          type != 'image_url') continue;
+          type != 'image_url') {
+        continue;
+      }
       String? source;
       final data = block['data'];
       final mime = block['mimeType'];
