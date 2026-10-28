@@ -7,7 +7,8 @@ import 'package:android_ssh_codex/src/ui/widgets/timeline_item.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-const _png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=';
+const _png =
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=';
 
 Future<void> _settleImage(WidgetTester tester) async {
   await tester.runAsync(() async {
@@ -18,18 +19,36 @@ Future<void> _settleImage(WidgetTester tester) async {
 
 void main() {
   test('image-only messages are not filtered out of the timeline', () {
-    expect(buildTimelineEntries(const [
-      TaskItem(id: 'image', kind: TaskItemKind.agent, text: '', attachments: [
-        MessageAttachment(path: 'data:image/png;base64,$_png', isImage: true),
-      ]),
-    ]), hasLength(1));
+    expect(
+        buildTimelineEntries(const [
+          TaskItem(
+              id: 'image',
+              kind: TaskItemKind.agent,
+              text: '',
+              attachments: [
+                MessageAttachment(
+                    path: 'data:image/png;base64,$_png', isImage: true),
+              ]),
+        ]),
+        hasLength(1));
   });
 
-  testWidgets('tool images are visible while work events remain collapsed', (tester) async {
-    await tester.pumpWidget(const MaterialApp(home: Scaffold(body: TimelineActivityGroup(items: [
-      TaskItem(id: 'tool', kind: TaskItemKind.tool, text: 'view image', detail: 'metadata', attachments: [
-        MessageAttachment(path: 'data:image/png;base64,$_png', name: 'Tool image', isImage: true),
-      ]),
+  testWidgets('tool images are visible while work events remain collapsed',
+      (tester) async {
+    await tester.pumpWidget(const MaterialApp(
+        home: Scaffold(
+            body: TimelineActivityGroup(items: [
+      TaskItem(
+          id: 'tool',
+          kind: TaskItemKind.tool,
+          text: 'view image',
+          detail: 'metadata',
+          attachments: [
+            MessageAttachment(
+                path: 'data:image/png;base64,$_png',
+                name: 'Tool image',
+                isImage: true),
+          ]),
     ]))));
     await _settleImage(tester);
     expect(find.byType(Image), findsOneWidget);
@@ -40,10 +59,16 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('agent markdown remote images auto-preview without save dialogs', (tester) async {
+  testWidgets('agent markdown remote images auto-preview without save dialogs',
+      (tester) async {
     var reads = 0;
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: TimelineItemView(
-      item: const TaskItem(id: 'agent', kind: TaskItemKind.agent, text: 'Camera:\n\n![Top camera](/remote/top%20camera.png)'),
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: TimelineItemView(
+      item: const TaskItem(
+          id: 'agent',
+          kind: TaskItemKind.agent,
+          text: 'Camera:\n\n![Top camera](/remote/top%20camera.png)'),
       loadImage: (path) async {
         reads++;
         expect(path, '/remote/top camera.png');

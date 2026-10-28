@@ -25,7 +25,8 @@ final class _RecordingTransport implements RpcTransport {
 
 void main() {
   for (final type in ['mcpToolCall', 'dynamicToolCall', 'agentMessage']) {
-    test('$type retains native output images without base64 in tool details', () {
+    test('$type retains native output images without base64 in tool details',
+        () {
       const data = 'aW1hZ2U=';
       final blocks = [
         {'type': 'image', 'mimeType': 'image/png', 'data': data},
@@ -36,11 +37,16 @@ void main() {
           {
             'items': [
               {
-                'id': 'image', 'type': type,
+                'id': 'image',
+                'type': type,
                 if (type == 'mcpToolCall') 'result': {'content': blocks},
-                if (type == 'dynamicToolCall') 'contentItems': [
-                  {'type': 'inputImage', 'imageUrl': 'data:image/png;base64,$data'},
-                ],
+                if (type == 'dynamicToolCall')
+                  'contentItems': [
+                    {
+                      'type': 'inputImage',
+                      'imageUrl': 'data:image/png;base64,$data'
+                    },
+                  ],
                 if (type == 'agentMessage') 'content': blocks,
               },
             ],
