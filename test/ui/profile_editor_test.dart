@@ -9,6 +9,8 @@ void main() {
     final result = await _openEditor(tester, profile: _profile());
     await _openAdvancedSsh(tester);
     expect(find.text('Use jump host'), findsOneWidget);
+    await tester.ensureVisible(find.text('Use jump host'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Use jump host'));
     await tester.pumpAndSettle();
     for (final entry in {
