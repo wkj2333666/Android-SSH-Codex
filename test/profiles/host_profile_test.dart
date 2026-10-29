@@ -5,16 +5,31 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   test('SSH connection options survive profile JSON round trips', () {
     final json = {
-      'id': 'options', 'label': 'Options', 'hostName': 'host.example', 'user': 'coder', 'port': 22,
-      'sshOptions': {'connectTimeoutSeconds': 25, 'authTimeoutSeconds': 35, 'keepAliveIntervalSeconds': 30},
+      'id': 'options',
+      'label': 'Options',
+      'hostName': 'host.example',
+      'user': 'coder',
+      'port': 22,
+      'sshOptions': {
+        'connectTimeoutSeconds': 25,
+        'authTimeoutSeconds': 35,
+        'keepAliveIntervalSeconds': 30
+      },
     };
-    expect(HostProfile.fromJson(json).toJson()['sshOptions'], json['sshOptions']);
+    expect(
+        HostProfile.fromJson(json).toJson()['sshOptions'], json['sshOptions']);
   });
 
   test('imports connection and keepalive options from SSH config', () {
-    final host = SshConfig.parse('Host test\n ConnectTimeout 25\n ServerAliveInterval 30\n').resolve('test');
+    final host = SshConfig.parse(
+            'Host test\n ConnectTimeout 25\n ServerAliveInterval 30\n')
+        .resolve('test');
     final json = HostProfile.fromResolved(host).toJson();
-    expect(json['sshOptions'], {'connectTimeoutSeconds': 25, 'authTimeoutSeconds': 20, 'keepAliveIntervalSeconds': 30});
+    expect(json['sshOptions'], {
+      'connectTimeoutSeconds': 25,
+      'authTimeoutSeconds': 20,
+      'keepAliveIntervalSeconds': 30
+    });
   });
 
   test('creates a profile from an SSH config alias', () {
