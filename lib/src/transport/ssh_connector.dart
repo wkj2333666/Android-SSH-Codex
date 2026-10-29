@@ -129,35 +129,51 @@ final class SshConnector {
         unownedSocket = await SSHSocket.connect(
           profile.hostName,
           profile.port,
-          timeout: const Duration(seconds: 15),
+          timeout: profile.sshOptions.connectTimeout,
         );
       } else {
         unownedSocket = await SSHSocket.connect(
           jump.hostName,
           jump.port,
-          timeout: const Duration(seconds: 15),
+          timeout: profile.sshOptions.connectTimeout,
         );
         jumpClient = _client(
           diagnostic: _SshDiagnostic('jump', diagnosticAttempt),
           socket: unownedSocket,
           profileId: '${profile.id}.jump',
-          label: '${profile.label} jump host',
+          label: '${profile.label} jump host (${jump.hostName}:${jump.port})',
           user: jump.user,
           password: secret.jumpPassword,
           privateKey: secret.jumpPrivateKey,
           passphrase: secret.jumpPassphrase,
           prompt: prompt,
+          options: profile.sshOptions,
         );
         unownedSocket = null;
         final openingJump = jumpClient;
         setup?.watchClosed(openingJump.done,
             () => _requestSshClose(openingJump, 'connection_setup_aborted'));
         await jumpClient.authenticated;
-        unownedSocket =
-            await jumpClient.forwardLocal(profile.hostName, profile.port);
+        var forwardingFinished = false;
+        final forwarding = jumpClient
+            .forwardLocal(profile.hostName, profile.port)
+            .then((socket) {
+          if (forwardingFinished || openingJump.isClosed) {
+            socket.destroy();
+            throw StateError('Discarded late jump forwarding channel');
+          }
+          return socket;
+        });
+        try {
+          unownedSocket =
+              await forwarding.timeout(profile.sshOptions.connectTimeout);
+        } finally {
+          forwardingFinished = true;
+        }
       }
 
       targetClient = _client(
+        options: profile.sshOptions,
         diagnostic: _SshDiagnostic(diagnosticRole, diagnosticAttempt),
         socket: unownedSocket,
         profileId: profile.id,
@@ -192,6 +208,7 @@ final class SshConnector {
     required String? privateKey,
     required String? passphrase,
     required HostKeyPrompt prompt,
+    required SshConnectionOptions options,
   }) {
     if (user.trim().isEmpty) {
       throw ArgumentError('SSH user is required for $label');
@@ -221,12 +238,13 @@ final class SshConnector {
         return accepted;
       },
       keepAliveInterval: null,
-      handshakeTimeout: const Duration(seconds: 15),
-      authTimeout: const Duration(seconds: 20),
+      handshakeTimeout: options.connectTimeout,
+      authTimeout: options.authTimeout,
       ident: 'AndroidSSHCodex_0.1',
     );
     _sshDiagnostics[client] = diagnostic;
     final health = SshHealthMonitor(
+        interval: options.keepAliveInterval,
         ping: client.ping,
         onFailure: (error) {
           Diagnostics.record('ssh.health.error', {

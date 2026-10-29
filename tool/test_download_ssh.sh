@@ -28,4 +28,4 @@ AllowUsers $(id -un)
 Subsystem sftp /usr/lib/openssh/sftp-server
 ForceCommand /bin/bash $PWD/tool/test_download_command.sh
 EOF
-DOWNLOAD_TEST_KEY="$fixture/client" flutter test test/file_download_test.dart test/resumable_download_test.dart --reporter expanded
+DOWNLOAD_TEST_KEY="$fixture/client" flutter test test/file_download_test.dart test/resumable_download_test.dart test/transport/advanced_ssh_test.dart --reporter expanded

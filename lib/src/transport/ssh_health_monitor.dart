@@ -20,7 +20,7 @@ class SshHealthMonitor {
   bool _disposed = false;
 
   void start() {
-    if (_disposed) return;
+    if (_disposed || interval == Duration.zero) return;
     _timer ??= Timer.periodic(interval, (_) {
       unawaited(check());
     });

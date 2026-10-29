@@ -1,6 +1,8 @@
 import 'package:collection/collection.dart';
 
 import '../ssh_config/ssh_config.dart';
+import 'ssh_connection_options.dart';
+export 'ssh_connection_options.dart';
 
 enum HostAuthMethod { password, privateKey }
 
@@ -59,6 +61,7 @@ final class HostProfile {
     Map<String, String> environment = const {},
     AppServerMode appServerMode = AppServerMode.shared,
     String? customAppServerSocket,
+    SshConnectionOptions sshOptions = const SshConnectionOptions(),
   }) =>
       HostProfile._(
         id: id,
@@ -72,6 +75,7 @@ final class HostProfile {
         environment: Map.unmodifiable(environment),
         appServerMode: appServerMode,
         customAppServerSocket: customAppServerSocket,
+        sshOptions: sshOptions,
       );
 
   const HostProfile._({
@@ -86,6 +90,7 @@ final class HostProfile {
     required this.environment,
     required this.appServerMode,
     required this.customAppServerSocket,
+    required this.sshOptions,
   });
 
   factory HostProfile.fromResolved(ResolvedSshHost host) => HostProfile(
@@ -101,6 +106,9 @@ final class HostProfile {
             host.identityFiles.isEmpty ? null : host.identityFiles.first,
         environment: host.environment,
         appServerMode: AppServerMode.shared,
+        sshOptions: SshConnectionOptions(
+            connectTimeoutSeconds: host.connectTimeoutSeconds ?? 15,
+            keepAliveIntervalSeconds: host.keepAliveIntervalSeconds ?? 15),
         proxyJump: host.proxyJump == null
             ? null
             : JumpHostProfile(
@@ -132,6 +140,10 @@ final class HostProfile {
           orElse: () => AppServerMode.shared,
         ),
         customAppServerSocket: json['customAppServerSocket'] as String?,
+        sshOptions: json['sshOptions'] is Map
+            ? SshConnectionOptions.fromJson(
+                (json['sshOptions'] as Map).cast<String, dynamic>())
+            : const SshConnectionOptions(),
         proxyJump: json['proxyJump'] is Map
             ? JumpHostProfile.fromJson(
                 (json['proxyJump'] as Map).cast<String, dynamic>(),
@@ -150,6 +162,7 @@ final class HostProfile {
   final Map<String, String> environment;
   final AppServerMode appServerMode;
   final String? customAppServerSocket;
+  final SshConnectionOptions sshOptions;
 
   String get appServerModeLabel => switch (appServerMode) {
         AppServerMode.shared => 'Shared app-server',
@@ -171,6 +184,7 @@ final class HostProfile {
     String? customAppServerSocket,
     bool clearProxyJump = false,
     bool clearCustomAppServerSocket = false,
+    SshConnectionOptions? sshOptions,
   }) =>
       HostProfile(
         id: id ?? this.id,
@@ -182,6 +196,7 @@ final class HostProfile {
         identityFileHint: identityFileHint ?? this.identityFileHint,
         proxyJump: clearProxyJump ? null : proxyJump ?? this.proxyJump,
         environment: environment ?? this.environment,
+        sshOptions: sshOptions ?? this.sshOptions,
         appServerMode: appServerMode ?? this.appServerMode,
         customAppServerSocket: clearCustomAppServerSocket
             ? null
@@ -195,6 +210,8 @@ final class HostProfile {
         'user': user,
         'port': port,
         'authMethod': authMethod.name,
+        if (sshOptions != const SshConnectionOptions())
+          'sshOptions': sshOptions.toJson(),
         if (identityFileHint != null) 'identityFileHint': identityFileHint,
         if (proxyJump != null) 'proxyJump': proxyJump!.toJson(),
         if (environment.isNotEmpty) 'environment': environment,
@@ -214,6 +231,7 @@ final class HostProfile {
       other.port == port &&
       other.authMethod == authMethod &&
       other.identityFileHint == identityFileHint &&
+      other.sshOptions == sshOptions &&
       other.proxyJump == proxyJump &&
       other.appServerMode == appServerMode &&
       other.customAppServerSocket == customAppServerSocket &&
@@ -231,6 +249,7 @@ final class HostProfile {
         port,
         authMethod,
         identityFileHint,
+        sshOptions,
         proxyJump,
         appServerMode,
         customAppServerSocket,
