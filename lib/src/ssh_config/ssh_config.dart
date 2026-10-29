@@ -249,13 +249,15 @@ _JumpTarget _parseJumpTarget(String value) {
   var alias = remainder;
   if (remainder.startsWith('[')) {
     final bracket = remainder.indexOf(']');
-    if (bracket <= 1)
+    if (bracket <= 1) {
       throw const FormatException('Invalid bracketed ProxyJump host.');
+    }
     alias = remainder.substring(1, bracket);
     final suffix = remainder.substring(bracket + 1);
     if (suffix.isNotEmpty) {
-      if (!suffix.startsWith(':'))
+      if (!suffix.startsWith(':')) {
         throw const FormatException('Invalid ProxyJump port.');
+      }
       port = int.tryParse(suffix.substring(1));
       if (port == null) throw const FormatException('Invalid ProxyJump port.');
     }
@@ -267,8 +269,9 @@ _JumpTarget _parseJumpTarget(String value) {
   }
   if (alias.isEmpty ||
       (user != null && user.isEmpty) ||
-      (port != null && (port < 1 || port > 65535)))
+      (port != null && (port < 1 || port > 65535))) {
     throw const FormatException('Invalid ProxyJump host, user or port.');
+  }
   return _JumpTarget(alias: alias, user: user, port: port);
 }
 
