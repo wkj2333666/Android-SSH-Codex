@@ -251,6 +251,20 @@ importer understands:
 - `SetEnv`
 - wildcard and negated host patterns
 - one-hop `ProxyJump`
+- `ConnectTimeout` (1–120 seconds), `ServerAliveInterval` (0–300 seconds)
+
+Under **Advanced SSH**, enable **Use jump host** to add or edit a jump host
+without importing a config. Supply its address, user, port and independent
+password/private key/passphrase; it forwards TCP to the target, not a shell
+command. Both hosts verify their keys separately. Changing the jump endpoint
+requires confirming its new key; turning it off clears its saved credentials.
+The jump server must allow TCP forwarding to the target.
+
+Per-host connection and authentication timeouts (1–120 seconds) and keepalive
+interval (0–300 seconds) are editable there too. Defaults remain 15, 20 and 15
+seconds. A zero keepalive interval disables periodic pings, not explicit health
+checks. Options apply to both SSH legs; long setup budgets account for both.
+Changes take effect on the next connection, including attachment transfers.
 
 An imported `IdentityFile` path is only a hint: the file usually exists on the
 computer where the SSH config came from, not on the phone. Paste the key into

@@ -57,6 +57,7 @@ final class SecureProfileStore implements ProfileStore, WorkspaceStore {
   Future<void> writeProfile(HostProfile profile, HostSecret secret) async {
     final profiles = (await readProfiles()).toList();
     final index = profiles.indexWhere((item) => item.id == profile.id);
+    final jumpChanged = index >= 0 && _jumpEndpointChanged(profiles[index], profile);
     if (index == -1) {
       profiles.add(profile);
     } else {
@@ -70,6 +71,9 @@ final class SecureProfileStore implements ProfileStore, WorkspaceStore {
       key: 'secret.${profile.id}',
       value: jsonEncode(secret.toJson()),
     );
+    if (jumpChanged) {
+      await _storage.delete(key: 'fingerprint.${profile.id}.jump');
+    }
   }
 
   @override
@@ -83,6 +87,7 @@ final class SecureProfileStore implements ProfileStore, WorkspaceStore {
     );
     await _storage.delete(key: 'secret.$id');
     await _storage.delete(key: 'fingerprint.$id');
+    await _storage.delete(key: 'fingerprint.$id.jump');
     await _storage.delete(key: 'owned.$id');
     await _storage.delete(key: 'projects.$id');
     if (await readAutoConnectHostId() == id) {
@@ -206,6 +211,9 @@ final class MemoryProfileStore implements ProfileStore, WorkspaceStore {
 
   @override
   Future<void> writeProfile(HostProfile profile, HostSecret secret) async {
+    if (_jumpEndpointChanged(_profiles[profile.id], profile)) {
+      _fingerprints.remove('${profile.id}.jump');
+    }
     _profiles[profile.id] = profile;
     _secrets[profile.id] = secret;
   }
@@ -215,6 +223,7 @@ final class MemoryProfileStore implements ProfileStore, WorkspaceStore {
     _profiles.remove(id);
     _secrets.remove(id);
     _fingerprints.remove(id);
+    _fingerprints.remove('$id.jump');
     _owned.remove(id);
     _projects.remove(id);
     if (_autoConnectHostId == id) _autoConnectHostId = null;
@@ -280,3 +289,8 @@ List<RemoteProject> _sortProjects(Iterable<RemoteProject> projects) {
   );
   return List.unmodifiable(sorted);
 }
+
+bool _jumpEndpointChanged(HostProfile? previous, HostProfile next) =>
+    previous != null &&
+    (previous.proxyJump?.hostName != next.proxyJump?.hostName ||
+        previous.proxyJump?.port != next.proxyJump?.port);

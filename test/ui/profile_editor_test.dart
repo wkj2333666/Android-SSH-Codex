@@ -61,7 +61,8 @@ void main() {
     expect(find.text('Use jump host'), findsOneWidget);
     await _scrollTo(tester, 'Jump password');
     await tester.enterText(_fieldFinder('Jump password'), 'jump-secret');
-    await _scrollTo(tester, 'Use jump host');
+    await tester.ensureVisible(find.text('Use jump host'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Use jump host'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Save'));

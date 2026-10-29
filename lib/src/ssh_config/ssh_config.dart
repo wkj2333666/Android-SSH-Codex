@@ -53,6 +53,8 @@ final class SshConfig {
     String? user;
     int? port;
     String? proxyJumpValue;
+    int? connectTimeoutSeconds;
+    int? keepAliveIntervalSeconds;
     final identityFiles = <String>[];
     final environment = <String, String>{};
     final warnings = _parseWarnings.toList();
@@ -104,6 +106,18 @@ final class SshConfig {
               if (!warnings.contains(warning)) warnings.add(warning);
             }
             break;
+          case 'connecttimeout':
+          case 'serveraliveinterval':
+            final value = int.tryParse(directive.value);
+            final connect = directive.key == 'connecttimeout';
+            if (value == null || value < (connect ? 1 : 0) || value > (connect ? 120 : 300)) {
+              warnings.add('Invalid or unsupported ${connect ? "ConnectTimeout (1–120 seconds)" : "ServerAliveInterval (0–300 seconds)"}');
+            } else if (connect) {
+              connectTimeoutSeconds ??= value;
+            } else {
+              keepAliveIntervalSeconds ??= value;
+            }
+            break;
         }
       }
     }
@@ -136,6 +150,8 @@ final class SshConfig {
       environment: Map.unmodifiable(environment),
       proxyJump: jump,
       warnings: List.unmodifiable(warnings),
+      connectTimeoutSeconds: connectTimeoutSeconds,
+      keepAliveIntervalSeconds: keepAliveIntervalSeconds,
     );
   }
 }
@@ -147,6 +163,8 @@ const _supportedDirectives = {
   'identityfile',
   'proxyjump',
   'setenv',
+  'connecttimeout',
+  'serveraliveinterval',
 };
 
 final class ResolvedSshHost {
@@ -159,6 +177,8 @@ final class ResolvedSshHost {
     this.environment = const {},
     this.proxyJump,
     this.warnings = const [],
+    this.connectTimeoutSeconds,
+    this.keepAliveIntervalSeconds,
   });
 
   final String alias;
@@ -169,6 +189,8 @@ final class ResolvedSshHost {
   final Map<String, String> environment;
   final ResolvedSshHost? proxyJump;
   final List<String> warnings;
+  final int? connectTimeoutSeconds;
+  final int? keepAliveIntervalSeconds;
 }
 
 final class _HostSection {
@@ -222,11 +244,23 @@ _JumpTarget _parseJumpTarget(String value) {
   }
   int? port;
   var alias = remainder;
-  if (remainder.contains(':')) {
+  if (remainder.startsWith('[')) {
+    final bracket = remainder.indexOf(']');
+    if (bracket <= 1) throw const FormatException('Invalid bracketed ProxyJump host.');
+    alias = remainder.substring(1, bracket);
+    final suffix = remainder.substring(bracket + 1);
+    if (suffix.isNotEmpty) {
+      if (!suffix.startsWith(':')) throw const FormatException('Invalid ProxyJump port.');
+      port = int.tryParse(suffix.substring(1));
+      if (port == null) throw const FormatException('Invalid ProxyJump port.');
+    }
+  } else if (':'.allMatches(remainder).length == 1) {
     final split = remainder.lastIndexOf(':');
     port = int.tryParse(remainder.substring(split + 1));
     alias = remainder.substring(0, split);
+    if (port == null) throw const FormatException('Invalid ProxyJump port.');
   }
+  if (alias.isEmpty || (user != null && user.isEmpty) || (port != null && (port < 1 || port > 65535))) throw const FormatException('Invalid ProxyJump host, user or port.');
   return _JumpTarget(alias: alias, user: user, port: port);
 }
 
