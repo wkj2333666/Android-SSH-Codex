@@ -2,6 +2,14 @@ import 'package:android_ssh_codex/src/ssh_config/ssh_config.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('ProxyJump accepts bracketed IPv6 and rejects invalid ports', () {
+    final jump = SshConfig.parse('Host target\n ProxyJump gateway@[2001:db8::1]:2222\n').resolve('target').proxyJump!;
+    expect(jump.hostName, '2001:db8::1');
+    expect(jump.user, 'gateway');
+    expect(jump.port, 2222);
+    expect(() => SshConfig.parse('Host target\n ProxyJump gateway@edge:99999\n').resolve('target'), throwsFormatException);
+  });
+
   group('SshConfig', () {
     test('resolves an alias and fills defaults from Host star', () {
       final config = SshConfig.parse('''

@@ -154,9 +154,19 @@ final class SshConnector {
         setup?.watchClosed(openingJump.done,
             () => _requestSshClose(openingJump, 'connection_setup_aborted'));
         await jumpClient.authenticated;
-        unownedSocket = await jumpClient
-            .forwardLocal(profile.hostName, profile.port)
-            .timeout(profile.sshOptions.connectTimeout);
+        var forwardingFinished = false;
+        final forwarding = jumpClient.forwardLocal(profile.hostName, profile.port).then((socket) {
+          if (forwardingFinished || openingJump.isClosed) {
+            socket.destroy();
+            throw StateError('Discarded late jump forwarding channel');
+          }
+          return socket;
+        });
+        try {
+          unownedSocket = await forwarding.timeout(profile.sshOptions.connectTimeout);
+        } finally {
+          forwardingFinished = true;
+        }
       }
 
       targetClient = _client(
