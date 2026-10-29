@@ -4,6 +4,53 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('advanced SSH manually adds a jump host and credentials', (tester) async {
+    final result = await _openEditor(tester, profile: _profile());
+    await _openAdvancedSsh(tester);
+    expect(find.text('Use jump host'), findsOneWidget);
+    await tester.tap(find.text('Use jump host'));
+    await tester.pumpAndSettle();
+    for (final entry in {'Jump host name or IP': 'edge.example', 'Jump user': 'gateway', 'Jump port': '2222', 'Jump password': 'jump-secret'}.entries) {
+      await _scrollTo(tester, entry.key);
+      await tester.enterText(_fieldFinder(entry.key), entry.value);
+    }
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(result()!.profile.proxyJump?.hostName, 'edge.example');
+    expect(result()!.profile.proxyJump?.user, 'gateway');
+    expect(result()!.profile.proxyJump?.port, 2222);
+    expect(result()!.secret.jumpPassword, 'jump-secret');
+    expect(result()!.profile.toJson().toString(), isNot(contains('jump-secret')));
+  });
+
+  testWidgets('advanced SSH saves timeout and keepalive settings', (tester) async {
+    final result = await _openEditor(tester, profile: _profile());
+    await _openAdvancedSsh(tester);
+    for (final entry in {'Connect timeout (seconds)': '25', 'Authentication timeout (seconds)': '35', 'Keepalive interval (seconds)': '30'}.entries) {
+      await _scrollTo(tester, entry.key);
+      await tester.enterText(_fieldFinder(entry.key), entry.value);
+    }
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(result()!.profile.toJson()['sshOptions'], {'connectTimeoutSeconds': 25, 'authTimeoutSeconds': 35, 'keepAliveIntervalSeconds': 30});
+  });
+
+  testWidgets('removing a jump host clears its saved credentials', (tester) async {
+    final profile = _profile().copyWith(proxyJump: const JumpHostProfile(hostName: 'edge.example', user: 'gateway'));
+    final result = await _openEditor(tester, profile: profile);
+    await _openAdvancedSsh(tester);
+    expect(find.text('Use jump host'), findsOneWidget);
+    await _scrollTo(tester, 'Jump password');
+    await tester.enterText(_fieldFinder('Jump password'), 'jump-secret');
+    await _scrollTo(tester, 'Use jump host');
+    await tester.tap(find.text('Use jump host'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(result()!.profile.proxyJump, isNull);
+    expect(result()!.secret.jumpPassword, anyOf(isNull, isEmpty));
+  });
+
   testWidgets('host editor exposes all app-server modes', (tester) async {
     await _openEditor(tester, profile: _profile());
     await _scrollTo(tester, 'Shared');
@@ -84,6 +131,8 @@ void main() {
     );
 
     await _openEditor(tester, profile: profile);
+
+    await _openAdvancedSsh(tester);
 
     expect(find.text('Jump password'), findsOneWidget);
     expect(find.text('Jump OpenSSH private key'), findsOneWidget);
