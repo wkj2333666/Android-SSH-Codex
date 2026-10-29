@@ -110,8 +110,11 @@ final class SshConfig {
           case 'serveraliveinterval':
             final value = int.tryParse(directive.value);
             final connect = directive.key == 'connecttimeout';
-            if (value == null || value < (connect ? 1 : 0) || value > (connect ? 120 : 300)) {
-              warnings.add('Invalid or unsupported ${connect ? "ConnectTimeout (1–120 seconds)" : "ServerAliveInterval (0–300 seconds)"}');
+            if (value == null ||
+                value < (connect ? 1 : 0) ||
+                value > (connect ? 120 : 300)) {
+              warnings.add(
+                  'Invalid or unsupported ${connect ? "ConnectTimeout (1–120 seconds)" : "ServerAliveInterval (0–300 seconds)"}');
             } else if (connect) {
               connectTimeoutSeconds ??= value;
             } else {
@@ -246,11 +249,13 @@ _JumpTarget _parseJumpTarget(String value) {
   var alias = remainder;
   if (remainder.startsWith('[')) {
     final bracket = remainder.indexOf(']');
-    if (bracket <= 1) throw const FormatException('Invalid bracketed ProxyJump host.');
+    if (bracket <= 1)
+      throw const FormatException('Invalid bracketed ProxyJump host.');
     alias = remainder.substring(1, bracket);
     final suffix = remainder.substring(bracket + 1);
     if (suffix.isNotEmpty) {
-      if (!suffix.startsWith(':')) throw const FormatException('Invalid ProxyJump port.');
+      if (!suffix.startsWith(':'))
+        throw const FormatException('Invalid ProxyJump port.');
       port = int.tryParse(suffix.substring(1));
       if (port == null) throw const FormatException('Invalid ProxyJump port.');
     }
@@ -260,7 +265,10 @@ _JumpTarget _parseJumpTarget(String value) {
     alias = remainder.substring(0, split);
     if (port == null) throw const FormatException('Invalid ProxyJump port.');
   }
-  if (alias.isEmpty || (user != null && user.isEmpty) || (port != null && (port < 1 || port > 65535))) throw const FormatException('Invalid ProxyJump host, user or port.');
+  if (alias.isEmpty ||
+      (user != null && user.isEmpty) ||
+      (port != null && (port < 1 || port > 65535)))
+    throw const FormatException('Invalid ProxyJump host, user or port.');
   return _JumpTarget(alias: alias, user: user, port: port);
 }
 

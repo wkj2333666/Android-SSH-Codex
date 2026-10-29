@@ -106,7 +106,9 @@ final class HostProfile {
             host.identityFiles.isEmpty ? null : host.identityFiles.first,
         environment: host.environment,
         appServerMode: AppServerMode.shared,
-        sshOptions: SshConnectionOptions(connectTimeoutSeconds: host.connectTimeoutSeconds ?? 15, keepAliveIntervalSeconds: host.keepAliveIntervalSeconds ?? 15),
+        sshOptions: SshConnectionOptions(
+            connectTimeoutSeconds: host.connectTimeoutSeconds ?? 15,
+            keepAliveIntervalSeconds: host.keepAliveIntervalSeconds ?? 15),
         proxyJump: host.proxyJump == null
             ? null
             : JumpHostProfile(
@@ -138,7 +140,10 @@ final class HostProfile {
           orElse: () => AppServerMode.shared,
         ),
         customAppServerSocket: json['customAppServerSocket'] as String?,
-        sshOptions: json['sshOptions'] is Map ? SshConnectionOptions.fromJson((json['sshOptions'] as Map).cast<String, dynamic>()) : const SshConnectionOptions(),
+        sshOptions: json['sshOptions'] is Map
+            ? SshConnectionOptions.fromJson(
+                (json['sshOptions'] as Map).cast<String, dynamic>())
+            : const SshConnectionOptions(),
         proxyJump: json['proxyJump'] is Map
             ? JumpHostProfile.fromJson(
                 (json['proxyJump'] as Map).cast<String, dynamic>(),
@@ -205,7 +210,8 @@ final class HostProfile {
         'user': user,
         'port': port,
         'authMethod': authMethod.name,
-        if (sshOptions != const SshConnectionOptions()) 'sshOptions': sshOptions.toJson(),
+        if (sshOptions != const SshConnectionOptions())
+          'sshOptions': sshOptions.toJson(),
         if (identityFileHint != null) 'identityFileHint': identityFileHint,
         if (proxyJump != null) 'proxyJump': proxyJump!.toJson(),
         if (environment.isNotEmpty) 'environment': environment,

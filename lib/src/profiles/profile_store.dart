@@ -57,7 +57,8 @@ final class SecureProfileStore implements ProfileStore, WorkspaceStore {
   Future<void> writeProfile(HostProfile profile, HostSecret secret) async {
     final profiles = (await readProfiles()).toList();
     final index = profiles.indexWhere((item) => item.id == profile.id);
-    final jumpChanged = index >= 0 && _jumpEndpointChanged(profiles[index], profile);
+    final jumpChanged =
+        index >= 0 && _jumpEndpointChanged(profiles[index], profile);
     if (index == -1) {
       profiles.add(profile);
     } else {

@@ -84,9 +84,11 @@ class _ProfileEditorState extends State<ProfileEditor> {
     _jumpUser = TextEditingController(text: jump?.user ?? '');
     _jumpPort = TextEditingController(text: '${jump?.port ?? 22}');
     final options = profile?.sshOptions ?? const SshConnectionOptions();
-    _connectTimeout = TextEditingController(text: '${options.connectTimeoutSeconds}');
+    _connectTimeout =
+        TextEditingController(text: '${options.connectTimeoutSeconds}');
     _authTimeout = TextEditingController(text: '${options.authTimeoutSeconds}');
-    _keepAliveInterval = TextEditingController(text: '${options.keepAliveIntervalSeconds}');
+    _keepAliveInterval =
+        TextEditingController(text: '${options.keepAliveIntervalSeconds}');
   }
 
   @override
@@ -299,22 +301,59 @@ class _ProfileEditorState extends State<ProfileEditor> {
                       SwitchListTile(
                         contentPadding: EdgeInsets.zero,
                         title: const Text('Use jump host'),
-                        subtitle: const Text('Phone → jump host → target. One ProxyJump hop.'),
+                        subtitle: const Text(
+                            'Phone → jump host → target. One ProxyJump hop.'),
                         value: _useJump,
                         onChanged: (value) => setState(() => _useJump = value),
                       ),
                       if (_useJump) ...[
-                        TextFormField(controller: _jumpHost, decoration: const InputDecoration(labelText: 'Jump host name or IP'), validator: _required),
-                        TextFormField(controller: _jumpUser, decoration: const InputDecoration(labelText: 'Jump user'), validator: _required),
-                        TextFormField(controller: _jumpPort, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Jump port'), validator: _portValidator),
-                        TextFormField(controller: _jumpPassword, obscureText: true, decoration: const InputDecoration(labelText: 'Jump password')),
-                        TextFormField(controller: _jumpPrivateKey, minLines: 4, maxLines: 8, style: const TextStyle(fontFamily: 'monospace'), decoration: const InputDecoration(labelText: 'Jump OpenSSH private key', alignLabelWithHint: true)),
-                        TextFormField(controller: _jumpPassphrase, obscureText: true, decoration: const InputDecoration(labelText: 'Jump key passphrase')),
-                        const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Text('Jump credentials are independent. Leave unused fields empty. Each SSH server verifies its own host key.')),
+                        TextFormField(
+                            controller: _jumpHost,
+                            decoration: const InputDecoration(
+                                labelText: 'Jump host name or IP'),
+                            validator: _required),
+                        TextFormField(
+                            controller: _jumpUser,
+                            decoration:
+                                const InputDecoration(labelText: 'Jump user'),
+                            validator: _required),
+                        TextFormField(
+                            controller: _jumpPort,
+                            keyboardType: TextInputType.number,
+                            decoration:
+                                const InputDecoration(labelText: 'Jump port'),
+                            validator: _portValidator),
+                        TextFormField(
+                            controller: _jumpPassword,
+                            obscureText: true,
+                            decoration: const InputDecoration(
+                                labelText: 'Jump password')),
+                        TextFormField(
+                            controller: _jumpPrivateKey,
+                            minLines: 4,
+                            maxLines: 8,
+                            style: const TextStyle(fontFamily: 'monospace'),
+                            decoration: const InputDecoration(
+                                labelText: 'Jump OpenSSH private key',
+                                alignLabelWithHint: true)),
+                        TextFormField(
+                            controller: _jumpPassphrase,
+                            obscureText: true,
+                            decoration: const InputDecoration(
+                                labelText: 'Jump key passphrase')),
+                        const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 8),
+                            child: Text(
+                                'Jump credentials are independent. Leave unused fields empty. Each SSH server verifies its own host key.')),
                       ],
-                      _numberField(_connectTimeout, 'Connect timeout (seconds)', 1, 120),
-                      _numberField(_authTimeout, 'Authentication timeout (seconds)', 1, 120),
-                      _numberField(_keepAliveInterval, 'Keepalive interval (seconds)', 0, 300, helper: '0 disables periodic SSH pings. Default: 15 seconds.'),
+                      _numberField(
+                          _connectTimeout, 'Connect timeout (seconds)', 1, 120),
+                      _numberField(_authTimeout,
+                          'Authentication timeout (seconds)', 1, 120),
+                      _numberField(_keepAliveInterval,
+                          'Keepalive interval (seconds)', 0, 300,
+                          helper:
+                              '0 disables periodic SSH pings. Default: 15 seconds.'),
                       TextFormField(
                         controller: _environment,
                         minLines: 3,
@@ -365,7 +404,8 @@ class _ProfileEditorState extends State<ProfileEditor> {
         _jumpPort.text = '${jump?.port ?? 22}';
         _connectTimeout.text = '${imported.sshOptions.connectTimeoutSeconds}';
         _authTimeout.text = '${imported.sshOptions.authTimeoutSeconds}';
-        _keepAliveInterval.text = '${imported.sshOptions.keepAliveIntervalSeconds}';
+        _keepAliveInterval.text =
+            '${imported.sshOptions.keepAliveIntervalSeconds}';
         _environment.text = formatSshEnvironmentLines(imported.environment);
         _importError =
             resolved.warnings.isEmpty ? null : resolved.warnings.join('\n');
@@ -398,8 +438,17 @@ class _ProfileEditorState extends State<ProfileEditor> {
           port: int.parse(_port.text),
           authMethod: _authMethod,
           identityFileHint: widget.profile?.identityFileHint,
-          proxyJump: _useJump ? JumpHostProfile(hostName: _jumpHost.text.trim(), user: _jumpUser.text.trim(), port: int.parse(_jumpPort.text), identityFileHint: _jumpIdentityHint) : null,
-          sshOptions: SshConnectionOptions(connectTimeoutSeconds: int.parse(_connectTimeout.text), authTimeoutSeconds: int.parse(_authTimeout.text), keepAliveIntervalSeconds: int.parse(_keepAliveInterval.text)),
+          proxyJump: _useJump
+              ? JumpHostProfile(
+                  hostName: _jumpHost.text.trim(),
+                  user: _jumpUser.text.trim(),
+                  port: int.parse(_jumpPort.text),
+                  identityFileHint: _jumpIdentityHint)
+              : null,
+          sshOptions: SshConnectionOptions(
+              connectTimeoutSeconds: int.parse(_connectTimeout.text),
+              authTimeoutSeconds: int.parse(_authTimeout.text),
+              keepAliveIntervalSeconds: int.parse(_keepAliveInterval.text)),
           environment: environment,
           appServerMode: _appServerMode,
           customAppServerSocket: _appServerMode == AppServerMode.custom
@@ -421,15 +470,21 @@ class _ProfileEditorState extends State<ProfileEditor> {
   String? _required(String? value) =>
       value == null || value.trim().isEmpty ? 'Required' : null;
 
-  Widget _numberField(TextEditingController controller, String label, int min, int max, {String? helper}) => TextFormField(
-    controller: controller,
-    keyboardType: TextInputType.number,
-    decoration: InputDecoration(labelText: label, helperText: helper ?? '$min–$max seconds'),
-    validator: (text) {
-      final value = int.tryParse(text ?? '');
-      return value == null || value < min || value > max ? 'Enter $min–$max seconds.' : null;
-    },
-  );
+  Widget _numberField(
+          TextEditingController controller, String label, int min, int max,
+          {String? helper}) =>
+      TextFormField(
+        controller: controller,
+        keyboardType: TextInputType.number,
+        decoration: InputDecoration(
+            labelText: label, helperText: helper ?? '$min–$max seconds'),
+        validator: (text) {
+          final value = int.tryParse(text ?? '');
+          return value == null || value < min || value > max
+              ? 'Enter $min–$max seconds.'
+              : null;
+        },
+      );
 
   String? _portValidator(String? value) {
     final port = int.tryParse(value ?? '');

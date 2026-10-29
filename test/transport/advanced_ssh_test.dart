@@ -12,18 +12,33 @@ final class _Storage implements SecureKeyValueStore {
   Future<String?> read({required String key}) async => values[key];
   @override
   Future<void> write({required String key, required String? value}) async {
-    if (value == null) { values.remove(key); } else { values[key] = value; }
+    if (value == null) {
+      values.remove(key);
+    } else {
+      values[key] = value;
+    }
   }
+
   @override
-  Future<void> delete({required String key}) async { values.remove(key); }
+  Future<void> delete({required String key}) async {
+    values.remove(key);
+  }
 }
 
-HostProfile _profile(String jump) => HostProfile(id: 'private', label: 'Private', hostName: '127.0.0.1', port: 22229, user: 'coder', proxyJump: JumpHostProfile(hostName: jump, user: 'gateway'));
+HostProfile _profile(String jump) => HostProfile(
+    id: 'private',
+    label: 'Private',
+    hostName: '127.0.0.1',
+    port: 22229,
+    user: 'coder',
+    proxyJump: JumpHostProfile(hostName: jump, user: 'gateway'));
 
 void main() {
   for (final secure in [false, true]) {
-    test('jump endpoint edits reset only its host pin (secure: $secure)', () async {
-      final ProfileStore store = secure ? SecureProfileStore(_Storage()) : MemoryProfileStore();
+    test('jump endpoint edits reset only its host pin (secure: $secure)',
+        () async {
+      final ProfileStore store =
+          secure ? SecureProfileStore(_Storage()) : MemoryProfileStore();
       await store.writeProfile(_profile('edge-a'), const HostSecret());
       await store.writeHostFingerprint('private', 'target-pin');
       await store.writeHostFingerprint('private.jump', 'jump-pin');
@@ -38,23 +53,45 @@ void main() {
     });
   }
 
-  test('options keep safe legacy defaults and reject invalid stored ranges', () {
-    final options = SshConnectionOptions.fromJson({'connectTimeoutSeconds': -1, 'authTimeoutSeconds': 0, 'keepAliveIntervalSeconds': 99999});
+  test('options keep safe legacy defaults and reject invalid stored ranges',
+      () {
+    final options = SshConnectionOptions.fromJson({
+      'connectTimeoutSeconds': -1,
+      'authTimeoutSeconds': 0,
+      'keepAliveIntervalSeconds': 99999
+    });
     expect(options, const SshConnectionOptions());
-    expect(options.setupTimeout(hasJumpHost: true), greaterThan(options.setupTimeout(hasJumpHost: false)));
-    expect(const SshConnectionOptions(keepAliveIntervalSeconds: 0).keepAliveInterval, Duration.zero);
+    expect(options.setupTimeout(hasJumpHost: true),
+        greaterThan(options.setupTimeout(hasJumpHost: false)));
+    expect(
+        const SshConnectionOptions(keepAliveIntervalSeconds: 0)
+            .keepAliveInterval,
+        Duration.zero);
   });
 
-  test('real SSH jump authenticates and pins both hosts, then closes both', () async {
-    final key = await File(Platform.environment['DOWNLOAD_TEST_KEY']!).readAsString();
+  test('real SSH jump authenticates and pins both hosts, then closes both',
+      () async {
+    final key =
+        await File(Platform.environment['DOWNLOAD_TEST_KEY']!).readAsString();
     final user = Platform.environment['USER']!;
-    final profile = _profile('127.0.0.1').copyWith(user: user, proxyJump: JumpHostProfile(hostName: '127.0.0.1', port: 22229, user: user), sshOptions: const SshConnectionOptions(connectTimeoutSeconds: 10, authTimeoutSeconds: 10, keepAliveIntervalSeconds: 0));
+    final profile = _profile('127.0.0.1').copyWith(
+        user: user,
+        proxyJump:
+            JumpHostProfile(hostName: '127.0.0.1', port: 22229, user: user),
+        sshOptions: const SshConnectionOptions(
+            connectTimeoutSeconds: 10,
+            authTimeoutSeconds: 10,
+            keepAliveIntervalSeconds: 0));
     final secret = HostSecret(privateKey: key, jumpPrivateKey: key);
     final store = MemoryProfileStore();
     var prompts = 0;
     final connector = SshConnector(store);
     for (var attempt = 0; attempt < 2; attempt++) {
-      final connection = await connector.connect(profile, secret, prompt: (_) async { prompts++; return true; });
+      final connection =
+          await connector.connect(profile, secret, prompt: (_) async {
+        prompts++;
+        return true;
+      });
       try {
         expect(connection.jumpClient, isNotNull);
         expect(await connection.checkHealth(), isTrue);

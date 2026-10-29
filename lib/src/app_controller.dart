@@ -601,7 +601,8 @@ final class AppController extends ChangeNotifier {
           diagnosticAttempt: attempt,
           setup: setup,
         ),
-        timeout: profile.sshOptions.setupTimeout(hasJumpHost: profile.proxyJump != null),
+        timeout: profile.sshOptions
+            .setupTimeout(hasJumpHost: profile.proxyJump != null),
         closeLateResult: (connection) =>
             connection.close(reason: 'late_connection_setup_result'),
       );
