@@ -34,6 +34,26 @@ void main() {
     }
   });
 
+  test('typed video attachments render without image previews or raw metadata',
+      () {
+    final result = parseAttachmentMessage('Inspect\n'
+        'Attached files (on the remote machine):\n'
+        'Video file (video/mp4):\n/tmp/clip\n/tmp/photo.png');
+    expect(result.text, 'Inspect');
+    expect(result.attachments, hasLength(2));
+    expect(result.attachments.first.isVideo, isTrue);
+    expect(result.attachments.first.isImage, isFalse);
+    expect(result.attachments.last.isImage, isTrue);
+  });
+
+  test('native image flags do not override a video extension', () {
+    final result = parseAttachmentMessage(
+        'Attached files (on the remote machine):\n/tmp/clip.mp4',
+        [const MessageAttachment(path: '/tmp/clip.mp4', isImage: true)]);
+    expect(result.attachments.single.isImage, isFalse);
+    expect(result.attachments.single.isVideo, isTrue);
+  });
+
   test('empty request and multiple Desktop pasted files are supported', () {
     final result = parseAttachmentMessage(
       '# Files pasted by the user:\n\n## a.txt: /tmp/a.txt\n\n'

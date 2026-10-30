@@ -98,6 +98,36 @@ void main() {
         () => Attachments.validate(List.filled(4, allowed)), returnsNormally);
   });
 
+  test('video MIME overrides an image flag from the picker', () async {
+    messenger.setMockMethodCallHandler(
+        Attachments.channel,
+        (call) async => {
+              'name': 'clip',
+              'path': '/cache/picked.bin',
+              'size': 3,
+              'isImage': true,
+              'mimeType': 'video/mp4',
+            });
+    final video = (await Attachments.pick(image: false))!;
+    expect(video.isImage, isFalse);
+    expect(video.isVideo, isTrue);
+    expect(video.mimeType, 'video/mp4');
+  });
+
+  test('video filenames never become native image inputs', () {
+    const video = RemoteAttachment(path: '/remote/clip.MP4', isImage: true);
+    expect(video.isImage, isFalse);
+    expect(video.isVideo, isTrue);
+    final prompt = attachmentPrompt('Inspect', [video]);
+    expect(prompt, contains('Video file (video/mp4):\n/remote/clip.MP4'));
+  });
+
+  test('long upload names retain the media extension', () {
+    final command = attachmentUploadCommand(
+        '0123456789abcdef0123456789abcdef', '${'a' * 160}.mp4');
+    expect(command, contains('.mp4'));
+  });
+
   test('remote upload command never interpolates shell syntax from filename',
       () {
     final command = attachmentUploadCommand('0123456789abcdef0123456789abcdef',
