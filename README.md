@@ -319,6 +319,12 @@ cancel its transfer. Tap a failed attachment to retry from that offset.
 PNG, JPEG, WebP and GIF are accepted as images (up to 64
 megapixels and 16,384 pixels per side); other formats can be sent
 as files. Queued messages and steering preserve image attachments.
+Videos must be selected with **File**. They are uploaded as the original remote
+file, labeled as video with its media type, and never sent as native image
+inputs. Video understanding depends on the agent's remote tools and codecs;
+this client does not turn a video into model-native video input or extract
+frames automatically. If a document provider returns only an image thumbnail
+instead of the video, selection is rejected; choose the original file instead.
 
 Sent images, native MCP/dynamic-tool image results, and remote Markdown images
 in replies appear as bounded inline thumbnails without a save dialog. Tool

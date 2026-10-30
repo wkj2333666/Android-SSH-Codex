@@ -18,6 +18,31 @@ Future<void> _settleImage(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets('videos have a video card and never request an image preview',
+      (tester) async {
+    var reads = 0;
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: TimelineItemView(
+      item: const TaskItem(
+          id: 'video',
+          kind: TaskItemKind.user,
+          text: 'Attached files (on the remote machine):\n'
+              'Video file (video/mp4):\n/remote/clip',
+          attachments: []),
+      loadImage: (_) async {
+        reads++;
+        return base64Decode(_png);
+      },
+    ))));
+    await tester.pumpAndSettle();
+    expect(find.text('Video attachment'), findsOneWidget);
+    expect(find.byIcon(Icons.videocam_outlined), findsOneWidget);
+    expect(find.byType(Image), findsNothing);
+    expect(reads, 0);
+    expect(tester.takeException(), isNull);
+  });
+
   test('image-only messages are not filtered out of the timeline', () {
     expect(
         buildTimelineEntries(const [

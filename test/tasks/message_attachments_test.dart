@@ -54,6 +54,15 @@ void main() {
     expect(result.attachments.single.isVideo, isTrue);
   });
 
+  test('native image flags do not replace explicit video metadata', () {
+    final result = parseAttachmentMessage(
+        'Attached files (on the remote machine):\n'
+        'Video file (video/mp4):\n/tmp/clip.jpg',
+        [const MessageAttachment(path: '/tmp/clip.jpg', isImage: true)]);
+    expect(result.attachments.single.isImage, isFalse);
+    expect(result.attachments.single.isVideo, isTrue);
+  });
+
   test('empty request and multiple Desktop pasted files are supported', () {
     final result = parseAttachmentMessage(
       '# Files pasted by the user:\n\n## a.txt: /tmp/a.txt\n\n'

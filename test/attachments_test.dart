@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:android_ssh_codex/src/attachments.dart';
 import 'package:android_ssh_codex/src/app_controller.dart';
+import 'package:android_ssh_codex/src/tasks/message_attachments.dart';
 import 'package:android_ssh_codex/src/tasks/task_message_queue.dart';
 import 'package:android_ssh_codex/src/transport/attachment_upload.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -128,6 +129,27 @@ void main() {
     expect(command, contains('.mp4'));
   });
 
+  test('video MIME is normalized and cannot inject prompt metadata', () {
+    const video = RemoteAttachment(
+        path: '/remote/clip',
+        isImage: true,
+        mimeType: 'Video/MP4; codecs=avc1');
+    final parsed = parseAttachmentMessage(attachmentPrompt('', [video]));
+    expect(parsed.text, isEmpty);
+    expect(parsed.attachments.single.isVideo, isTrue);
+    expect(parsed.attachments.single.isImage, isFalse);
+    const invalid = RemoteAttachment(
+        path: '/remote/clip', isImage: false, mimeType: 'video/mp4\ninjected');
+    expect(attachmentPrompt('', [invalid]), isNot(contains('injected')));
+  });
+
+  test('source-code extensions are not mistaken for videos', () {
+    for (final path in ['/remote/index.ts', '/remote/module.mts']) {
+      final file = RemoteAttachment(path: path, isImage: false);
+      expect(file.isVideo, isFalse);
+    }
+  });
+
   test('remote upload command never interpolates shell syntax from filename',
       () {
     final command = attachmentUploadCommand('0123456789abcdef0123456789abcdef',
@@ -164,10 +186,11 @@ void main() {
     final contents = List.generate(200000, (index) => index % 251);
     await file.writeAsBytes(contents);
     final attachment = LocalAttachment(
-        name: 'payload.bin',
+        name: 'payload.mp4',
         path: file.path,
         size: contents.length,
-        isImage: false);
+        isImage: false,
+        mimeType: 'video/mp4');
     final buffer = _UploadBuffer();
     final offsets = <int>[];
     var connections = 0;
@@ -184,6 +207,9 @@ void main() {
     expect(offsets.last, greaterThan(0));
     expect(buffer.bytes, contents);
     expect(remote.path, '/remote/file.bin');
+    expect(remote.isVideo, isTrue);
+    expect(remote.isImage, isFalse);
+    expect(remote.mimeType, 'video/mp4');
   });
 
   test('attachment-only message and queued steer preserve image paths', () {

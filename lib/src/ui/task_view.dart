@@ -511,7 +511,9 @@ class _TaskViewState extends State<TaskView> {
             cacheWidth: 64,
             fit: BoxFit.cover,
             errorBuilder: (_, __, ___) => const Icon(Icons.broken_image))
-        : const Icon(Icons.insert_drive_file_outlined);
+        : Icon(attachment.local.isVideo
+            ? Icons.videocam_outlined
+            : Icons.insert_drive_file_outlined);
     final message = waiting
         ? 'Waiting for connection'
         : failed
