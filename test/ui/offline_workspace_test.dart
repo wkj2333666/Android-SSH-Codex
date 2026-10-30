@@ -163,7 +163,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('File or video'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('clip.mp4'));
+    await tester.tap(find.textContaining('clip.mp4'));
     await tester.pumpAndSettle();
     expect(played, ['/nonexistent/picked-video.bin']);
     expect(
