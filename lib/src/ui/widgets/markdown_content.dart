@@ -110,9 +110,10 @@ class MarkdownContent extends StatelessWidget {
         final attachment = MessageAttachment(path: path ?? uri.path);
         if (attachment.isVideo) {
           return OutlinedButton.icon(
-            onPressed: path != null && RemoteFileActions.maybeOf(context) != null
-                ? () => unawaited(showRemoteFileDownload(context, path))
-                : null,
+            onPressed:
+                path != null && RemoteFileActions.maybeOf(context) != null
+                    ? () => unawaited(showRemoteFileDownload(context, path))
+                    : null,
             icon: const Icon(Icons.videocam_outlined),
             label: const Text('Download video'),
           );
