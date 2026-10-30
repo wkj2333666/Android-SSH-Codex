@@ -2,8 +2,7 @@
 /// from a document provider must survive caching, where paths end in `.bin`.
 String? videoAttachmentMimeType(String name, String? mimeType) {
   final declared = mimeType?.split(';').first.trim().toLowerCase();
-  if (declared != null &&
-      RegExp(r'^video/[a-z0-9.+-]+$').hasMatch(declared)) {
+  if (declared != null && RegExp(r'^video/[a-z0-9.+-]+$').hasMatch(declared)) {
     return declared;
   }
   // Embedded image URLs can contain megabytes of Base64. Never split or

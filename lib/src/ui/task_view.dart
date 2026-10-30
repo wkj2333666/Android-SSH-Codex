@@ -1700,7 +1700,7 @@ class _Composer extends StatelessWidget {
                       icon: const Icon(Icons.attach_file),
                       itemBuilder: (_) => const [
                         PopupMenuItem(value: true, child: Text('Image')),
-                        PopupMenuItem(value: false, child: Text('File')),
+                        PopupMenuItem(value: false, child: Text('File or video')),
                       ],
                     ),
                   Expanded(

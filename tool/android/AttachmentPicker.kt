@@ -56,6 +56,9 @@ class AttachmentPicker(private val activity: Activity) {
                 // A video must not enter the native image-input path, including
                 // providers that expose a JPEG thumbnail for the document.
                 val extension = name.substringAfterLast('.', "").lowercase()
+                if (name.length > 200 && extension.isNotEmpty() && extension.length <= 11) {
+                    name = name.take(199 - extension.length) + "." + extension
+                }
                 val extensionMime = if (extension == "ts" || extension == "mts") null else
                     MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
                 val declaredMime = resolver.getType(uri)?.substringBefore(';')?.trim()?.lowercase()
@@ -94,7 +97,7 @@ class AttachmentPicker(private val activity: Activity) {
                 }
                 // Do not silently upload a provider's preview as the video.
                 require(videoMime == null || imageMime == null) {
-                    "The file provider returned an image instead of the video. Choose the original video using File."
+                    "The file provider returned an image instead of the video. Choose the original using File or video."
                 }
                 val image = imageMime != null
                 require(!requireImage || image) { "Choose a PNG, JPEG, WebP or GIF image" }

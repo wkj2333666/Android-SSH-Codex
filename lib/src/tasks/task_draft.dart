@@ -115,11 +115,10 @@ final class TaskDraft extends ChangeNotifier {
               file['token'] as String, local.name));
       final remote = file['remotePath'] as String?;
       if (remote != null) {
-        transfer.remote =
-            RemoteAttachment(
-                path: remote,
-                isImage: local.isImage,
-                mimeType: local.videoMimeType ?? local.mimeType);
+        transfer.remote = RemoteAttachment(
+            path: remote,
+            isImage: local.isImage,
+            mimeType: local.videoMimeType ?? local.mimeType);
         transfer.state = AttachmentState.uploaded;
         transfer.progress = 1;
       } else {

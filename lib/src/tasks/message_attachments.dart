@@ -120,8 +120,8 @@ AttachmentMessage parseAttachmentMessage(
       for (var i = 0; i < paths.length; i++) {
         var path = paths[i];
         String? mimeType;
-        final video = RegExp(r'^Video file \((video/[a-z0-9.+-]+)\):$')
-            .firstMatch(path);
+        final video =
+            RegExp(r'^Video file \((video/[a-z0-9.+-]+)\):$').firstMatch(path);
         if (video != null && i + 1 < paths.length) {
           mimeType = video.group(1);
           path = paths[++i];
@@ -155,8 +155,7 @@ AttachmentMessage parseAttachmentMessage(
   return AttachmentMessage(body, attachments);
 }
 
-MessageAttachment _attachment(String path,
-        {String? name, String? mimeType}) =>
+MessageAttachment _attachment(String path, {String? name, String? mimeType}) =>
     MessageAttachment(
       path: path,
       name: name,

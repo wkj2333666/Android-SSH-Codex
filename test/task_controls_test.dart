@@ -54,15 +54,15 @@ void main() {
       () async {
     final transport = Transport();
     final rpc = JsonRpcClient(transport)..start();
-    final controller = AppController.connectedForTesting(
-        rpc: rpc, cachedTasks: [task()]);
+    final controller =
+        AppController.connectedForTesting(rpc: rpc, cachedTasks: [task()]);
     await controller.selectTask('task');
-    await controller.sendPrompt('Inspect',
-        mode: TaskSendMode.queue,
-        attachments: const [
-          RemoteAttachment(
-              path: '/remote/clip', isImage: true, mimeType: 'video/mp4'),
-        ]);
+    await controller.disconnect();
+    await controller
+        .sendPrompt('Inspect', mode: TaskSendMode.queue, attachments: const [
+      RemoteAttachment(
+          path: '/remote/clip', isImage: true, mimeType: 'video/mp4'),
+    ]);
     final pending = controller.queuedMessagesForTask('task').single;
     expect(pending.imagePaths, isEmpty);
     expect(pending.text, contains('Video file (video/mp4):\n/remote/clip'));

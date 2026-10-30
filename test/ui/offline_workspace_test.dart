@@ -117,7 +117,7 @@ void main() {
     ))));
     await tester.tap(find.byTooltip('Attach image or file'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('File'));
+    await tester.tap(find.text('File or video'));
     await tester.pumpAndSettle();
     final draft = controller.draftForTask('cached');
     expect(draft.attachments.single.state, AttachmentState.waiting);

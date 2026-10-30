@@ -105,6 +105,18 @@ class MarkdownContent extends StatelessWidget {
       },
       imageBuilder: (uri, title, alt) {
         final path = remoteFilePath(uri.toString(), '/');
+        // Some agents use image Markdown for all media. Never read a video
+        // through the bounded image decoder or offer an endless image retry.
+        final attachment = MessageAttachment(path: path ?? uri.path);
+        if (attachment.isVideo) {
+          return OutlinedButton.icon(
+            onPressed: path != null && RemoteFileActions.maybeOf(context) != null
+                ? () => unawaited(showRemoteFileDownload(context, path))
+                : null,
+            icon: const Icon(Icons.videocam_outlined),
+            label: const Text('Download video'),
+          );
+        }
         final loader = ImagePreviewScope.maybeOf(context);
         if ((path != null && loader != null) ||
             uri.toString().startsWith('data:image/')) {

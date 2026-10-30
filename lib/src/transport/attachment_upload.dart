@@ -56,9 +56,8 @@ String attachmentUploadCommand(String token, String name) {
   }
   final safeName = name.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
   final dot = safeName.lastIndexOf('.');
-  final extension = dot > 0 && safeName.length - dot <= 12
-      ? safeName.substring(dot)
-      : '';
+  final extension =
+      dot > 0 && safeName.length - dot <= 12 ? safeName.substring(dot) : '';
   final fileName = safeName.isEmpty
       ? 'attachment'
       : safeName.length <= 100

@@ -4,6 +4,7 @@ import 'package:android_ssh_codex/src/tasks/message_attachments.dart';
 import 'package:android_ssh_codex/src/tasks/task_reducer.dart';
 import 'package:android_ssh_codex/src/ui/timeline_entries.dart';
 import 'package:android_ssh_codex/src/ui/widgets/timeline_item.dart';
+import 'package:android_ssh_codex/src/ui/widgets/remote_file_actions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -18,6 +19,34 @@ Future<void> _settleImage(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets('video Markdown image syntax does not load a video as an image',
+      (tester) async {
+    var reads = 0;
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: RemoteFileActions(
+      download: (_) async => true,
+      child: TimelineItemView(
+        item: const TaskItem(
+            id: 'video',
+            kind: TaskItemKind.agent,
+            text: '![Clip](/remote/clip.mp4)'),
+        loadImage: (_) async {
+          reads++;
+          return base64Decode(_png);
+        },
+      ),
+    ))));
+    await tester.pumpAndSettle();
+    expect(find.text('Download video'), findsOneWidget);
+    expect(find.byType(Image), findsNothing);
+    expect(reads, 0);
+    await tester.tap(find.text('Download video'));
+    await tester.pumpAndSettle();
+    expect(find.text('Download remote file?'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('videos have a video card and never request an image preview',
       (tester) async {
     var reads = 0;
