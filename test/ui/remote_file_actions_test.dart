@@ -4,10 +4,52 @@ import 'package:android_ssh_codex/src/transport/file_download.dart';
 import 'package:android_ssh_codex/src/ui/widgets/markdown_content.dart';
 import 'package:android_ssh_codex/src/ui/widgets/remote_file_actions.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('video loading has progress, cancellation and decoder errors',
+      (tester) async {
+    final completion = Completer<bool>();
+    void Function(DownloadProgress)? update;
+    VoidCallback? ready;
+    var cancellations = 0;
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: RemoteFileActions(
+      download: (_) async => false,
+      cancelDownload: () => cancellations++,
+      previewVideo: (_, {onProgress, onReady}) {
+        update = onProgress;
+        ready = onReady;
+        return completion.future;
+      },
+      child: Builder(
+          builder: (context) => TextButton(
+              onPressed: () => showRemoteVideoPreview(context, '/remote/a.mp4'),
+              child: const Text('Play'))),
+    ))));
+    await tester.tap(find.text('Play'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    update!(const DownloadProgress(1048576, 2097152));
+    await tester.pump();
+    expect(find.text('Loading video'), findsOneWidget);
+    expect(tester.widget<LinearProgressIndicator>(
+        find.byType(LinearProgressIndicator)).value, 0.5);
+    await tester.tap(find.text('Cancel loading'));
+    expect(cancellations, 1);
+    ready!();
+    await tester.pumpAndSettle();
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+    completion.completeError(PlatformException(
+        code: 'VIDEO_UNSUPPORTED', message: 'Unsupported video codec.'));
+    await tester.pumpAndSettle();
+    expect(find.text('Unsupported video codec.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('download reports progress and specific failure', (tester) async {
     final completion = Completer<bool>();
     var cancellations = 0;

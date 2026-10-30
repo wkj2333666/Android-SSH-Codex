@@ -19,6 +19,34 @@ Future<void> _settleImage(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets('Markdown video preview plays on tap without a save picker',
+      (tester) async {
+    final played = <String>[];
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: RemoteFileActions(
+      download: (_) async => throw StateError('Must not save for preview'),
+      previewVideo: (path, {onProgress, onReady}) async {
+        played.add(path);
+        onReady?.call();
+        return true;
+      },
+      child: const TimelineItemView(
+          item: TaskItem(
+              id: 'video',
+              kind: TaskItemKind.agent,
+              text: '![实验视频](/remote/experiment.mp4)')),
+    ))));
+    await tester.pumpAndSettle();
+    expect(played, isEmpty);
+    await tester.tap(find.text('Play video'));
+    await tester.pumpAndSettle();
+    expect(played, ['/remote/experiment.mp4']);
+    expect(find.text('Download remote file?'), findsNothing);
+    expect(find.byType(Image), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('video Markdown image syntax does not load a video as an image',
       (tester) async {
     var reads = 0;
