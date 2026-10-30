@@ -350,6 +350,8 @@ class _AttachmentCard extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (attachment.isVideo && attachment.path.startsWith('/'))
+            RemoteVideoPreview(path: attachment.path, label: attachment.label),
           if (attachment.isImage &&
               ((attachment.path.startsWith('/') && loadImage != null) ||
                   attachment.path.startsWith('data:image/')))

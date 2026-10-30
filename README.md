@@ -323,7 +323,14 @@ Videos must be selected with **File or video**. They are uploaded as the origina
 file, labeled as video with its media type, and never sent as native image
 inputs. Video understanding depends on the agent's remote tools and codecs;
 this client does not turn a video into model-native video input or extract
-frames automatically. If a document provider returns only an image thumbnail
+frames automatically. Tap **Play video** in a reply or sent video attachment to
+open the in-app player with pause and seeking controls. The first tap streams
+the file over a dedicated resumable SSH connection to temporary phone storage
+(up to 1 GiB), with loading progress and cancellation; it does not open a save
+picker. Closing the player releases its temporary copy. A selected local video
+can also be played from its composer chip before sending. Playback uses the
+phone's supported codecs; **Download video** remains available for other players.
+If a document provider returns only an image thumbnail
 instead of the video, selection is rejected; choose the original file instead.
 
 Sent images, native MCP/dynamic-tool image results, and remote Markdown images

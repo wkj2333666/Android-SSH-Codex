@@ -219,6 +219,9 @@ class _TaskViewState extends State<TaskView> {
             child: RemoteFileActions(
                 download: widget.controller.downloadFile,
                 downloadWithProgress: widget.controller.downloadFile,
+                previewVideo: Attachments.supported
+                    ? widget.controller.previewVideo
+                    : null,
                 cancelDownload: widget.controller.cancelDownload,
                 child: timeline)),
         if (widget.controller.userInputRequests
@@ -577,7 +580,9 @@ class _TaskViewState extends State<TaskView> {
               ? () => _retryAttachment(attachment)
               : attachment.local.isImage
                   ? () => _previewAttachment(attachment.local)
-                  : null,
+                  : attachment.local.isVideo
+                      ? () => _previewVideo(attachment.local)
+                      : null,
           onDeleted: () => _discardAttachment(attachment),
           deleteButtonTooltipMessage: 'Remove attachment',
         ),
@@ -587,6 +592,17 @@ class _TaskViewState extends State<TaskView> {
 
   void _retryAttachment(AttachmentTransfer attachment) {
     unawaited(_draft.upload(attachment));
+  }
+
+  Future<void> _previewVideo(LocalAttachment attachment) async {
+    try {
+      await Attachments.channel.invokeMethod<bool>('playVideo', {
+        'path': attachment.path,
+        'name': attachment.name,
+      });
+    } catch (error) {
+      if (mounted) _showError(error);
+    }
   }
 
   void _discardAttachment(AttachmentTransfer attachment) {

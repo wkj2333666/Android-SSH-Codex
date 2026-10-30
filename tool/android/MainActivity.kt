@@ -18,6 +18,7 @@ class MainActivity : FlutterActivity() {
 
     private var permissionResult: MethodChannel.Result? = null
     private var exportResult: MethodChannel.Result? = null
+    private var videoResult: MethodChannel.Result? = null
     private var exportSnapshot: String? = null
     private var attachmentPicker: AttachmentPicker? = null
     private var attachmentDownloads: AttachmentDownloads? = null
@@ -54,6 +55,19 @@ class MainActivity : FlutterActivity() {
                 val downloads = attachmentDownloads
                 if (downloads == null) result.error("ACTIVITY_CLOSED", "Save picker closed", null)
                 else downloads.save(call.argument<String>("path") ?: "", call.argument<String>("name") ?: "download", result)
+            }
+            else if (call.method == "playVideo") {
+                if (videoResult != null) result.error("BUSY", "A video preview is already open", null)
+                else try {
+                    val file = VideoPreviewActivity.previewFile(this, call.argument<String>("path") ?: "")
+                    videoResult = result
+                    startActivityForResult(Intent(this, VideoPreviewActivity::class.java)
+                        .putExtra("path", file.absolutePath)
+                        .putExtra("name", call.argument<String>("name") ?: "Video"), VideoPreviewActivity.REQUEST)
+                } catch (_: Exception) {
+                    videoResult = null
+                    result.error("VIDEO_UNAVAILABLE", "Cannot open video preview", null)
+                }
             }
             else if (call.method == "pick") {
                 val picker = attachmentPicker
@@ -161,6 +175,14 @@ class MainActivity : FlutterActivity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == VideoPreviewActivity.REQUEST) {
+            val result = videoResult
+            videoResult = null
+            val error = data?.getStringExtra("error")
+            if (error != null) result?.error("VIDEO_UNSUPPORTED", error, null)
+            else result?.success(resultCode == Activity.RESULT_OK)
+            return
+        }
         if (requestCode == 4104) {
             attachmentDownloads?.onResult(resultCode, data)
             return
@@ -207,6 +229,8 @@ class MainActivity : FlutterActivity() {
         ConnectionRuntime.installDetachedHandlers(applicationContext, flutterEngine)
         permissionResult?.error("ACTIVITY_CLOSED", "Connection activity closed", null)
         permissionResult = null
+        videoResult?.error("ACTIVITY_CLOSED", "Video preview activity closed", null)
+        videoResult = null
         super.cleanUpFlutterEngine(flutterEngine)
     }
 }

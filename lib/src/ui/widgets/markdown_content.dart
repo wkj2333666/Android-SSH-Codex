@@ -98,7 +98,12 @@ class MarkdownContent extends StatelessWidget {
         if (href != null &&
             RemoteFileActions.maybeOf(context) != null &&
             remoteFilePath(href, '/') != null) {
-          unawaited(showRemoteFileDownload(context, href));
+          if (MessageAttachment(path: remoteFilePath(href, '/')!).isVideo &&
+              RemoteFileActions.maybeOf(context)?.previewVideo != null) {
+            unawaited(showRemoteVideoPreview(context, href));
+          } else {
+            unawaited(showRemoteFileDownload(context, href));
+          }
         } else {
           unawaited(openWebLink(context, href, openExternalLink));
         }
@@ -108,15 +113,8 @@ class MarkdownContent extends StatelessWidget {
         // Some agents use image Markdown for all media. Never read a video
         // through the bounded image decoder or offer an endless image retry.
         final attachment = MessageAttachment(path: path ?? uri.path);
-        if (attachment.isVideo) {
-          return OutlinedButton.icon(
-            onPressed:
-                path != null && RemoteFileActions.maybeOf(context) != null
-                    ? () => unawaited(showRemoteFileDownload(context, path))
-                    : null,
-            icon: const Icon(Icons.videocam_outlined),
-            label: const Text('Download video'),
-          );
+        if (attachment.isVideo && path != null) {
+          return RemoteVideoPreview(path: path, label: alt);
         }
         final loader = ImagePreviewScope.maybeOf(context);
         if ((path != null && loader != null) ||

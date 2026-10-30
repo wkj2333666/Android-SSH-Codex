@@ -75,6 +75,34 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('typed video cards play even when the remote path has no extension',
+      (tester) async {
+    final played = <String>[];
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: RemoteFileActions(
+      download: (_) async => true,
+      previewVideo: (path, {onProgress, onReady}) async {
+        played.add(path);
+        onReady?.call();
+        return true;
+      },
+      child: const TimelineItemView(
+          item: TaskItem(
+              id: 'video',
+              kind: TaskItemKind.user,
+              text: 'Attached files (on the remote machine):\n'
+                  'Video file (video/mp4):\n/remote/clip')),
+    ))));
+    await tester.pumpAndSettle();
+    expect(find.text('Video attachment'), findsOneWidget);
+    await tester.tap(find.text('Play video'));
+    await tester.pumpAndSettle();
+    expect(played, ['/remote/clip']);
+    expect(find.text('Download remote file?'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('videos have a video card and never request an image preview',
       (tester) async {
     var reads = 0;
