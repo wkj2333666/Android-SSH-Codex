@@ -5,8 +5,10 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
+import android.os.Build
 import android.view.Gravity
 import android.view.View
+import android.view.WindowInsets
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
@@ -61,6 +63,17 @@ class VideoPreviewActivity : Activity() {
         window.statusBarColor = Color.BLACK
         window.navigationBarColor = Color.BLACK
         val root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
+        root.setOnApplyWindowInsetsListener { view, insets ->
+            if (Build.VERSION.SDK_INT >= 30) {
+                val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
+                view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+            } else {
+                @Suppress("DEPRECATION")
+                view.setPadding(insets.systemWindowInsetLeft, insets.systemWindowInsetTop,
+                    insets.systemWindowInsetRight, insets.systemWindowInsetBottom)
+            }
+            insets
+        }
         val player = object : VideoView(this) {
             override fun start() { super.start(); keepScreenOn = true }
             override fun pause() { super.pause(); keepScreenOn = false }
@@ -122,6 +135,7 @@ class VideoPreviewActivity : Activity() {
             true
         }
         setContentView(root)
+        root.requestApplyInsets()
         player.setVideoPath(file.absolutePath)
         player.requestFocus()
     }
@@ -145,7 +159,7 @@ class VideoPreviewActivity : Activity() {
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
-        outState.putInt("position", if (prepared) video?.currentPosition ?: position else position)
+        outState.putInt("position", if (prepared && foreground) video?.currentPosition ?: position else position)
         outState.putBoolean("playing", if (prepared && foreground) video?.isPlaying ?: resumePlayback else resumePlayback)
         super.onSaveInstanceState(outState)
     }

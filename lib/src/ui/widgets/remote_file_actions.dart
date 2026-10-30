@@ -51,6 +51,7 @@ Future<void> showRemoteVideoPreview(BuildContext context, String path) async {
     ready = true;
     if (navigator.mounted && route.isActive) navigator.removeRoute(route);
   }
+
   route = DialogRoute<void>(
     context: context,
     barrierDismissible: false,
@@ -70,17 +71,20 @@ Future<void> showRemoteVideoPreview(BuildContext context, String path) async {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 LinearProgressIndicator(
-                    value: value.verifying || value.reconnecting ? null : fraction),
+                    value: value.verifying || value.reconnecting
+                        ? null
+                        : fraction),
                 const SizedBox(height: 12),
-                Text('${(value.received / 1048576).toStringAsFixed(2)} MiB received'
+                Text(
+                    '${(value.received / 1048576).toStringAsFixed(2)} MiB received'
                     '${fraction == null ? "" : " · ${(fraction * 100).toStringAsFixed(0)}%"}'),
                 if (value.reconnecting)
-                  const Text('Connection interrupted. Reconnecting and resuming…'),
+                  const Text(
+                      'Connection interrupted. Reconnecting and resuming…'),
                 if (value.verifying) const Text('Verifying file integrity…'),
                 if (cancel != null)
                   TextButton(
-                      onPressed: cancel,
-                      child: const Text('Cancel loading')),
+                      onPressed: cancel, child: const Text('Cancel loading')),
               ],
             );
           },
@@ -90,11 +94,9 @@ Future<void> showRemoteVideoPreview(BuildContext context, String path) async {
   );
   unawaited(navigator.push(route));
   try {
-    await preview(path,
-        onProgress: (value) {
-          if (!finished && !ready) progress.value = value;
-        },
-        onReady: hideLoading);
+    await preview(path, onProgress: (value) {
+      if (!finished && !ready) progress.value = value;
+    }, onReady: hideLoading);
   } catch (error) {
     if (!context.mounted) return;
     messenger.hideCurrentSnackBar();
@@ -133,12 +135,14 @@ class RemoteVideoPreview extends StatelessWidget {
                 height: 158,
                 child: Center(
                   child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(Icons.play_circle_outline, size: 48, color: colors.primary),
+                    Icon(Icons.play_circle_outline,
+                        size: 48, color: colors.primary),
                     const Text('Play video'),
                     if (label?.isNotEmpty == true)
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: Text(label!, maxLines: 1, overflow: TextOverflow.ellipsis),
+                        child: Text(label!,
+                            maxLines: 1, overflow: TextOverflow.ellipsis),
                       ),
                   ]),
                 ),

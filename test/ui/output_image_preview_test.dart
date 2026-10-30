@@ -75,7 +75,8 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('typed video cards play even when the remote path has no extension',
+  testWidgets(
+      'typed video cards play even when the remote path has no extension',
       (tester) async {
     final played = <String>[];
     await tester.pumpWidget(MaterialApp(

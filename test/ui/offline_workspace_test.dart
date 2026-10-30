@@ -166,7 +166,8 @@ void main() {
     await tester.tap(find.text('clip.mp4'));
     await tester.pumpAndSettle();
     expect(played, ['/nonexistent/picked-video.bin']);
-    expect(controller.draftForTask('cached').attachments.single.active, isFalse);
+    expect(
+        controller.draftForTask('cached').attachments.single.active, isFalse);
     await tester.pumpWidget(const SizedBox());
     controller.dispose();
   });

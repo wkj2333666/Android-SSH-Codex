@@ -1777,7 +1777,8 @@ final class AppController extends ChangeNotifier {
 
   Future<bool> downloadFile(String link,
           {void Function(downloads.DownloadProgress)? onProgress}) =>
-      _receiveRemoteFile(link, onProgress: onProgress, openFile: (file, name) async {
+      _receiveRemoteFile(link, onProgress: onProgress,
+          openFile: (file, name) async {
         final size = await file.length();
         onProgress?.call(downloads.DownloadProgress(size, size, saving: true));
         return await Attachments.channel.invokeMethod<bool>('saveDownload', {
@@ -1790,17 +1791,15 @@ final class AppController extends ChangeNotifier {
   Future<bool> previewVideo(String link,
           {void Function(downloads.DownloadProgress)? onProgress,
           VoidCallback? onReady}) =>
-      _receiveRemoteFile(link,
-          onProgress: onProgress,
-          purpose: 'video-preview',
+      _receiveRemoteFile(link, onProgress: onProgress, purpose: 'video-preview',
           openFile: (file, name) async {
-            onReady?.call();
-            return await Attachments.channel.invokeMethod<bool>('playVideo', {
-                  'path': file.path,
-                  'name': name,
-                }) ??
-                false;
-          });
+        onReady?.call();
+        return await Attachments.channel.invokeMethod<bool>('playVideo', {
+              'path': file.path,
+              'name': name,
+            }) ??
+            false;
+      });
 
   Future<bool> _receiveRemoteFile(String link,
       {required Future<bool> Function(File file, String name) openFile,

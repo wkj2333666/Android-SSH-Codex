@@ -36,8 +36,12 @@ void main() {
     update!(const DownloadProgress(1048576, 2097152));
     await tester.pump();
     expect(find.text('Loading video'), findsOneWidget);
-    expect(tester.widget<LinearProgressIndicator>(
-        find.byType(LinearProgressIndicator)).value, 0.5);
+    expect(
+        tester
+            .widget<LinearProgressIndicator>(
+                find.byType(LinearProgressIndicator))
+            .value,
+        0.5);
     await tester.tap(find.text('Cancel loading'));
     expect(cancellations, 1);
     ready!();
