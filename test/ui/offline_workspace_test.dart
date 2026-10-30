@@ -117,7 +117,7 @@ void main() {
     ))));
     await tester.tap(find.byTooltip('Attach image or file'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('File'));
+    await tester.tap(find.text('File or video'));
     await tester.pumpAndSettle();
     final draft = controller.draftForTask('cached');
     expect(draft.attachments.single.state, AttachmentState.waiting);
@@ -127,6 +127,47 @@ void main() {
     await tester.tap(find.byTooltip('Remove attachment'));
     await tester.pump();
     expect(draft.attachments, isEmpty);
+    await tester.pumpWidget(const SizedBox());
+    controller.dispose();
+  });
+
+  testWidgets('local video composer chips play offline before upload',
+      (tester) async {
+    final controller = AppController.memory(cachedTasks: [cachedTask]);
+    await controller.selectTask('cached');
+    final played = <String>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(Attachments.channel, (MethodCall call) async {
+      if (call.method == 'playVideo') {
+        played.add((call.arguments as Map)['path'] as String);
+        return true;
+      }
+      return {
+        'name': 'clip.mp4',
+        'path': '/nonexistent/picked-video.bin',
+        'size': 1,
+        'isImage': false,
+        'mimeType': 'video/mp4',
+      };
+    });
+    addTearDown(() => TestDefaultBinaryMessengerBinding
+        .instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(Attachments.channel, null));
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: TaskView(
+      controller: controller,
+      task: controller.selectedTask!,
+    ))));
+    await tester.tap(find.byTooltip('Attach image or file'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('File or video'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('clip.mp4'));
+    await tester.pumpAndSettle();
+    expect(played, ['/nonexistent/picked-video.bin']);
+    expect(
+        controller.draftForTask('cached').attachments.single.active, isFalse);
     await tester.pumpWidget(const SizedBox());
     controller.dispose();
   });

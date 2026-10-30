@@ -10,6 +10,30 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test('video metadata survives draft persistence and completed uploads', () {
+    TaskDraft create() => TaskDraft(
+        canUpload: () => false,
+        upload: (file, target, cancel, {onProgress}) async =>
+            throw StateError('Offline'));
+    final draft = create();
+    draft.addAttachment(const LocalAttachment(
+        name: 'clip',
+        path: '/nonexistent/video',
+        size: 1,
+        isImage: false,
+        mimeType: 'video/mp4'));
+    draft.attachments.single
+      ..remote = const RemoteAttachment(
+          path: '/remote/clip', isImage: false, mimeType: 'video/mp4')
+      ..state = AttachmentState.uploaded;
+    final restored = create()..restore(draft.toJson());
+    expect(restored.attachments.single.local.isVideo, isTrue);
+    expect(restored.attachments.single.remote!.isVideo, isTrue);
+    expect(restored.attachments.single.remote!.isImage, isFalse);
+    draft.dispose();
+    restored.dispose();
+  });
+
   test('offline files wait, resume once, and deleted files stay removed',
       () async {
     var connected = false;

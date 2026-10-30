@@ -80,6 +80,7 @@ final class TaskDraft extends ChangeNotifier {
               'path': file.local.path,
               'size': file.local.size,
               'isImage': file.local.isImage,
+              if (file.local.mimeType != null) 'mimeType': file.local.mimeType,
               'token': file.target.token,
               'remotePath': file.remote?.path,
             }
@@ -107,14 +108,17 @@ final class TaskDraft extends ChangeNotifier {
           name: file['name'] as String,
           path: file['path'] as String,
           size: file['size'] as int,
-          isImage: file['isImage'] == true);
+          isImage: file['isImage'] == true,
+          mimeType: file['mimeType'] as String?);
       final transfer = AttachmentTransfer(local,
           target: AttachmentUploadTarget.restore(
               file['token'] as String, local.name));
       final remote = file['remotePath'] as String?;
       if (remote != null) {
-        transfer.remote =
-            RemoteAttachment(path: remote, isImage: local.isImage);
+        transfer.remote = RemoteAttachment(
+            path: remote,
+            isImage: local.isImage,
+            mimeType: local.videoMimeType ?? local.mimeType);
         transfer.state = AttachmentState.uploaded;
         transfer.progress = 1;
       } else {

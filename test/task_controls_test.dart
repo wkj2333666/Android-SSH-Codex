@@ -50,6 +50,26 @@ TaskSnapshot task() => TaskSnapshot(
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test('queued videos retain media metadata but never create image inputs',
+      () async {
+    final transport = Transport();
+    final rpc = JsonRpcClient(transport)..start();
+    final controller =
+        AppController.connectedForTesting(rpc: rpc, cachedTasks: [task()]);
+    await controller.selectTask('task');
+    await controller.disconnect();
+    await controller
+        .sendPrompt('Inspect', mode: TaskSendMode.queue, attachments: const [
+      RemoteAttachment(
+          path: '/remote/clip', isImage: true, mimeType: 'video/mp4'),
+    ]);
+    final pending = controller.queuedMessagesForTask('task').single;
+    expect(pending.imagePaths, isEmpty);
+    expect(pending.text, contains('Video file (video/mp4):\n/remote/clip'));
+    controller.dispose();
+    await rpc.close();
+  });
+
   test('disposing before initialization does not erase saved drafts', () async {
     final store = MemoryProfileStore();
     await store.writeWorkspace({

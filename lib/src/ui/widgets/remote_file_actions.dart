@@ -11,6 +11,7 @@ class RemoteFileActions extends InheritedWidget {
   const RemoteFileActions(
       {required this.download,
       this.downloadWithProgress,
+      this.previewVideo,
       this.cancelDownload,
       required super.child,
       super.key});
@@ -18,6 +19,9 @@ class RemoteFileActions extends InheritedWidget {
   final VoidCallback? cancelDownload;
   final Future<bool> Function(String,
       {void Function(DownloadProgress)? onProgress})? downloadWithProgress;
+  final Future<bool> Function(String,
+      {void Function(DownloadProgress)? onProgress,
+      VoidCallback? onReady})? previewVideo;
 
   static RemoteFileActions? maybeOf(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<RemoteFileActions>();
@@ -26,7 +30,134 @@ class RemoteFileActions extends InheritedWidget {
   bool updateShouldNotify(RemoteFileActions oldWidget) =>
       download != oldWidget.download ||
       downloadWithProgress != oldWidget.downloadWithProgress ||
+      previewVideo != oldWidget.previewVideo ||
       cancelDownload != oldWidget.cancelDownload;
+}
+
+/// Only a tap starts an SSH transfer. Videos are streamed to bounded temporary
+/// disk storage, then opened in the phone's player without a save-location step.
+Future<void> showRemoteVideoPreview(BuildContext context, String path) async {
+  final actions = RemoteFileActions.maybeOf(context);
+  final preview = actions?.previewVideo;
+  if (preview == null) return;
+  final cancel = actions?.cancelDownload;
+  final messenger = ScaffoldMessenger.of(context);
+  final progress = ValueNotifier(const DownloadProgress(0, null));
+  var finished = false;
+  var ready = false;
+  final navigator = Navigator.of(context, rootNavigator: true);
+  late final DialogRoute<void> route;
+  void hideLoading() {
+    ready = true;
+    if (navigator.mounted && route.isActive) navigator.removeRoute(route);
+  }
+
+  route = DialogRoute<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => PopScope(
+      canPop: false,
+      child: AlertDialog(
+        title: const Text('Loading video'),
+        content: ValueListenableBuilder<DownloadProgress>(
+          valueListenable: progress,
+          builder: (context, value, _) {
+            final total = value.total;
+            final fraction = total != null && total > 0
+                ? (value.received / total).clamp(0.0, 1.0)
+                : null;
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                LinearProgressIndicator(
+                    value: value.verifying || value.reconnecting
+                        ? null
+                        : fraction),
+                const SizedBox(height: 12),
+                Text(
+                    '${(value.received / 1048576).toStringAsFixed(2)} MiB received'
+                    '${fraction == null ? "" : " · ${(fraction * 100).toStringAsFixed(0)}%"}'),
+                if (value.reconnecting)
+                  const Text(
+                      'Connection interrupted. Reconnecting and resuming…'),
+                if (value.verifying) const Text('Verifying file integrity…'),
+                if (cancel != null)
+                  TextButton(
+                      onPressed: cancel, child: const Text('Cancel loading')),
+              ],
+            );
+          },
+        ),
+      ),
+    ),
+  );
+  unawaited(navigator.push(route));
+  try {
+    await preview(path, onProgress: (value) {
+      if (!finished && !ready) progress.value = value;
+    }, onReady: hideLoading);
+  } catch (error) {
+    if (!context.mounted) return;
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(SnackBar(
+        content: Text(error is PlatformException
+            ? error.message ?? 'Video playback failed (${error.code}).'
+            : downloadErrorMessage(error))));
+  } finally {
+    finished = true;
+    hideLoading();
+    WidgetsBinding.instance.addPostFrameCallback((_) => progress.dispose());
+  }
+}
+
+class RemoteVideoPreview extends StatelessWidget {
+  const RemoteVideoPreview({required this.path, this.label, super.key});
+  final String path;
+  final String? label;
+
+  @override
+  Widget build(BuildContext context) {
+    final actions = RemoteFileActions.maybeOf(context);
+    final playable = actions?.previewVideo != null;
+    final colors = Theme.of(context).colorScheme;
+    return SizedBox(
+      width: 280,
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        if (playable)
+          Material(
+            color: colors.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(12),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: () => unawaited(showRemoteVideoPreview(context, path)),
+              child: SizedBox(
+                height: 158,
+                child: Center(
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Icons.play_circle_outline,
+                        size: 48, color: colors.primary),
+                    const Text('Play video'),
+                    if (label?.isNotEmpty == true)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Text(label!,
+                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                      ),
+                  ]),
+                ),
+              ),
+            ),
+          ),
+        if (actions != null)
+          TextButton.icon(
+            onPressed: () => unawaited(showRemoteFileDownload(context, path)),
+            icon: const Icon(Icons.download_outlined),
+            label: const Text('Download video'),
+          ),
+      ]),
+    );
+  }
 }
 
 Future<void> showRemoteFileDownload(BuildContext context, String path) async {

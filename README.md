@@ -307,7 +307,7 @@ app-server traffic in public issues.
 ### Send images and files (Android)
 
 In an existing task, tap the paperclip beside the message box and choose **Image**
-or **File**. Images have a preview; tap a chip to enlarge an image, or its remove
+or **File or video**. Images have a preview; tap a chip to enlarge an image, or its remove
 button to discard it. You can send attachments with or without accompanying text.
 Limits: 4 attachments per message and 1 GiB per file. Selection is streamed to
 an app cache file and immediately uploaded over a dedicated SSH/SFTP connection,
@@ -319,6 +319,19 @@ cancel its transfer. Tap a failed attachment to retry from that offset.
 PNG, JPEG, WebP and GIF are accepted as images (up to 64
 megapixels and 16,384 pixels per side); other formats can be sent
 as files. Queued messages and steering preserve image attachments.
+Videos must be selected with **File or video**. They are uploaded as the original remote
+file, labeled as video with its media type, and never sent as native image
+inputs. Video understanding depends on the agent's remote tools and codecs;
+this client does not turn a video into model-native video input or extract
+frames automatically. Tap **Play video** in a reply or sent video attachment to
+open the in-app player with pause and seeking controls. The first tap streams
+the file over a dedicated resumable SSH connection to temporary phone storage
+(up to 1 GiB), with loading progress and cancellation; it does not open a save
+picker. Closing the player releases its temporary copy. A selected local video
+can also be played from its composer chip before sending. Playback uses the
+phone's supported codecs; **Download video** remains available for other players.
+If a document provider returns only an image thumbnail
+instead of the video, selection is rejected; choose the original file instead.
 
 Sent images, native MCP/dynamic-tool image results, and remote Markdown images
 in replies appear as bounded inline thumbnails without a save dialog. Tool

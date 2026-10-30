@@ -4,6 +4,7 @@ import 'package:android_ssh_codex/src/tasks/message_attachments.dart';
 import 'package:android_ssh_codex/src/tasks/task_reducer.dart';
 import 'package:android_ssh_codex/src/ui/timeline_entries.dart';
 import 'package:android_ssh_codex/src/ui/widgets/timeline_item.dart';
+import 'package:android_ssh_codex/src/ui/widgets/remote_file_actions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -18,6 +19,116 @@ Future<void> _settleImage(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets('Markdown video preview plays on tap without a save picker',
+      (tester) async {
+    final played = <String>[];
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: RemoteFileActions(
+      download: (_) async => throw StateError('Must not save for preview'),
+      previewVideo: (path, {onProgress, onReady}) async {
+        played.add(path);
+        onReady?.call();
+        return true;
+      },
+      child: const TimelineItemView(
+          item: TaskItem(
+              id: 'video',
+              kind: TaskItemKind.agent,
+              text: '![实验视频](/remote/experiment.mp4)')),
+    ))));
+    await tester.pumpAndSettle();
+    expect(played, isEmpty);
+    await tester.tap(find.text('Play video'));
+    await tester.pumpAndSettle();
+    expect(played, ['/remote/experiment.mp4']);
+    expect(find.text('Download remote file?'), findsNothing);
+    expect(find.byType(Image), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('video Markdown image syntax does not load a video as an image',
+      (tester) async {
+    var reads = 0;
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: RemoteFileActions(
+      download: (_) async => true,
+      child: TimelineItemView(
+        item: const TaskItem(
+            id: 'video',
+            kind: TaskItemKind.agent,
+            text: '![Clip](/remote/clip.mp4)'),
+        loadImage: (_) async {
+          reads++;
+          return base64Decode(_png);
+        },
+      ),
+    ))));
+    await tester.pumpAndSettle();
+    expect(find.text('Download video'), findsOneWidget);
+    expect(find.byType(Image), findsNothing);
+    expect(reads, 0);
+    await tester.tap(find.text('Download video'));
+    await tester.pumpAndSettle();
+    expect(find.text('Download remote file?'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'typed video cards play even when the remote path has no extension',
+      (tester) async {
+    final played = <String>[];
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: RemoteFileActions(
+      download: (_) async => true,
+      previewVideo: (path, {onProgress, onReady}) async {
+        played.add(path);
+        onReady?.call();
+        return true;
+      },
+      child: const TimelineItemView(
+          item: TaskItem(
+              id: 'video',
+              kind: TaskItemKind.user,
+              text: 'Attached files (on the remote machine):\n'
+                  'Video file (video/mp4):\n/remote/clip')),
+    ))));
+    await tester.pumpAndSettle();
+    expect(find.text('Video attachment'), findsOneWidget);
+    await tester.tap(find.text('Play video'));
+    await tester.pumpAndSettle();
+    expect(played, ['/remote/clip']);
+    expect(find.text('Download remote file?'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('videos have a video card and never request an image preview',
+      (tester) async {
+    var reads = 0;
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: TimelineItemView(
+      item: const TaskItem(
+          id: 'video',
+          kind: TaskItemKind.user,
+          text: 'Attached files (on the remote machine):\n'
+              'Video file (video/mp4):\n/remote/clip',
+          attachments: []),
+      loadImage: (_) async {
+        reads++;
+        return base64Decode(_png);
+      },
+    ))));
+    await tester.pumpAndSettle();
+    expect(find.text('Video attachment'), findsOneWidget);
+    expect(find.byIcon(Icons.videocam_outlined), findsOneWidget);
+    expect(find.byType(Image), findsNothing);
+    expect(reads, 0);
+    expect(tester.takeException(), isNull);
+  });
+
   test('image-only messages are not filtered out of the timeline', () {
     expect(
         buildTimelineEntries(const [

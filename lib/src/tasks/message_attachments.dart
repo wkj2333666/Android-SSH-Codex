@@ -1,11 +1,19 @@
+import '../attachment_media.dart';
+
 /// Presentation metadata only. The original prompt is never rewritten.
 class MessageAttachment {
   const MessageAttachment(
-      {required this.path, this.name, this.isImage = false});
+      {required this.path, this.name, bool isImage = false, this.mimeType})
+      : _isImage = isImage;
 
   final String path;
   final String? name;
-  final bool isImage;
+  final bool _isImage;
+  final String? mimeType;
+  bool get isVideo =>
+      videoAttachmentMimeType(path, mimeType) != null ||
+      videoAttachmentMimeType(name ?? '', null) != null;
+  bool get isImage => _isImage && !isVideo;
 
   String get label {
     if (name != null) return name!;
@@ -65,7 +73,8 @@ List<MessageAttachment> outputImageAttachments(Map<String, dynamic> item) {
       images.add(MessageAttachment(
           path: source,
           name: source.startsWith('/') ? null : 'Image',
-          isImage: true));
+          isImage: true,
+          mimeType: mime is String ? mime : null));
     }
   }
 
@@ -106,9 +115,25 @@ AttachmentMessage parseAttachmentMessage(
     final index = text.lastIndexOf(marker);
     if (index == 0 || (index > 0 && text[index - 1] == '\n')) {
       final paths = text.substring(index + marker.length).trim().split('\n');
-      if (paths.isNotEmpty &&
-          paths.every((path) => path.startsWith('/') && path.trim() == path)) {
-        attachments.addAll(paths.map(_attachment));
+      final parsed = <MessageAttachment>[];
+      var valid = paths.isNotEmpty;
+      for (var i = 0; i < paths.length; i++) {
+        var path = paths[i];
+        String? mimeType;
+        final video =
+            RegExp(r'^Video file \((video/[a-z0-9.+-]+)\):$').firstMatch(path);
+        if (video != null && i + 1 < paths.length) {
+          mimeType = video.group(1);
+          path = paths[++i];
+        }
+        if (!path.startsWith('/') || path.trim() != path) {
+          valid = false;
+          break;
+        }
+        parsed.add(_attachment(path, mimeType: mimeType));
+      }
+      if (valid) {
+        attachments.addAll(parsed);
         body = text.substring(0, index).trimRight();
       }
     }
@@ -117,20 +142,24 @@ AttachmentMessage parseAttachmentMessage(
     final index = attachments.indexWhere((a) => a.path == attachment.path);
     if (index < 0) {
       attachments.add(attachment);
-    } else if (attachment.isImage) {
+    } else if (attachment.isVideo ||
+        (attachment.isImage && !attachments[index].isVideo)) {
       attachments[index] = MessageAttachment(
         path: attachment.path,
         name: attachments[index].name,
-        isImage: true,
+        isImage: attachment.isImage,
+        mimeType: attachment.mimeType ?? attachments[index].mimeType,
       );
     }
   }
   return AttachmentMessage(body, attachments);
 }
 
-MessageAttachment _attachment(String path, {String? name}) => MessageAttachment(
+MessageAttachment _attachment(String path, {String? name, String? mimeType}) =>
+    MessageAttachment(
       path: path,
       name: name,
+      mimeType: mimeType,
       isImage: RegExp(r'\.(png|jpe?g|webp|gif)$', caseSensitive: false)
           .hasMatch(path),
     );

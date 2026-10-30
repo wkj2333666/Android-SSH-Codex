@@ -350,6 +350,8 @@ class _AttachmentCard extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (attachment.isVideo && attachment.path.startsWith('/'))
+            RemoteVideoPreview(path: attachment.path, label: attachment.label),
           if (attachment.isImage &&
               ((attachment.path.startsWith('/') && loadImage != null) ||
                   attachment.path.startsWith('data:image/')))
@@ -363,14 +365,19 @@ class _AttachmentCard extends StatelessWidget {
             visualDensity: VisualDensity.compact,
             leading: Icon(attachment.isImage
                 ? Icons.image_outlined
-                : Icons.insert_drive_file_outlined),
+                : attachment.isVideo
+                    ? Icons.videocam_outlined
+                    : Icons.insert_drive_file_outlined),
             title: Text(
               attachment.label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
-            subtitle: Text(
-                attachment.isImage ? 'Image attachment' : 'File attachment'),
+            subtitle: Text(attachment.isImage
+                ? 'Image attachment'
+                : attachment.isVideo
+                    ? 'Video attachment'
+                    : 'File attachment'),
             trailing: const Icon(Icons.info_outline, size: 18),
             onTap: () => showDialog<void>(
               context: context,

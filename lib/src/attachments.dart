@@ -3,24 +3,38 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import 'attachment_media.dart';
+
 class LocalAttachment {
   const LocalAttachment(
       {required this.name,
       required this.path,
       required this.size,
-      required this.isImage});
+      required bool isImage,
+      this.mimeType})
+      : _isImage = isImage;
 
   final String name;
   final String path;
   final int size;
-  final bool isImage;
+  final bool _isImage;
+  final String? mimeType;
+  bool get isVideo => videoMimeType != null;
+  String? get videoMimeType => videoAttachmentMimeType(name, mimeType);
+  bool get isImage => _isImage && !isVideo;
 }
 
 class RemoteAttachment {
-  const RemoteAttachment({required this.path, required this.isImage});
+  const RemoteAttachment(
+      {required this.path, required bool isImage, this.mimeType})
+      : _isImage = isImage;
 
   final String path;
-  final bool isImage;
+  final bool _isImage;
+  final String? mimeType;
+  String? get videoMimeType => videoAttachmentMimeType(path, mimeType);
+  bool get isVideo => videoMimeType != null;
+  bool get isImage => _isImage && !isVideo;
 }
 
 abstract final class Attachments {
@@ -44,6 +58,7 @@ abstract final class Attachments {
       path: result['path'] as String,
       size: result['size'] as int,
       isImage: result['isImage'] == true,
+      mimeType: result['mimeType'] as String?,
     );
     validate([attachment]);
     return attachment;
@@ -79,5 +94,8 @@ abstract final class Attachments {
 String attachmentPrompt(String text, List<RemoteAttachment> attachments) => [
       if (text.trim().isNotEmpty) text.trim(),
       if (attachments.isNotEmpty) 'Attached files (on the remote machine):',
-      for (final attachment in attachments) attachment.path,
+      for (final attachment in attachments) ...[
+        if (attachment.isVideo) 'Video file (${attachment.videoMimeType}):',
+        attachment.path,
+      ],
     ].join('\n');

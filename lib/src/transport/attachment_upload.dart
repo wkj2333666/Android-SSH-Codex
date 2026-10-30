@@ -55,9 +55,14 @@ String attachmentUploadCommand(String token, String name) {
     throw ArgumentError('Invalid attachment token');
   }
   final safeName = name.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+  final dot = safeName.lastIndexOf('.');
+  final extension =
+      dot > 0 && safeName.length - dot <= 12 ? safeName.substring(dot) : '';
   final fileName = safeName.isEmpty
       ? 'attachment'
-      : safeName.substring(0, min(100, safeName.length));
+      : safeName.length <= 100
+          ? safeName
+          : '${safeName.substring(0, 100 - extension.length)}$extension';
   const relative = '.local/share/android-ssh-codex/attachments';
   final script = 'umask 077; '
       'base="\$HOME/$relative"; dir="\$base/$token"; '
@@ -277,7 +282,10 @@ Future<RemoteAttachment> uploadAttachmentResumable({
         throw SSHStateError('Attachment upload was incomplete');
       }
       onProgress?.call(acknowledged, attachment.size);
-      return RemoteAttachment(path: session.path, isImage: attachment.isImage);
+      return RemoteAttachment(
+          path: session.path,
+          isImage: attachment.isImage,
+          mimeType: attachment.videoMimeType ?? attachment.mimeType);
     } catch (error) {
       openingExpired = true;
       if (error is AttachmentUploadCancelled || cancellation.isCancelled) {

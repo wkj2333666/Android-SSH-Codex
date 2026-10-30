@@ -1776,7 +1776,35 @@ final class AppController extends ChangeNotifier {
   }
 
   Future<bool> downloadFile(String link,
-      {void Function(downloads.DownloadProgress)? onProgress}) async {
+          {void Function(downloads.DownloadProgress)? onProgress}) =>
+      _receiveRemoteFile(link, onProgress: onProgress,
+          openFile: (file, name) async {
+        final size = await file.length();
+        onProgress?.call(downloads.DownloadProgress(size, size, saving: true));
+        return await Attachments.channel.invokeMethod<bool>('saveDownload', {
+              'path': file.path,
+              'name': name,
+            }) ??
+            false;
+      });
+
+  Future<bool> previewVideo(String link,
+          {void Function(downloads.DownloadProgress)? onProgress,
+          VoidCallback? onReady}) =>
+      _receiveRemoteFile(link, onProgress: onProgress, purpose: 'video-preview',
+          openFile: (file, name) async {
+        onReady?.call();
+        return await Attachments.channel.invokeMethod<bool>('playVideo', {
+              'path': file.path,
+              'name': name,
+            }) ??
+            false;
+      });
+
+  Future<bool> _receiveRemoteFile(String link,
+      {required Future<bool> Function(File file, String name) openFile,
+      String purpose = 'download',
+      void Function(downloads.DownloadProgress)? onProgress}) async {
     if (_downloadingFile) throw StateError('A download is already active');
     if (!Attachments.supported) throw UnsupportedError('Android download only');
     final ssh = _ssh;
@@ -1804,7 +1832,7 @@ final class AppController extends ChangeNotifier {
         connect: () async {
           cancellation.check();
           final connection = await _connector.connect(profile, secret,
-              prompt: (_) async => false, diagnosticRole: 'download');
+              prompt: (_) async => false, diagnosticRole: purpose);
           if (cancellation.isCancelled) {
             await connection.close(reason: 'download_cancelled');
             throw DownloadCancelled();
@@ -1814,23 +1842,20 @@ final class AppController extends ChangeNotifier {
         onProgress: onProgress,
         onRetry: (retry, received, error) =>
             Diagnostics.record('download.retry', {
+          'purpose': purpose,
           'retry': retry,
           'receivedBytes': received,
           ...Diagnostics.errorFields(error),
         }),
       );
       cancellation.check();
-      stage = 'phone_save';
-      onProgress?.call(downloads.DownloadProgress(
-          await file.length(), await file.length(),
-          saving: true));
-      return await Attachments.channel.invokeMethod<bool>('saveDownload', {
-            'path': file.path,
-            'name': path.split('/').last,
-          }) ??
-          false;
+      stage = purpose == 'video-preview' ? 'phone_preview' : 'phone_save';
+      // The player owns the file until it closes. Do not delete the temporary
+      // payload while the native decoder might still seek within it.
+      return await openFile(file, path.split('/').last);
     } catch (error) {
       Diagnostics.record('download.failed', {
+        'purpose': purpose,
         'stage': stage,
         if (error is downloads.FileDownloadException) ...{
           'transferStage': error.stage,

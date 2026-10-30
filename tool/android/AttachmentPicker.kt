@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Intent
 import android.graphics.BitmapFactory
 import android.provider.OpenableColumns
+import android.webkit.MimeTypeMap
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
 import java.util.concurrent.Executors
@@ -51,6 +52,18 @@ class AttachmentPicker(private val activity: Activity) {
                 resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
                     if (it.moveToFirst()) name = it.getString(0) ?: name
                 }
+                // Keep provider metadata: the private cached copy ends in .bin.
+                // A video must not enter the native image-input path, including
+                // providers that expose a JPEG thumbnail for the document.
+                val extension = name.substringAfterLast('.', "").lowercase()
+                if (name.length > 200 && extension.isNotEmpty() && extension.length <= 11) {
+                    name = name.take(199 - extension.length) + "." + extension
+                }
+                val extensionMime = if (extension == "ts" || extension == "mts") null else
+                    MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
+                val declaredMime = resolver.getType(uri)?.substringBefore(';')?.trim()?.lowercase()
+                val videoMime = listOf(declaredMime, extensionMime)
+                    .firstOrNull { it?.startsWith("video/") == true }
                 val directory = File(activity.filesDir, "codex-attachments")
                 require(directory.isDirectory || directory.mkdirs()) { "Cannot create attachment cache" }
                 val outputFile = File.createTempFile("picked-", ".bin", directory)
@@ -74,11 +87,19 @@ class AttachmentPicker(private val activity: Activity) {
                     headerSize >= offset + expected.size && expected.indices.all {
                         (header[offset + it].toInt() and 255) == expected[it]
                     }
-                val image = bytesAt(0, 255, 216, 255) ||
-                    bytesAt(0, 137, 80, 78, 71, 13, 10, 26, 10) ||
-                    (bytesAt(0, 82, 73, 70, 70) && bytesAt(8, 87, 69, 66, 80)) ||
+                val imageMime = when {
+                    bytesAt(0, 255, 216, 255) -> "image/jpeg"
+                    bytesAt(0, 137, 80, 78, 71, 13, 10, 26, 10) -> "image/png"
+                    bytesAt(0, 82, 73, 70, 70) && bytesAt(8, 87, 69, 66, 80) -> "image/webp"
                     bytesAt(0, 71, 73, 70, 56, 55, 97) ||
-                    bytesAt(0, 71, 73, 70, 56, 57, 97)
+                        bytesAt(0, 71, 73, 70, 56, 57, 97) -> "image/gif"
+                    else -> null
+                }
+                // Do not silently upload a provider's preview as the video.
+                require(videoMime == null || imageMime == null) {
+                    "The file provider returned an image instead of the video. Choose the original using File or video."
+                }
+                val image = imageMime != null
                 require(!requireImage || image) { "Choose a PNG, JPEG, WebP or GIF image" }
                 if (image) {
                     val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -98,7 +119,8 @@ class AttachmentPicker(private val activity: Activity) {
                         "name" to name.take(200),
                         "path" to outputFile.absolutePath,
                         "size" to size,
-                        "isImage" to image))
+                        "isImage" to image,
+                        "mimeType" to (videoMime ?: imageMime ?: declaredMime ?: extensionMime)))
                 }
             } catch (error: Exception) {
                 target?.delete()
