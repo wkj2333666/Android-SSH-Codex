@@ -24,6 +24,29 @@ final class _RecordingTransport implements RpcTransport {
 }
 
 void main() {
+  for (final wireType in ['image', 'input_image']) {
+    test('MCP text envelopes retain $wireType without leaking Base64', () {
+      const data = 'aW1hZ2U=';
+      final snapshot = CodexRemoteApi.parseThread({
+        'id': 'thread',
+        'turns': [
+          {'items': [
+            {'id': 'picture', 'type': 'mcpToolCall', 'result': {'content': [
+              {'type': 'text', 'text': jsonEncode({'content': [
+                if (wireType == 'image')
+                  {'type': wireType, 'mimeType': 'image/png', 'data': data}
+                else
+                  {'type': wireType, 'image_url': 'data:image/png;base64,$data'},
+              ], 'structuredContent': {'width': 10}})},
+            ]}},
+          ]},
+        ],
+      });
+      expect(snapshot.items.single.attachments.single.path, 'data:image/png;base64,$data');
+      expect(snapshot.items.single.detail, isNot(contains(data)));
+    });
+  }
+
   for (final type in ['mcpToolCall', 'dynamicToolCall', 'agentMessage']) {
     test('$type retains native output images without base64 in tool details',
         () {

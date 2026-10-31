@@ -19,6 +19,44 @@ Future<void> _settleImage(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets('video cards show a bounded poster without downloading video', (tester) async {
+    var posters = 0;
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: RemoteFileActions(
+      download: (_) async => throw StateError('No automatic download'),
+      previewVideo: (_, {onProgress, onReady}) async => true,
+      loadVideoPoster: (path) async {
+        posters++;
+        expect(path, '/remote/clip.mp4');
+        return base64Decode(_png);
+      },
+      child: const TimelineItemView(item: TaskItem(id: 'video', kind: TaskItemKind.agent, text: '![Clip](/remote/clip.mp4)')),
+    ))));
+    await _settleImage(tester);
+    expect(posters, 1);
+    expect(find.byType(Image), findsOneWidget);
+    expect(find.text('Play video'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('truncated MCP image recovers from history or explains failure', (tester) async {
+    var recoveries = 0;
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: RemoteFileActions(
+      download: (_) async => false,
+      recoverImage: (source) async {
+        recoveries++;
+        expect(source, contains('chars truncated'));
+        return base64Decode(_png);
+      },
+      child: const TimelineItemView(item: TaskItem(id: 'image', kind: TaskItemKind.tool, text: 'view image', attachments: [
+        MessageAttachment(path: 'data:image/png;base64,AAAA…100 chars truncated…AAAA', isImage: true),
+      ])),
+    ))));
+    await _settleImage(tester);
+    expect(recoveries, 1);
+    expect(find.byType(Image), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Markdown video preview plays on tap without a save picker',
       (tester) async {
     final played = <String>[];
