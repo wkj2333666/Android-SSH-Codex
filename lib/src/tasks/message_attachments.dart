@@ -49,7 +49,7 @@ Map<String, dynamic>? imageEnvelope(String text) {
 }
 
 bool imageDataTruncated(String source) =>
-    RegExp(r'…\d+ chars truncated…').hasMatch(source);
+    source.startsWith('data:image/') && RegExp(r'…\d+ chars truncated…').hasMatch(source);
 
 /// Read image blocks only from protocol content, never from tool arguments or
 /// arbitrary text. MCP embedded bytes and dynamic-tool image URLs share the

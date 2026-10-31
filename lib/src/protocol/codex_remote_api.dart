@@ -818,7 +818,7 @@ Object? _imageSafeDetail(Object? value) {
       return {
         'type': value['type'],
         'mimeType': value['mimeType'],
-        'preview': 'Image displayed separately'
+        'preview': 'Image preview handled separately'
       };
     }
     if (value['type'] == 'text' && value['text'] is String) {

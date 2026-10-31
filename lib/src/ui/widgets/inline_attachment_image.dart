@@ -58,11 +58,6 @@ class InlineAttachmentImage extends StatefulWidget {
 class InlineAttachmentImageState extends State<InlineAttachmentImage> {
   late Future<Uint8List?> _preview;
 
-  @override
-  void initState() {
-    super.initState();
-  }
-
   Future<Uint8List> Function(String)? _recovery;
   bool _started = false;
 

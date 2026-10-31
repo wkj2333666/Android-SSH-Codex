@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:dartssh2/dartssh2.dart';
+import 'package:crypto/crypto.dart';
 
 String _quote(String value) => "'${value.replaceAll("'", "'\\''")}'";
 String _program(String value) =>
@@ -46,6 +47,9 @@ String imageRecoveryCommand(String rollout, String threadId, String source) {
   if (length > 14 * 1024 * 1024) throw StateError('Image exceeds the preview limit.');
   final reference = jsonEncode({
     'mime': match[1], 'length': length,
+    'beforeLength': before.length, 'afterLength': after.length,
+    'beforeHash': sha256.convert(utf8.encode(before)).toString(),
+    'afterHash': sha256.convert(utf8.encode(after)).toString(),
     'prefix': before.substring(0, before.length < 4096 ? before.length : 4096),
     'suffix': after.substring(after.length > 4096 ? after.length - 4096 : 0),
   });
@@ -58,7 +62,7 @@ String imageRecoveryCommand(String rollout, String threadId, String source) {
 }
 
 const imageRecoveryScript = r'''
-import base64,json,os,stat,sys
+import base64,hashlib,json,os,stat,sys
 path,thread,raw=sys.argv[1:]
 ref=json.loads(raw);limit=10*1024*1024;found=None;verified=False;total=0
 def images(value,depth=0):
@@ -100,6 +104,7 @@ with open(path,'rb') as stream:
             if not source.startswith(prefix):continue
             data=source[len(prefix):]
             if len(data)!=ref['length'] or not data.startswith(ref['prefix']) or not data.endswith(ref['suffix']):continue
+            if hashlib.sha256(data[:ref['beforeLength']].encode()).hexdigest()!=ref['beforeHash'] or hashlib.sha256(data[-ref['afterLength']:].encode()).hexdigest()!=ref['afterHash']:continue
             try:decoded=base64.b64decode(data,validate=True)
             except ValueError:continue
             if len(decoded)>limit:sys.exit(65)

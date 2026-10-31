@@ -19,6 +19,18 @@ Future<void> _settleImage(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets('missing original image displays an explicit history warning', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: Scaffold(body: TimelineItemView(
+      item: TaskItem(id: 'bad', kind: TaskItemKind.tool, text: 'view image', attachments: [
+        MessageAttachment(path: 'data:image/png;base64,AAAA…100 chars truncated…AAAA', isImage: true),
+      ]),
+    ))));
+    await tester.pumpAndSettle();
+    expect(find.text('Historical image is incomplete and could not be restored.'), findsOneWidget);
+    expect(find.text('Image unavailable · Retry'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('video cards show a bounded poster without downloading video', (tester) async {
     var posters = 0;
     await tester.pumpWidget(MaterialApp(home: Scaffold(body: RemoteFileActions(
