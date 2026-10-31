@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
@@ -403,20 +402,8 @@ class _AttachmentCard extends StatelessWidget {
                           attachment.path.startsWith('data:image/')))
                     TextButton(
                       onPressed: () {
-                        final loading = attachment.path.startsWith('data:')
-                            ? Future<Uint8List>.sync(() {
-                                final match = RegExp(
-                                        r'^data:image/(?:png|jpeg|webp|gif);base64,')
-                                    .firstMatch(attachment.path);
-                                if (match == null ||
-                                    attachment.path.length > 14 * 1024 * 1024) {
-                                  throw const FormatException(
-                                      'Unsupported or oversized image');
-                                }
-                                return base64Decode(
-                                    attachment.path.substring(match.end));
-                              })
-                            : loadImage!(attachment.path);
+                        final loading = readMessageImage(attachment, loadImage,
+                            RemoteFileActions.maybeOf(thisContext)?.recoverImage);
                         final preview = loadPreviewImage(loading);
                         unawaited(showDialog<void>(
                           context: context,

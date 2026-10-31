@@ -28,6 +28,8 @@ import 'tasks/task_refresh_lock.dart';
 import 'transport/codex_daemon.dart';
 import 'transport/connection_setup.dart';
 import 'transport/attachment_upload.dart';
+import 'transport/media_preview.dart';
+import 'transport/media_preview_cache.dart';
 import 'transport/file_download.dart' as downloads;
 import 'transport/resumable_download.dart';
 import 'transport/ssh_connector.dart';
@@ -1716,6 +1718,47 @@ final class AppController extends ChangeNotifier {
       throw StateError('Connection changed');
     }
     return bytes;
+  }
+
+  final _mediaPreviews = MediaPreviewCache();
+  String? _rolloutKey;
+  Future<String>? _rolloutPath;
+
+  Future<Uint8List> loadVideoPoster(String path) {
+    final ssh = _ssh;
+    if (ssh == null) return Future.error(StateError('Reconnect to load the video cover.'));
+    final resolved = downloads.remoteFilePath(path, selectedTask?.cwd ?? '/');
+    if (resolved == null) return Future.error(ArgumentError('Invalid video path'));
+    return _mediaPreviews.load('$_selectedHostId:$_epoch:poster:$resolved', () async {
+      if (!identical(ssh, _ssh)) throw StateError('Connection changed');
+      return readMediaPreview(ssh.client, videoPosterCommand(resolved), maxBytes: 512 * 1024);
+    });
+  }
+
+  Future<Uint8List> recoverImage(String source) {
+    final ssh = _ssh;
+    final api = _api;
+    final threadId = _selectedTaskId;
+    if (ssh == null || api == null || threadId == null) {
+      return Future.error(StateError('Reconnect to restore the incomplete historical image.'));
+    }
+    final key = '$_selectedHostId:$_epoch:$threadId';
+    return _mediaPreviews.load('$key:image:$source', () async {
+      if (!identical(ssh, _ssh) || !identical(api, _api)) throw StateError('Connection changed');
+      if (_rolloutKey != key) {
+        _rolloutKey = key;
+        _rolloutPath = api.readThreadRolloutPath(threadId);
+      }
+      String path;
+      try {
+        path = await _rolloutPath!;
+      } catch (_) {
+        if (_rolloutKey == key) _rolloutKey = null;
+        rethrow;
+      }
+      if (!identical(ssh, _ssh)) throw StateError('Connection changed');
+      return readMediaPreview(ssh.client, imageRecoveryCommand(path, threadId, source), maxBytes: Attachments.maxImagePreviewBytes);
+    });
   }
 
   Future<RemoteAttachment> uploadAttachmentNow(

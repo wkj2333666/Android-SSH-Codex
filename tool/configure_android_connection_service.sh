@@ -21,6 +21,7 @@ cp "$template_root/MainActivity.kt" "$template_root/ConnectionService.kt" "$temp
 cp "$template_root/AttachmentPicker.kt" "$kotlin_dir/"
 cp "$template_root/AttachmentDownloads.kt" "$kotlin_dir/"
 cp "$template_root/VideoPreviewActivity.kt" "$kotlin_dir/"
+cp "$template_root/VideoThumbnails.kt" "$kotlin_dir/"
 cp "$template_root/ConnectionDiagnostics.kt" "$kotlin_dir/"
 cp "$template_root/ConnectionRuntime.kt" "$kotlin_dir/"
 cp "$template_root/ic_connection.xml" "$android_root/app/src/main/res/drawable/"

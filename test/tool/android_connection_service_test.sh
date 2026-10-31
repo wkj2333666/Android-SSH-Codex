@@ -23,6 +23,7 @@ cmp "$repo_root/tool/android/DiagnosticLog.kt" "$fixture/app/src/main/kotlin/io/
 cmp "$repo_root/tool/android/AttachmentPicker.kt" "$fixture/app/src/main/kotlin/io/github/wkj2333666/android_ssh_codex/AttachmentPicker.kt"
 cmp "$repo_root/tool/android/AttachmentDownloads.kt" "$fixture/app/src/main/kotlin/io/github/wkj2333666/android_ssh_codex/AttachmentDownloads.kt"
 cmp "$repo_root/tool/android/VideoPreviewActivity.kt" "$fixture/app/src/main/kotlin/io/github/wkj2333666/android_ssh_codex/VideoPreviewActivity.kt"
+cmp "$repo_root/tool/android/VideoThumbnails.kt" "$fixture/app/src/main/kotlin/io/github/wkj2333666/android_ssh_codex/VideoThumbnails.kt"
 grep -Fq 'android:name=".VideoPreviewActivity"' "$fixture/first.xml"
 grep -Fq '"playVideo"' "$repo_root/tool/android/MainActivity.kt"
 cmp "$repo_root/tool/android/ConnectionDiagnostics.kt" "$fixture/app/src/main/kotlin/io/github/wkj2333666/android_ssh_codex/ConnectionDiagnostics.kt"

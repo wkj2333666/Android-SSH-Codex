@@ -1,10 +1,29 @@
 import 'dart:convert';
-import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../tasks/message_attachments.dart';
+import 'remote_file_actions.dart';
+import 'image_preview_data.dart';
+export 'image_preview_data.dart' show loadPreviewImage;
+
+Future<Uint8List> readMessageImage(MessageAttachment attachment,
+    Future<Uint8List> Function(String)? loadImage,
+    Future<Uint8List> Function(String)? recoverImage) async {
+  final path = attachment.path;
+  if (imageDataTruncated(path)) {
+    if (recoverImage == null) throw StateError('Incomplete image history');
+    return recoverImage(path);
+  }
+  if (!path.startsWith('data:')) {
+    if (loadImage == null) throw StateError('Reconnect to load this image');
+    return loadImage(path);
+  }
+  final match = RegExp(r'^data:image/(?:png|jpeg|webp|gif);base64,').firstMatch(path);
+  if (match == null || path.length > 14 * 1024 * 1024) throw const FormatException('Unsupported or oversized image');
+  return base64Decode(path.substring(match.end));
+}
 
 class ImagePreviewScope extends InheritedWidget {
   const ImagePreviewScope(
@@ -42,7 +61,20 @@ class InlineAttachmentImageState extends State<InlineAttachmentImage> {
   @override
   void initState() {
     super.initState();
-    _preview = _load();
+  }
+
+  Future<Uint8List> Function(String)? _recovery;
+  bool _started = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final recovery = RemoteFileActions.maybeOf(context)?.recoverImage;
+    if (!_started || recovery != _recovery) {
+      _started = true;
+      _recovery = recovery;
+      _preview = _load();
+    }
   }
 
   @override
@@ -51,16 +83,8 @@ class InlineAttachmentImageState extends State<InlineAttachmentImage> {
     if (oldWidget.attachment.path != widget.attachment.path) _preview = _load();
   }
 
-  Future<Uint8List?> _load() => loadPreviewImage(Future.sync(() {
-        final path = widget.attachment.path;
-        if (!path.startsWith('data:')) return widget.loadImage!(path);
-        final match = RegExp(r'^data:image/(?:png|jpeg|webp|gif);base64,')
-            .firstMatch(path);
-        if (match == null || path.length > 14 * 1024 * 1024) {
-          throw const FormatException('Unsupported or oversized image');
-        }
-        return base64Decode(path.substring(match.end));
-      }));
+  Future<Uint8List?> _load() => loadPreviewImage(
+      readMessageImage(widget.attachment, widget.loadImage, _recovery));
 
   @override
   Widget build(BuildContext context) => SizedBox(
@@ -74,13 +98,17 @@ class InlineAttachmentImageState extends State<InlineAttachmentImage> {
             }
             final bytes = snapshot.data;
             if (bytes == null) {
-              return TextButton.icon(
+              return Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                if (imageDataTruncated(widget.attachment.path))
+                  const Text('Historical image is incomplete and could not be restored.', textAlign: TextAlign.center),
+                TextButton.icon(
                 onPressed: () => setState(() {
                   _preview = _load();
                 }),
                 icon: const Icon(Icons.refresh),
                 label: const Text('Image unavailable · Retry'),
-              );
+              ),
+              ]);
             }
             return InkWell(
               onTap: () => showDialog<void>(
@@ -116,32 +144,4 @@ class InlineAttachmentImageState extends State<InlineAttachmentImage> {
           },
         ),
       );
-}
-
-Future<Uint8List?> loadPreviewImage(Future<Uint8List> loading) async {
-  try {
-    return await _validatePreviewImage(await loading);
-  } catch (_) {
-    return null;
-  }
-}
-
-Future<Uint8List> _validatePreviewImage(Uint8List bytes) async {
-  if (bytes.length > 10 * 1024 * 1024) throw StateError('Image too large');
-  final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
-  try {
-    final descriptor = await ui.ImageDescriptor.encoded(buffer);
-    try {
-      if (descriptor.width > 16384 ||
-          descriptor.height > 16384 ||
-          descriptor.width * descriptor.height > 64 * 1024 * 1024) {
-        throw StateError('Image dimensions too large');
-      }
-    } finally {
-      descriptor.dispose();
-    }
-  } finally {
-    buffer.dispose();
-  }
-  return bytes;
 }
