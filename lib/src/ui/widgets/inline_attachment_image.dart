@@ -23,8 +23,9 @@ Future<Uint8List> readMessageImage(
   }
   final match =
       RegExp(r'^data:image/(?:png|jpeg|webp|gif);base64,').firstMatch(path);
-  if (match == null || path.length > 14 * 1024 * 1024)
+  if (match == null || path.length > 14 * 1024 * 1024) {
     throw const FormatException('Unsupported or oversized image');
+  }
   return base64Decode(path.substring(match.end));
 }
 

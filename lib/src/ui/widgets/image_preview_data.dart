@@ -14,8 +14,9 @@ Future<Uint8List?> loadPreviewImage(Future<Uint8List> loading,
       try {
         if (descriptor.width > maxDimension ||
             descriptor.height > maxDimension ||
-            descriptor.width * descriptor.height > maxPixels)
+            descriptor.width * descriptor.height > maxPixels) {
           throw StateError('Image dimensions too large');
+        }
       } finally {
         descriptor.dispose();
       }

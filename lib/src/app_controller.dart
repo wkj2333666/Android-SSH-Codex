@@ -1726,11 +1726,13 @@ final class AppController extends ChangeNotifier {
 
   Future<Uint8List> loadVideoPoster(String path) {
     final ssh = _ssh;
-    if (ssh == null)
+    if (ssh == null) {
       return Future.error(StateError('Reconnect to load the video cover.'));
+    }
     final resolved = downloads.remoteFilePath(path, selectedTask?.cwd ?? '/');
-    if (resolved == null)
+    if (resolved == null) {
       return Future.error(ArgumentError('Invalid video path'));
+    }
     return _mediaPreviews.load('$_selectedHostId:$_epoch:poster:$resolved',
         () async {
       if (!identical(ssh, _ssh)) throw StateError('Connection changed');
@@ -1749,8 +1751,9 @@ final class AppController extends ChangeNotifier {
     }
     final key = '$_selectedHostId:$_epoch:$threadId';
     return _mediaPreviews.load('$key:image:$source', () async {
-      if (!identical(ssh, _ssh) || !identical(api, _api))
+      if (!identical(ssh, _ssh) || !identical(api, _api)) {
         throw StateError('Connection changed');
+      }
       if (_rolloutKey != key) {
         _rolloutKey = key;
         _rolloutPath = api.readThreadRolloutPath(threadId);

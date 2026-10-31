@@ -37,8 +37,9 @@ class AttachmentMessage {
 
 /// Only unwrap complete MCP content envelopes, not arbitrary prose/examples.
 Map<String, dynamic>? imageEnvelope(String text) {
-  if (text.length > 14 * 1024 * 1024 || !text.trimLeft().startsWith('{'))
+  if (text.length > 14 * 1024 * 1024 || !text.trimLeft().startsWith('{')) {
     return null;
+  }
   try {
     final value = jsonDecode(text);
     if (value is! Map<String, dynamic> ||
@@ -50,7 +51,9 @@ Map<String, dynamic>? imageEnvelope(String text) {
               'isError',
               'is_error',
               '_meta'
-            ].contains(key))) return null;
+            ].contains(key))) {
+      return null;
+    }
     return value;
   } on FormatException {
     return null;

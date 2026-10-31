@@ -831,8 +831,9 @@ Object? _imageSafeDetail(Object? value) {
     }
     if (value['type'] == 'text' && value['text'] is String) {
       final envelope = imageEnvelope(value['text'] as String);
-      if (envelope != null)
+      if (envelope != null) {
         return {'type': 'text', 'text': jsonEncode(_imageSafeDetail(envelope))};
+      }
     }
     return value
         .map((key, entry) => MapEntry(key.toString(), _imageSafeDetail(entry)));

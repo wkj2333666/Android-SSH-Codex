@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -214,8 +213,9 @@ class _VideoPosterState extends State<_VideoPoster> {
   Widget build(BuildContext context) => FutureBuilder<Uint8List?>(
       future: _future,
       builder: (context, snapshot) {
-        if (snapshot.data case final bytes?)
+        if (snapshot.data case final bytes?) {
           return Image.memory(bytes, fit: BoxFit.cover, cacheWidth: 560);
+        }
         return Align(
             alignment: Alignment.topRight,
             child: snapshot.connectionState != ConnectionState.done &&

@@ -141,8 +141,9 @@ Future<Uint8List> readMediaPreview(SSHClient client, String command,
       await channel.stdin.close();
       final bytes = BytesBuilder(copy: false);
       await for (final chunk in channel.stdout) {
-        if (bytes.length + chunk.length > maxBytes)
+        if (bytes.length + chunk.length > maxBytes) {
           throw StateError('Preview exceeds the size limit.');
+        }
         bytes.add(chunk);
       }
       await channel.done;

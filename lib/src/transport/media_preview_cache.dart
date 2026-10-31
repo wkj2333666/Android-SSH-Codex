@@ -5,7 +5,7 @@ import 'dart:typed_data';
 /// Bound background work as well as retained bytes. A scrolling transcript
 /// must not start an unbounded number of decoders or history scans.
 class MediaPreviewCache {
-  final _entries = LinkedHashMap<String, _PreviewEntry>();
+  final _entries = <String, _PreviewEntry>{};
   final _queue = Queue<_PreviewEntry>();
   var _active = 0;
   var _bytes = 0;
@@ -20,8 +20,9 @@ class MediaPreviewCache {
       }
       _bytes -= previous.size;
     }
-    if (_queue.length >= 8)
+    if (_queue.length >= 8) {
       return Future.error(StateError('Preview queue is busy. Tap Retry.'));
+    }
     final entry = _PreviewEntry(fetch);
     _entries[key] = entry;
     _queue.add(entry);
