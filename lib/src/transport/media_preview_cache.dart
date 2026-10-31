@@ -13,13 +13,15 @@ class MediaPreviewCache {
   Future<Uint8List> load(String key, Future<Uint8List> Function() fetch) {
     final previous = _entries.remove(key);
     if (previous != null) {
-      if (!previous.done || DateTime.now().difference(previous.created).inSeconds < 120) {
+      if (!previous.done ||
+          DateTime.now().difference(previous.created).inSeconds < 120) {
         _entries[key] = previous;
         return previous.result.future;
       }
       _bytes -= previous.size;
     }
-    if (_queue.length >= 8) return Future.error(StateError('Preview queue is busy. Tap Retry.'));
+    if (_queue.length >= 8)
+      return Future.error(StateError('Preview queue is busy. Tap Retry.'));
     final entry = _PreviewEntry(fetch);
     _entries[key] = entry;
     _queue.add(entry);
@@ -42,7 +44,10 @@ class MediaPreviewCache {
         _active--;
         for (final key in _entries.keys.toList()) {
           final candidate = _entries[key]!;
-          if (candidate.done && (_entries.length > 12 || _bytes > 16 * 1024 * 1024 || candidate.size == 0)) {
+          if (candidate.done &&
+              (_entries.length > 12 ||
+                  _bytes > 16 * 1024 * 1024 ||
+                  candidate.size == 0)) {
             _bytes -= candidate.size;
             _entries.remove(key);
           }

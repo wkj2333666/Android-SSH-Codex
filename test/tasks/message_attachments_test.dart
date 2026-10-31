@@ -5,10 +5,35 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('image envelopes never scan arbitrary arguments or user prose', () {
-    final envelope = jsonEncode({'content': [{'type': 'image', 'data': 'AAAA', 'mimeType': 'image/png'}]});
-    expect(outputImageAttachments({'type': 'mcpToolCall', 'arguments': {'text': envelope}}), isEmpty);
-    expect(outputImageAttachments({'type': 'userMessage', 'content': [{'type': 'text', 'text': envelope}]}), isEmpty);
-    expect(outputImageAttachments({'type': 'mcpToolCall', 'result': {'content': [{'type': 'text', 'text': '{bad JSON'}]}}), isEmpty);
+    final envelope = jsonEncode({
+      'content': [
+        {'type': 'image', 'data': 'AAAA', 'mimeType': 'image/png'}
+      ]
+    });
+    expect(
+        outputImageAttachments({
+          'type': 'mcpToolCall',
+          'arguments': {'text': envelope}
+        }),
+        isEmpty);
+    expect(
+        outputImageAttachments({
+          'type': 'userMessage',
+          'content': [
+            {'type': 'text', 'text': envelope}
+          ]
+        }),
+        isEmpty);
+    expect(
+        outputImageAttachments({
+          'type': 'mcpToolCall',
+          'result': {
+            'content': [
+              {'type': 'text', 'text': '{bad JSON'}
+            ]
+          }
+        }),
+        isEmpty);
   });
   test('Desktop envelope becomes attachments plus actual request', () {
     const text = '# Files mentioned by the user:\n\n'

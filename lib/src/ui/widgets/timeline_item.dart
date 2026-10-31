@@ -402,8 +402,11 @@ class _AttachmentCard extends StatelessWidget {
                           attachment.path.startsWith('data:image/')))
                     TextButton(
                       onPressed: () {
-                        final loading = readMessageImage(attachment, loadImage,
-                            RemoteFileActions.maybeOf(thisContext)?.recoverImage);
+                        final loading = readMessageImage(
+                            attachment,
+                            loadImage,
+                            RemoteFileActions.maybeOf(thisContext)
+                                ?.recoverImage);
                         final preview = loadPreviewImage(loading);
                         unawaited(showDialog<void>(
                           context: context,

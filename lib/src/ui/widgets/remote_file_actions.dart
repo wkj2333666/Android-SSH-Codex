@@ -145,11 +145,17 @@ class RemoteVideoPreview extends StatelessWidget {
                   _VideoPoster(path: path),
                   Center(
                     child: DecoratedBox(
-                      decoration: BoxDecoration(color: colors.surface.withValues(alpha: 0.75), borderRadius: BorderRadius.circular(12)),
-                      child: Padding(padding: const EdgeInsets.all(8), child: Column(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(Icons.play_circle_outline, size: 40, color: colors.primary),
-                        const Text('Play video'),
-                      ])),
+                      decoration: BoxDecoration(
+                          color: colors.surface.withValues(alpha: 0.75),
+                          borderRadius: BorderRadius.circular(12)),
+                      child: Padding(
+                          padding: const EdgeInsets.all(8),
+                          child:
+                              Column(mainAxisSize: MainAxisSize.min, children: [
+                            Icon(Icons.play_circle_outline,
+                                size: 40, color: colors.primary),
+                            const Text('Play video'),
+                          ])),
                     ),
                   ),
                 ]),
@@ -182,14 +188,20 @@ class _VideoPosterState extends State<_VideoPoster> {
 
   void _load() {
     final loader = _loader;
-    _future = loader == null ? null : loadPreviewImage(Future.sync(() => loader(widget.path)), maxBytes: 512 * 1024, maxDimension: 640, maxPixels: 640 * 640);
+    _future = loader == null
+        ? null
+        : loadPreviewImage(Future.sync(() => loader(widget.path)),
+            maxBytes: 512 * 1024, maxDimension: 640, maxPixels: 640 * 640);
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final loader = RemoteFileActions.maybeOf(context)?.loadVideoPoster;
-    if (_loader != loader || _future == null) { _loader = loader; _load(); }
+    if (_loader != loader || _future == null) {
+      _loader = loader;
+      _load();
+    }
   }
 
   @override
@@ -199,12 +211,25 @@ class _VideoPosterState extends State<_VideoPoster> {
   }
 
   @override
-  Widget build(BuildContext context) => FutureBuilder<Uint8List?>(future: _future, builder: (context, snapshot) {
-    if (snapshot.data case final bytes?) return Image.memory(bytes, fit: BoxFit.cover, cacheWidth: 560);
-    return Align(alignment: Alignment.topRight, child: snapshot.connectionState != ConnectionState.done && _future != null
-        ? const Padding(padding: EdgeInsets.all(8), child: SizedBox.square(dimension: 16, child: CircularProgressIndicator(strokeWidth: 2)))
-        : IconButton(tooltip: 'Cover unavailable · Retry', onPressed: _loader == null ? null : () => setState(_load), icon: const Icon(Icons.refresh, size: 18)));
-  });
+  Widget build(BuildContext context) => FutureBuilder<Uint8List?>(
+      future: _future,
+      builder: (context, snapshot) {
+        if (snapshot.data case final bytes?)
+          return Image.memory(bytes, fit: BoxFit.cover, cacheWidth: 560);
+        return Align(
+            alignment: Alignment.topRight,
+            child: snapshot.connectionState != ConnectionState.done &&
+                    _future != null
+                ? const Padding(
+                    padding: EdgeInsets.all(8),
+                    child: SizedBox.square(
+                        dimension: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2)))
+                : IconButton(
+                    tooltip: 'Cover unavailable · Retry',
+                    onPressed: _loader == null ? null : () => setState(_load),
+                    icon: const Icon(Icons.refresh, size: 18)));
+      });
 }
 
 Future<void> showRemoteFileDownload(BuildContext context, String path) async {

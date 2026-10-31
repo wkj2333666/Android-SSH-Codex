@@ -303,7 +303,8 @@ final class CodexRemoteApi {
     }));
     final path = _map(result['thread'])['path'];
     if (path is! String || !path.startsWith('/') || !path.endsWith('.jsonl')) {
-      throw StateError('The server does not expose this thread’s complete image history.');
+      throw StateError(
+          'The server does not expose this thread’s complete image history.');
     }
     return path;
   }
@@ -814,7 +815,14 @@ String? _jsonDetail(Map<String, dynamic> item, List<String> keys) {
 Object? _imageSafeDetail(Object? value) {
   if (value is List) return value.map(_imageSafeDetail).toList();
   if (value is Map) {
-    if (const ['image', 'localImage', 'inputImage', 'input_image', 'output_image', 'image_url'].contains(value['type'])) {
+    if (const [
+      'image',
+      'localImage',
+      'inputImage',
+      'input_image',
+      'output_image',
+      'image_url'
+    ].contains(value['type'])) {
       return {
         'type': value['type'],
         'mimeType': value['mimeType'],
@@ -823,7 +831,8 @@ Object? _imageSafeDetail(Object? value) {
     }
     if (value['type'] == 'text' && value['text'] is String) {
       final envelope = imageEnvelope(value['text'] as String);
-      if (envelope != null) return {'type': 'text', 'text': jsonEncode(_imageSafeDetail(envelope))};
+      if (envelope != null)
+        return {'type': 'text', 'text': jsonEncode(_imageSafeDetail(envelope))};
     }
     return value
         .map((key, entry) => MapEntry(key.toString(), _imageSafeDetail(entry)));

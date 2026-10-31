@@ -30,19 +30,41 @@ void main() {
       final snapshot = CodexRemoteApi.parseThread({
         'id': 'thread',
         'turns': [
-          {'items': [
-            {'id': 'picture', 'type': 'mcpToolCall', 'result': {'content': [
-              {'type': 'text', 'text': jsonEncode({'content': [
-                if (wireType == 'image')
-                  {'type': wireType, 'mimeType': 'image/png', 'data': data}
-                else
-                  {'type': wireType, 'image_url': 'data:image/png;base64,$data'},
-              ], 'structuredContent': {'width': 10}})},
-            ]}},
-          ]},
+          {
+            'items': [
+              {
+                'id': 'picture',
+                'type': 'mcpToolCall',
+                'result': {
+                  'content': [
+                    {
+                      'type': 'text',
+                      'text': jsonEncode({
+                        'content': [
+                          if (wireType == 'image')
+                            {
+                              'type': wireType,
+                              'mimeType': 'image/png',
+                              'data': data
+                            }
+                          else
+                            {
+                              'type': wireType,
+                              'image_url': 'data:image/png;base64,$data'
+                            },
+                        ],
+                        'structuredContent': {'width': 10}
+                      })
+                    },
+                  ]
+                }
+              },
+            ]
+          },
         ],
       });
-      expect(snapshot.items.single.attachments.single.path, 'data:image/png;base64,$data');
+      expect(snapshot.items.single.attachments.single.path,
+          'data:image/png;base64,$data');
       expect(snapshot.items.single.detail, isNot(contains(data)));
     });
   }

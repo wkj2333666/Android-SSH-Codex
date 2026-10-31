@@ -37,11 +37,20 @@ class AttachmentMessage {
 
 /// Only unwrap complete MCP content envelopes, not arbitrary prose/examples.
 Map<String, dynamic>? imageEnvelope(String text) {
-  if (text.length > 14 * 1024 * 1024 || !text.trimLeft().startsWith('{')) return null;
+  if (text.length > 14 * 1024 * 1024 || !text.trimLeft().startsWith('{'))
+    return null;
   try {
     final value = jsonDecode(text);
-    if (value is! Map<String, dynamic> || value['content'] is! List ||
-        value.keys.any((key) => !const ['content', 'structuredContent', 'structured_content', 'isError', 'is_error', '_meta'].contains(key))) return null;
+    if (value is! Map<String, dynamic> ||
+        value['content'] is! List ||
+        value.keys.any((key) => !const [
+              'content',
+              'structuredContent',
+              'structured_content',
+              'isError',
+              'is_error',
+              '_meta'
+            ].contains(key))) return null;
     return value;
   } on FormatException {
     return null;
@@ -62,7 +71,8 @@ List<MessageAttachment> outputImageAttachments(Map<String, dynamic> item) {
     for (final block in raw) {
       if (block is! Map) continue;
       final type = block['type'];
-      if (type == 'text' && block['text'] is String &&
+      if (type == 'text' &&
+          block['text'] is String &&
           const ['mcpToolCall', 'dynamicToolCall'].contains(item['type'])) {
         final envelope = imageEnvelope(block['text'] as String);
         if (envelope != null) blocks(envelope['content'], depth + 1);

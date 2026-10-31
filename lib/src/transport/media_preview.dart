@@ -36,18 +36,24 @@ String imageRecoveryCommand(String rollout, String threadId, String source) {
   if (!rollout.endsWith('.jsonl') || threadId.isEmpty || threadId.length > 100) {
     throw ArgumentError('Invalid thread history');
   }
-  final match = RegExp(r'^data:(image/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/=]+)…(\d+) chars truncated…([A-Za-z0-9+/=]+)$')
+  final match = RegExp(
+          r'^data:(image/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/=]+)…(\d+) chars truncated…([A-Za-z0-9+/=]+)$')
       .firstMatch(source);
   if (match == null || match[2]!.length < 32 || match[4]!.length < 32) {
-    throw StateError('The historical image is incomplete and cannot be matched safely.');
+    throw StateError(
+        'The historical image is incomplete and cannot be matched safely.');
   }
   final before = match[2]!;
   final after = match[4]!;
   final length = before.length + after.length + int.parse(match[3]!);
-  if (length > 14 * 1024 * 1024) throw StateError('Image exceeds the preview limit.');
+  if (length > 14 * 1024 * 1024) {
+    throw StateError('Image exceeds the preview limit.');
+  }
   final reference = jsonEncode({
-    'mime': match[1], 'length': length,
-    'beforeLength': before.length, 'afterLength': after.length,
+    'mime': match[1],
+    'length': length,
+    'beforeLength': before.length,
+    'afterLength': after.length,
     'beforeHash': sha256.convert(utf8.encode(before)).toString(),
     'afterHash': sha256.convert(utf8.encode(after)).toString(),
     'prefix': before.substring(0, before.length < 4096 ? before.length : 4096),
@@ -133,7 +139,8 @@ Future<Uint8List> readMediaPreview(SSHClient client, String command,
       await channel.stdin.close();
       final bytes = BytesBuilder(copy: false);
       await for (final chunk in channel.stdout) {
-        if (bytes.length + chunk.length > maxBytes) throw StateError('Preview exceeds the size limit.');
+        if (bytes.length + chunk.length > maxBytes)
+          throw StateError('Preview exceeds the size limit.');
         bytes.add(chunk);
       }
       await channel.done;
@@ -143,7 +150,8 @@ Future<Uint8List> readMediaPreview(SSHClient client, String command,
             : 'The preview could not be restored (code ${channel.exitCode}).');
       }
       return bytes.takeBytes();
-    })().timeout(const Duration(seconds: 20));
+    })()
+        .timeout(const Duration(seconds: 20));
   } finally {
     expired = true;
     session?.close();

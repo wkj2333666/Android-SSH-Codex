@@ -8,7 +8,8 @@ import 'remote_file_actions.dart';
 import 'image_preview_data.dart';
 export 'image_preview_data.dart' show loadPreviewImage;
 
-Future<Uint8List> readMessageImage(MessageAttachment attachment,
+Future<Uint8List> readMessageImage(
+    MessageAttachment attachment,
     Future<Uint8List> Function(String)? loadImage,
     Future<Uint8List> Function(String)? recoverImage) async {
   final path = attachment.path;
@@ -20,8 +21,10 @@ Future<Uint8List> readMessageImage(MessageAttachment attachment,
     if (loadImage == null) throw StateError('Reconnect to load this image');
     return loadImage(path);
   }
-  final match = RegExp(r'^data:image/(?:png|jpeg|webp|gif);base64,').firstMatch(path);
-  if (match == null || path.length > 14 * 1024 * 1024) throw const FormatException('Unsupported or oversized image');
+  final match =
+      RegExp(r'^data:image/(?:png|jpeg|webp|gif);base64,').firstMatch(path);
+  if (match == null || path.length > 14 * 1024 * 1024)
+    throw const FormatException('Unsupported or oversized image');
   return base64Decode(path.substring(match.end));
 }
 
@@ -93,17 +96,21 @@ class InlineAttachmentImageState extends State<InlineAttachmentImage> {
             }
             final bytes = snapshot.data;
             if (bytes == null) {
-              return Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                if (imageDataTruncated(widget.attachment.path))
-                  const Text('Historical image is incomplete and could not be restored.', textAlign: TextAlign.center),
-                TextButton.icon(
-                onPressed: () => setState(() {
-                  _preview = _load();
-                }),
-                icon: const Icon(Icons.refresh),
-                label: const Text('Image unavailable · Retry'),
-              ),
-              ]);
+              return Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (imageDataTruncated(widget.attachment.path))
+                      const Text(
+                          'Historical image is incomplete and could not be restored.',
+                          textAlign: TextAlign.center),
+                    TextButton.icon(
+                      onPressed: () => setState(() {
+                        _preview = _load();
+                      }),
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Image unavailable · Retry'),
+                    ),
+                  ]);
             }
             return InkWell(
               onTap: () => showDialog<void>(
