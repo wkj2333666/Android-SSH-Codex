@@ -6,17 +6,22 @@ import 'package:flutter/services.dart';
 
 import '../../transport/file_download.dart';
 import '../../transport/resumable_download.dart';
+import 'image_preview_data.dart';
 
 class RemoteFileActions extends InheritedWidget {
   const RemoteFileActions(
       {required this.download,
       this.downloadWithProgress,
       this.previewVideo,
+      this.loadVideoPoster,
+      this.recoverImage,
       this.cancelDownload,
       required super.child,
       super.key});
   final Future<bool> Function(String) download;
   final VoidCallback? cancelDownload;
+  final Future<Uint8List> Function(String)? loadVideoPoster;
+  final Future<Uint8List> Function(String)? recoverImage;
   final Future<bool> Function(String,
       {void Function(DownloadProgress)? onProgress})? downloadWithProgress;
   final Future<bool> Function(String,
@@ -31,6 +36,8 @@ class RemoteFileActions extends InheritedWidget {
       download != oldWidget.download ||
       downloadWithProgress != oldWidget.downloadWithProgress ||
       previewVideo != oldWidget.previewVideo ||
+      loadVideoPoster != oldWidget.loadVideoPoster ||
+      recoverImage != oldWidget.recoverImage ||
       cancelDownload != oldWidget.cancelDownload;
 }
 
@@ -133,22 +140,29 @@ class RemoteVideoPreview extends StatelessWidget {
               onTap: () => unawaited(showRemoteVideoPreview(context, path)),
               child: SizedBox(
                 height: 158,
-                child: Center(
-                  child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(Icons.play_circle_outline,
-                        size: 48, color: colors.primary),
-                    const Text('Play video'),
-                    if (label?.isNotEmpty == true)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: Text(label!,
-                            maxLines: 1, overflow: TextOverflow.ellipsis),
-                      ),
-                  ]),
-                ),
+                child: Stack(fit: StackFit.expand, children: [
+                  _VideoPoster(path: path),
+                  Center(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                          color: colors.surface.withValues(alpha: 0.75),
+                          borderRadius: BorderRadius.circular(12)),
+                      child: Padding(
+                          padding: const EdgeInsets.all(8),
+                          child:
+                              Column(mainAxisSize: MainAxisSize.min, children: [
+                            Icon(Icons.play_circle_outline,
+                                size: 40, color: colors.primary),
+                            const Text('Play video'),
+                          ])),
+                    ),
+                  ),
+                ]),
               ),
             ),
           ),
+        if (label?.isNotEmpty == true)
+          Text(label!, maxLines: 1, overflow: TextOverflow.ellipsis),
         if (actions != null)
           TextButton.icon(
             onPressed: () => unawaited(showRemoteFileDownload(context, path)),
@@ -158,6 +172,64 @@ class RemoteVideoPreview extends StatelessWidget {
       ]),
     );
   }
+}
+
+class _VideoPoster extends StatefulWidget {
+  const _VideoPoster({required this.path});
+  final String path;
+  @override
+  State<_VideoPoster> createState() => _VideoPosterState();
+}
+
+class _VideoPosterState extends State<_VideoPoster> {
+  Future<Uint8List?>? _future;
+  Future<Uint8List> Function(String)? _loader;
+
+  void _load() {
+    final loader = _loader;
+    _future = loader == null
+        ? null
+        : loadPreviewImage(Future.sync(() => loader(widget.path)),
+            maxBytes: 512 * 1024, maxDimension: 640, maxPixels: 640 * 640);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final loader = RemoteFileActions.maybeOf(context)?.loadVideoPoster;
+    if (_loader != loader || _future == null) {
+      _loader = loader;
+      _load();
+    }
+  }
+
+  @override
+  void didUpdateWidget(_VideoPoster oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.path != widget.path) _load();
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<Uint8List?>(
+      future: _future,
+      builder: (context, snapshot) {
+        if (snapshot.data case final bytes?) {
+          return Image.memory(bytes, fit: BoxFit.cover, cacheWidth: 560);
+        }
+        return Align(
+            alignment: Alignment.topRight,
+            child: snapshot.connectionState != ConnectionState.done &&
+                    _future != null
+                ? const Padding(
+                    padding: EdgeInsets.all(8),
+                    child: SizedBox.square(
+                        dimension: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2)))
+                : IconButton(
+                    tooltip: 'Cover unavailable · Retry',
+                    onPressed: _loader == null ? null : () => setState(_load),
+                    icon: const Icon(Icons.refresh, size: 18)));
+      });
 }
 
 Future<void> showRemoteFileDownload(BuildContext context, String path) async {

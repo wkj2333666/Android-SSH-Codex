@@ -330,6 +330,11 @@ the file over a dedicated resumable SSH connection to temporary phone storage
 picker. Closing the player releases its temporary copy. A selected local video
 can also be played from its composer chip before sending. Playback uses the
 phone's supported codecs; **Download video** remains available for other players.
+Video cards lazily request a small cover frame (at most 640×360 and 512 KiB),
+not the video itself. Remote covers require FFmpeg and `timeout` on the SSH host;
+without those helpers the play button still works. Local selected videos use
+Android's thumbnail decoder. Preview work is capped at two remote requests at a
+time with a bounded queue and a short-lived, 16 MiB cache.
 If a document provider returns only an image thumbnail
 instead of the video, selection is rejected; choose the original file instead.
 
@@ -339,6 +344,15 @@ image previews stay visible outside collapsed work events; raw image Base64
 is not printed in tool details. External HTTP images remain blocked. Tap a
 thumbnail to zoom; if loading fails, use Retry. Only mounted timeline images
 are requested, and inline remote previews remain capped at 10 MiB.
+MCP image blocks also support JSON-wrapped results and `input_image` outputs.
+For a historical image containing a server truncation marker, the app can read
+the exact thread's rollout path returned by app-server and match the original
+image by both retained ends and full length. Recovery is read-only, scans at most
+64 MiB of that one file with bounded records, and requires Python 3 and `timeout`
+on the SSH host. It never replays a tool call or guesses a path on another host.
+Unavailable, oversized, ambiguous or missing originals show an explicit failure
+and Retry instead of silently dropping the image. Base64 is not shown in the
+tool's JSON details.
 Question prompts and answer options support Markdown formatting.
 
 Selecting a file uploads it into a private, randomly named directory under

@@ -19,6 +19,7 @@ import 'turn_settings_picker.dart';
 import 'widgets/timeline_item.dart';
 import 'widgets/user_input_panel.dart';
 import 'widgets/remote_file_actions.dart';
+import 'widgets/local_video_poster.dart';
 import 'widgets/task_question_panel.dart';
 import 'task_manager.dart';
 
@@ -219,6 +220,8 @@ class _TaskViewState extends State<TaskView> {
             child: RemoteFileActions(
                 download: widget.controller.downloadFile,
                 downloadWithProgress: widget.controller.downloadFile,
+                loadVideoPoster: widget.controller.loadVideoPoster,
+                recoverImage: widget.controller.recoverImage,
                 previewVideo: Attachments.supported
                     ? widget.controller.previewVideo
                     : null,
@@ -514,9 +517,9 @@ class _TaskViewState extends State<TaskView> {
             cacheWidth: 64,
             fit: BoxFit.cover,
             errorBuilder: (_, __, ___) => const Icon(Icons.broken_image))
-        : Icon(attachment.local.isVideo
-            ? Icons.videocam_outlined
-            : Icons.insert_drive_file_outlined);
+        : attachment.local.isVideo
+            ? LocalVideoPoster(path: attachment.local.path)
+            : const Icon(Icons.insert_drive_file_outlined);
     final message = waiting
         ? 'Waiting for connection'
         : failed

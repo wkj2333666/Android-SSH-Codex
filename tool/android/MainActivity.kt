@@ -19,6 +19,7 @@ class MainActivity : FlutterActivity() {
     private var permissionResult: MethodChannel.Result? = null
     private var exportResult: MethodChannel.Result? = null
     private var videoResult: MethodChannel.Result? = null
+    private var videoThumbnails: VideoThumbnails? = null
     private var exportSnapshot: String? = null
     private var attachmentPicker: AttachmentPicker? = null
     private var attachmentDownloads: AttachmentDownloads? = null
@@ -47,10 +48,16 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         attachmentPicker = AttachmentPicker(this)
         attachmentDownloads = AttachmentDownloads(this)
+        videoThumbnails = VideoThumbnails(this)
         connectionDiagnostics = ConnectionRuntime.observer()
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger,
             "android_ssh_codex/attachments").setMethodCallHandler { call, result ->
             if (call.method == "downloadDirectory") result.success(cacheDir.absolutePath)
+            else if (call.method == "videoThumbnail") {
+                val thumbnails = videoThumbnails
+                if (thumbnails == null) result.error("ACTIVITY_CLOSED", "Video cover closed", null)
+                else thumbnails.load(call.argument<String>("path") ?: "", result)
+            }
             else if (call.method == "saveDownload") {
                 val downloads = attachmentDownloads
                 if (downloads == null) result.error("ACTIVITY_CLOSED", "Save picker closed", null)
@@ -223,6 +230,8 @@ class MainActivity : FlutterActivity() {
         connectionDiagnostics = null
         attachmentPicker?.close()
         attachmentDownloads?.close()
+        videoThumbnails?.close()
+        videoThumbnails = null
         attachmentDownloads = null
         attachmentPicker = null
         finishExport(false, "Connection activity closed")
