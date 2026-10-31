@@ -33,7 +33,9 @@ String videoPosterCommand(String path) {
 /// surviving ends plus original length. Never guess a path from tool arguments.
 String imageRecoveryCommand(String rollout, String threadId, String source) {
   _path(rollout);
-  if (!rollout.endsWith('.jsonl') || threadId.isEmpty || threadId.length > 100) {
+  if (!rollout.endsWith('.jsonl') ||
+      threadId.isEmpty ||
+      threadId.length > 100) {
     throw ArgumentError('Invalid thread history');
   }
   final match = RegExp(

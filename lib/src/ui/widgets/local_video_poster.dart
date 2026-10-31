@@ -15,9 +15,9 @@ class LocalVideoPoster extends StatefulWidget {
 class _LocalVideoPosterState extends State<LocalVideoPoster> {
   late Future<Uint8List?> _future;
   Future<Uint8List?> _load() => loadPreviewImage(Future.sync(() async {
-        final bytes = await Attachments.channel
-            .invokeMethod<Uint8List>('videoThumbnail', {'path': widget.path})
-            .timeout(const Duration(seconds: 12));
+        final bytes = await Attachments.channel.invokeMethod<Uint8List>(
+            'videoThumbnail',
+            {'path': widget.path}).timeout(const Duration(seconds: 12));
         if (bytes == null) throw StateError('No video cover');
         return bytes;
       }), maxBytes: 512 * 1024, maxDimension: 640, maxPixels: 640 * 640);
@@ -26,11 +26,13 @@ class _LocalVideoPosterState extends State<LocalVideoPoster> {
     super.initState();
     _future = _load();
   }
+
   @override
   void didUpdateWidget(LocalVideoPoster oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.path != widget.path) _future = _load();
   }
+
   @override
   Widget build(BuildContext context) => FutureBuilder<Uint8List?>(
       future: _future,

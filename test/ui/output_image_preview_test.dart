@@ -25,14 +25,18 @@ void main() {
         home: Scaffold(
             body: TimelineItemView(
       item: TaskItem(
-          id: 'bad', kind: TaskItemKind.tool, text: 'view image', attachments: [
-        MessageAttachment(
-            path: 'data:image/png;base64,AAAA…100 chars truncated…AAAA',
-            isImage: true),
-      ]),
+          id: 'bad',
+          kind: TaskItemKind.tool,
+          text: 'view image',
+          attachments: [
+            MessageAttachment(
+                path: 'data:image/png;base64,AAAA…100 chars truncated…AAAA',
+                isImage: true),
+          ]),
     ))));
     await tester.pumpAndSettle();
-    expect(find.text('Historical image is incomplete and could not be restored.'),
+    expect(
+        find.text('Historical image is incomplete and could not be restored.'),
         findsOneWidget);
     expect(find.text('Image unavailable · Retry'), findsOneWidget);
     expect(tester.takeException(), isNull);
