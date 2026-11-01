@@ -18,6 +18,7 @@ class TurnSettingsPicker extends StatelessWidget {
     required this.onChanged,
     this.enabled = true,
     this.useCatalogDefault = true,
+    this.inheritedServiceTier,
     this.accountUsage,
     super.key,
   });
@@ -27,6 +28,7 @@ class TurnSettingsPicker extends StatelessWidget {
   final ValueChanged<TurnSettings> onChanged;
   final bool enabled;
   final bool useCatalogDefault;
+  final String? inheritedServiceTier;
   final AccountUsageController? accountUsage;
 
   @override
@@ -34,11 +36,15 @@ class TurnSettingsPicker extends StatelessWidget {
     final settings = resolveTurnSettings(models, value,
         useCatalogDefault: useCatalogDefault);
     final model = _selectedModel(models, settings);
+    final tier = settings.serviceTier ??
+        inheritedServiceTier ??
+        (useCatalogDefault ? model?.defaultServiceTier : null);
+    final fast = tier == 'fast' || tier == 'priority';
     final label = settings.model == null
         ? 'Model unavailable'
         : '${model?.displayName ?? settings.model} · '
             '${settings.effort ?? 'Effort unavailable'}'
-            '${settings.fast ? ' · Fast' : ''}';
+            '${fast ? ' · Fast' : ''}';
     return Align(
       alignment: Alignment.centerLeft,
       child: OutlinedButton(
@@ -58,6 +64,8 @@ class TurnSettingsPicker extends StatelessWidget {
                   builder: (_) => _TurnSettingsSheet(
                       models: models,
                       value: settings,
+                      inheritedServiceTier: inheritedServiceTier,
+                      useCatalogDefault: useCatalogDefault,
                       accountUsage: accountUsage),
                 );
                 if (context.mounted && selection != null) onChanged(selection);
@@ -80,10 +88,14 @@ class TurnSettingsPicker extends StatelessWidget {
 
 class _TurnSettingsSheet extends StatefulWidget {
   const _TurnSettingsSheet(
-      {required this.models, required this.value, this.accountUsage});
+      {required this.models, required this.value,
+      this.inheritedServiceTier, this.useCatalogDefault = true,
+      this.accountUsage});
 
   final List<RemoteModel> models;
   final TurnSettings value;
+  final String? inheritedServiceTier;
+  final bool useCatalogDefault;
   final AccountUsageController? accountUsage;
 
   @override
@@ -92,6 +104,14 @@ class _TurnSettingsSheet extends StatefulWidget {
 
 class _TurnSettingsSheetState extends State<_TurnSettingsSheet> {
   late TurnSettings _draft = widget.value;
+
+  bool get _fast {
+    final tier = _draft.serviceTier ?? widget.inheritedServiceTier ??
+        (widget.useCatalogDefault
+            ? _selectedModel(widget.models, _draft)?.defaultServiceTier
+            : null);
+    return tier == 'fast' || tier == 'priority';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -137,8 +157,10 @@ class _TurnSettingsSheetState extends State<_TurnSettingsSheet> {
                         _draft = TurnSettings(
                           model: candidate.model,
                           effort: candidate.defaultReasoningEffort,
-                          serviceTier: _draft.fast
-                              ? candidate.fastServiceTier ?? 'default'
+                          serviceTier: _fast && !candidate.supportsFast
+                              ? 'default'
+                              : _draft.fast
+                              ? candidate.fastServiceTier
                               : _draft.serviceTier,
                         );
                       }),
@@ -162,12 +184,12 @@ class _TurnSettingsSheetState extends State<_TurnSettingsSheet> {
                         key: const Key('turn-fast-toggle'),
                         contentPadding: EdgeInsets.zero,
                         dense: true,
-                        title: const Text('Fast'),
+                        title: const Text('Fast · next new turn'),
                         subtitle: Text(model.supportsFast
-                            ? 'New turns only · Higher usage'
+                            ? 'Higher usage · Steer keeps the running turn unchanged'
                             : 'Not advertised by this model/server'),
-                        value: _draft.fast,
-                        onChanged: model.supportsFast
+                        value: _fast,
+                        onChanged: model.supportsFast || _fast
                             ? (enabled) => setState(() {
                                   _draft = TurnSettings(
                                     model: _draft.model,
@@ -179,6 +201,17 @@ class _TurnSettingsSheetState extends State<_TurnSettingsSheet> {
                                 })
                             : null,
                       ),
+                      if (_draft.serviceTier != null)
+                        TextButton(
+                          key: const Key('turn-fast-inherit'),
+                          onPressed: () => setState(() {
+                            _draft = TurnSettings(
+                              model: _draft.model,
+                              effort: _draft.effort,
+                            );
+                          }),
+                          child: const Text('Follow server Fast setting'),
+                        ),
                       const Text('Reasoning effort'),
                       Wrap(
                         spacing: 8,

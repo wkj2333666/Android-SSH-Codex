@@ -1,10 +1,11 @@
 import '../protocol/codex_remote_api.dart';
 
 final class TurnSettings {
-  const TurnSettings({this.model, this.effort, this.serviceTier = 'default'});
+  const TurnSettings({this.model, this.effort, this.serviceTier});
 
   final String? model;
   final String? effort;
+  /// Null follows the server's thread setting, rather than forcing Standard.
   final String? serviceTier;
   bool get fast => serviceTier == 'fast' || serviceTier == 'priority';
 }

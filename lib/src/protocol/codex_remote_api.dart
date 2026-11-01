@@ -59,6 +59,7 @@ final class RemoteModel {
     required this.defaultReasoningEffort,
     required this.supportedReasoningEfforts,
     this.serviceTiers = const [],
+    this.defaultServiceTier,
   });
 
   final String id;
@@ -69,10 +70,11 @@ final class RemoteModel {
   final String defaultReasoningEffort;
   final List<RemoteReasoningEffort> supportedReasoningEfforts;
   final List<String> serviceTiers;
-  String? get fastServiceTier => serviceTiers.contains('priority')
-      ? 'priority'
-      : serviceTiers.contains('fast')
-          ? 'fast'
+  final String? defaultServiceTier;
+  String? get fastServiceTier => serviceTiers.contains('fast')
+      ? 'fast'
+      : serviceTiers.contains('priority')
+          ? 'priority'
           : null;
   bool get supportsFast =>
       serviceTiers.contains('fast') || serviceTiers.contains('priority');
@@ -341,15 +343,19 @@ final class CodexRemoteApi {
     return null;
   }
 
-  Future<String> startThread({required String cwd, String? projectId}) async {
+  Future<({String id, String? serviceTier})> startThread(
+      {required String cwd, String? projectId}) async {
     final result = _map(await _rpc.request('thread/start', {
       'cwd': cwd,
       if (projectId != null) 'projectId': projectId,
     }));
-    return _map(result['thread'])['id'] as String;
+    return (
+      id: _map(result['thread'])['id'] as String,
+      serviceTier: result['serviceTier'] as String?,
+    );
   }
 
-  Future<({String? model, String? effort})> resumeThread(
+  Future<({String? model, String? effort, String? serviceTier})> resumeThread(
       String threadId) async {
     final result = _map(await _rpc.request('thread/resume', {
       'threadId': threadId,
@@ -357,7 +363,8 @@ final class CodexRemoteApi {
     }));
     return (
       model: result['model'] as String?,
-      effort: result['reasoningEffort'] as String?
+      effort: result['reasoningEffort'] as String?,
+      serviceTier: result['serviceTier'] as String?,
     );
   }
 
@@ -923,6 +930,7 @@ RemoteModel? _parseModel(Map<String, dynamic> raw) {
     isDefault: raw['isDefault'] == true,
     defaultReasoningEffort: defaultEffort,
     supportedReasoningEfforts: List.unmodifiable(efforts),
+    defaultServiceTier: raw['defaultServiceTier'] as String?,
     serviceTiers: List.unmodifiable([
       for (final tier in raw['serviceTiers'] as List<dynamic>? ?? const [])
         if (_map(tier)['id'] case final String id) id,

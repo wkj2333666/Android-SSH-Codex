@@ -96,6 +96,7 @@ final class TaskRecord {
     this.isPinned = false,
     this.model,
     this.reasoningEffort,
+    this.serviceTier,
   });
 
   factory TaskRecord.placeholder(String id, int revision) => TaskRecord(
@@ -120,6 +121,8 @@ final class TaskRecord {
   final bool isPinned;
   final String? model;
   final String? reasoningEffort;
+  /// The server's saved thread tier, not a per-turn composer override.
+  final String? serviceTier;
 
   TaskRecord copyWith({
     String? title,
@@ -132,6 +135,8 @@ final class TaskRecord {
     String? model,
     String? reasoningEffort,
     bool replaceTurnSettings = false,
+    String? serviceTier,
+    bool replaceServiceTier = false,
     bool? isPinned,
   }) =>
       TaskRecord(
@@ -148,6 +153,7 @@ final class TaskRecord {
         reasoningEffort: replaceTurnSettings
             ? reasoningEffort
             : reasoningEffort ?? this.reasoningEffort,
+        serviceTier: replaceServiceTier ? serviceTier : this.serviceTier,
       );
 }
 
@@ -236,6 +242,25 @@ final class TaskReducer {
   final Map<String, Set<String>> _seenEvents = {};
 
   TaskState get state => _state;
+
+  void setServiceTier(int epoch, String taskId, String? serviceTier) {
+    if (epoch != _state.epoch) return;
+    final current = _state.tasks[taskId];
+    if (current == null) return;
+    final revision = _state.eventRevision + 1;
+    _state = TaskState(
+      epoch: epoch,
+      refreshGeneration: _state.refreshGeneration,
+      eventRevision: revision,
+      tasks: Map.unmodifiable({
+        ..._state.tasks,
+        taskId: current.copyWith(
+            serviceTier: serviceTier,
+            replaceServiceTier: true,
+            revision: revision),
+      }),
+    );
+  }
 
   void setTurnSettings(
       int epoch, String taskId, String? model, String? effort) {
@@ -371,6 +396,7 @@ final class TaskReducer {
             changedDuringRefresh ? current.updatedAt : snapshot.updatedAt,
         items: preserveItems ? current!.items : snapshot.items,
         ownership: ownership,
+        serviceTier: current?.serviceTier,
         revision: current?.revision ?? eventRevision,
         model: changedDuringRefresh
             ? current.model
@@ -418,6 +444,7 @@ final class TaskReducer {
                 : snapshot.updatedAt,
         items: _mergeItems(snapshot.items, current?.items ?? const []),
         ownership: _ownershipFor(status, loadedByUs, snapshot.id),
+        serviceTier: current?.serviceTier,
         revision: current?.revision ?? _state.eventRevision,
         model: snapshot.model ?? current?.model,
         reasoningEffort: snapshot.model != null
