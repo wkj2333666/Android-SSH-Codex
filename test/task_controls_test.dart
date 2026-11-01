@@ -50,6 +50,115 @@ TaskSnapshot task() => TaskSnapshot(
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test('inherits remote Fast without overriding it on new turns', () async {
+    final transport = Transport()
+      ..handle = (call) => switch (call['method']) {
+            'thread/resume' => {
+                'model': 'model',
+                'reasoningEffort': 'high',
+                'serviceTier': 'fast',
+              },
+            _ => {},
+          };
+    final rpc = JsonRpcClient(transport)..start();
+    final controller =
+        AppController.connectedForTesting(rpc: rpc, cachedTasks: [task()]);
+    await controller.selectTask('task');
+    expect(controller.selectedTask!.serviceTier, 'fast');
+    expect(controller.draftForTask('task').settings.serviceTier, isNull);
+    await controller.sendPrompt('Use remote settings');
+    final start =
+        transport.calls.singleWhere((c) => c['method'] == 'turn/start');
+    expect((start['params'] as Map).containsKey('serviceTierForTurn'), isFalse);
+    transport.notify('thread/settings/updated', {
+      'threadId': 'task',
+      'threadSettings': {
+        'model': 'model',
+        'effort': 'high',
+        'serviceTier': null
+      },
+    });
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.selectedTask!.serviceTier, isNull);
+    controller.dispose();
+    await rpc.close();
+  });
+
+  test('Fast overrides survive queueing but never change a steered turn',
+      () async {
+    final transport = Transport();
+    final rpc = JsonRpcClient(transport)..start();
+    final controller =
+        AppController.connectedForTesting(rpc: rpc, cachedTasks: [task()]);
+    await controller.selectTask('task');
+    await controller.sendPrompt('Fast next turn', serviceTier: 'fast');
+    expect(
+        transport.calls.lastWhere((c) => c['method'] == 'turn/start')['params'],
+        containsPair('serviceTierForTurn', 'fast'));
+    transport.handle = (call) => call['method'] == 'thread/turns/list'
+        ? {
+            'data': [
+              {'id': 'active', 'status': 'inProgress'}
+            ]
+          }
+        : {};
+    await controller.sendPrompt('Steer',
+        mode: TaskSendMode.steer, serviceTier: 'default');
+    final steer = transport.calls.lastWhere((c) => c['method'] == 'turn/steer');
+    expect((steer['params'] as Map).containsKey('serviceTierForTurn'), isFalse);
+    await controller.disconnect();
+    await controller.sendPrompt('Queued Fast', serviceTier: 'fast');
+    expect(controller.queuedMessagesForTask('task').single.serviceTier, 'fast');
+    controller.dispose();
+    await rpc.close();
+  });
+
+  test('Desktop Fast update wins over an older resume response', () async {
+    final transport = Transport()..withheldMethods.add('thread/resume');
+    final rpc = JsonRpcClient(transport)..start();
+    final controller =
+        AppController.connectedForTesting(rpc: rpc, cachedTasks: [task()]);
+    final selecting = controller.selectTask('task');
+    await Future<void>.delayed(Duration.zero);
+    final resume =
+        transport.calls.singleWhere((c) => c['method'] == 'thread/resume');
+    transport.notify('thread/settings/updated', {
+      'threadId': 'task',
+      'threadSettings': {'serviceTier': 'fast'},
+    });
+    transport.input.add(jsonEncode({
+      'id': resume['id'],
+      'result': {
+        'model': 'model',
+        'reasoningEffort': 'high',
+        'serviceTier': null
+      },
+    }));
+    await selecting;
+    expect(controller.selectedTask!.serviceTier, 'fast');
+    controller.dispose();
+    await rpc.close();
+  });
+
+  test('new tasks retain the server tier without forcing standard', () async {
+    final transport = Transport()
+      ..handle = (call) => call['method'] == 'thread/start'
+          ? {
+              'thread': {'id': 'new'},
+              'serviceTier': 'fast'
+            }
+          : {};
+    final rpc = JsonRpcClient(transport)..start();
+    final controller = AppController.connectedForTesting(rpc: rpc);
+    await controller.startNewTask(cwd: '/repo', prompt: 'Hello');
+    expect(controller.selectedTask!.serviceTier, 'fast');
+    final start =
+        transport.calls.singleWhere((c) => c['method'] == 'turn/start');
+    expect((start['params'] as Map).containsKey('serviceTierForTurn'), isFalse);
+    controller.dispose();
+    await rpc.close();
+  });
+
   test('queued videos retain media metadata but never create image inputs',
       () async {
     final transport = Transport();

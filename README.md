@@ -69,6 +69,10 @@ not imply Play approval.
   model panel also offers **Fast** when the server advertises support. Fast
   uses more quota/credits; it applies to new turns (including queued messages),
   not to a turn already running. Turning it off requests standard speed.
+  Unless explicitly changed, Fast follows the server's saved task setting,
+  including changes from Desktop. Use **Follow server Fast setting** to clear
+  a local override. The selector describes the next new turn, not the speed
+  of a running turn; Steer does not change that turn's settings.
   The model panel shows the connected server account's remaining subscription
   quota and reset times when provided, with live updates and manual refresh.
   API-key/custom providers without quota support show **Usage unavailable**,

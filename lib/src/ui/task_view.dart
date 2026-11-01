@@ -313,6 +313,7 @@ class _TaskViewState extends State<TaskView> {
                   effort: task.reasoningEffort,
                   useCatalogDefault: false),
               useCatalogDefault: false,
+              inheritedServiceTier: task.serviceTier,
               enabled: !_sending,
               onChanged: (value) {
                 if (draft.disposed) return;
@@ -461,6 +462,7 @@ class _TaskViewState extends State<TaskView> {
         mode: TaskSendMode.auto,
         model: settings.model,
         effort: settings.effort,
+        serviceTier: settings.serviceTier,
       );
       if (!mounted || widget.task.id != taskId) return;
       setState(() {

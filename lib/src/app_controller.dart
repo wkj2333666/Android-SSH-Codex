@@ -245,6 +245,7 @@ final class AppController extends ChangeNotifier {
   final Set<String> _interactiveThreadIds = {};
   Set<String> _subscribedThreadIds = {};
   final Map<String, Future<void>> _pendingThreadSubscriptions = {};
+  final Map<String, int> _serviceTierRevisions = {};
   SshConnection? _ssh;
   SshUnixTunnel? _tunnel;
   JsonRpcClient? _rpc;
@@ -1680,20 +1681,22 @@ final class AppController extends ChangeNotifier {
     if (projectId != null && project == null) {
       throw StateError('The project was removed. Refresh the project list.');
     }
-    final threadId =
+    final created =
         await api.startThread(cwd: cwd, projectId: project?.remoteId);
     if (!_isCurrentSession(api, attempt, epoch, profileId)) return;
+    final threadId = created.id;
     _subscribedThreadIds = {..._subscribedThreadIds, threadId};
     draftForTask(threadId).settings = TurnSettings(
       model: model,
       effort: effort,
-      serviceTier: serviceTier ?? 'default',
+      serviceTier: serviceTier,
     );
     _selectedTaskId = threadId;
     _taskReducer.applyEvent(
       _epoch,
       TaskEvent.statusChanged(threadId, TaskStatus.running),
     );
+    _taskReducer.setServiceTier(epoch, threadId, created.serviceTier);
     notifyListeners();
     await api.startTurn(
       threadId,
@@ -2697,10 +2700,14 @@ final class AppController extends ChangeNotifier {
     final pending = _pendingThreadSubscriptions[threadId];
     if (pending != null) return pending;
     final operation = () async {
+      final tierRevision = _serviceTierRevisions[threadId];
       final settings = await api.resumeThread(threadId);
       _ensureCurrentSession(api, attempt, epoch, profileId);
       _taskReducer.setTurnSettings(
           epoch, threadId, settings.model, settings.effort);
+      if (_serviceTierRevisions[threadId] == tierRevision) {
+        _taskReducer.setServiceTier(epoch, threadId, settings.serviceTier);
+      }
       _subscribedThreadIds = {..._subscribedThreadIds, threadId};
     }();
     _pendingThreadSubscriptions[threadId] = operation;
@@ -2739,6 +2746,21 @@ final class AppController extends ChangeNotifier {
     if (attempt != _connectionAttempt) return;
     final method = notification.method;
     final params = notification.params;
+    if (method == 'thread/settings/updated') {
+      final id = params['threadId'];
+      final settings = params['threadSettings'];
+      if (id is String &&
+          settings is Map &&
+          settings.containsKey('serviceTier')) {
+        final tier = settings['serviceTier'];
+        if (tier == null || tier is String) {
+          _serviceTierRevisions[id] = (_serviceTierRevisions[id] ?? 0) + 1;
+          _taskReducer.setServiceTier(_epoch, id, tier as String?);
+          notifyListeners();
+        }
+      }
+      return;
+    }
     if (method == 'account/rateLimits/updated') {
       accountUsage.update(params);
       return;
@@ -2965,6 +2987,7 @@ final class AppController extends ChangeNotifier {
     _projectDiscoveryApi = null;
     _subscribedThreadIds = {};
     _pendingThreadSubscriptions.clear();
+    _serviceTierRevisions.clear();
     _loadingProjectPage = false;
     _loadingRecentPage = false;
     _loadingUnassignedPage = false;

@@ -66,6 +66,7 @@ final class TaskDraft extends ChangeNotifier {
         'model': settings.model,
         'effort': settings.effort,
         'serviceTier': settings.serviceTier,
+        'serviceTierSelectionVersion': 1,
         'sendMode': sendMode.name,
         if (skill case final selected?)
           'skill': {
@@ -92,7 +93,14 @@ final class TaskDraft extends ChangeNotifier {
     settings = TurnSettings(
         model: value['model'] as String?,
         effort: value['effort'] as String?,
-        serviceTier: value['serviceTier'] as String? ?? 'default');
+        // Untouched legacy drafts saved "default" without a choice. Preserve
+        // configured legacy drafts: they may represent an explicit Fast-off.
+        serviceTier: value['serviceTierSelectionVersion'] == null &&
+                value['model'] == null &&
+                value['effort'] == null &&
+                value['serviceTier'] == 'default'
+            ? null
+            : value['serviceTier'] as String?);
     sendMode = TaskSendMode.values.firstWhere(
         (mode) => mode.name == value['sendMode'],
         orElse: () => TaskSendMode.auto);
