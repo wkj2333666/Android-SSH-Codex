@@ -452,12 +452,14 @@ void main() {
           'thread': {'id': 'thr_large', 'turns': <Object>[]},
           'model': 'actual-model',
           'reasoningEffort': 'high',
+          'serviceTier': 'fast',
         },
       }));
 
       final settings = await resuming;
       expect(settings.model, 'actual-model');
       expect(settings.effort, 'high');
+      expect(settings.serviceTier, 'fast');
     } finally {
       await rpc.close();
     }

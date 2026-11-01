@@ -40,6 +40,47 @@ void main() {
     ),
   ];
 
+  testWidgets('inherited Fast is shown but effort-only edits keep inheritance',
+      (tester) async {
+    TurnSettings? selection;
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: TurnSettingsPicker(
+      models: models,
+      value: const TurnSettings(model: 'gpt-5.6-sol', effort: 'high'),
+      inheritedServiceTier: 'priority',
+      useCatalogDefault: false,
+      onChanged: (value) => selection = value,
+    ))));
+    expect(find.text('GPT-5.6 Sol · high · Fast'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('turn-settings-selector')));
+    await tester.pumpAndSettle();
+    expect(tester.widget<SwitchListTile>(
+        find.byKey(const Key('turn-fast-toggle'))).value, isTrue);
+    await tester.ensureVisible(find.byKey(const Key('turn-effort-medium')));
+    await tester.tap(find.byKey(const Key('turn-effort-medium')));
+    await tester.tap(find.byKey(const Key('turn-settings-apply')));
+    await tester.pumpAndSettle();
+    expect(selection!.effort, 'medium');
+    expect(selection!.serviceTier, isNull);
+  });
+
+  testWidgets('turning inherited Fast off requests standard speed explicitly',
+      (tester) async {
+    TurnSettings? selection;
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: TurnSettingsPicker(
+      models: models,
+      value: const TurnSettings(model: 'gpt-5.6-sol', effort: 'high'),
+      inheritedServiceTier: 'priority',
+      onChanged: (value) => selection = value,
+    ))));
+    await tester.tap(find.byKey(const Key('turn-settings-selector')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('turn-fast-toggle')));
+    await tester.tap(find.byKey(const Key('turn-fast-toggle')));
+    await tester.tap(find.byKey(const Key('turn-settings-apply')));
+    await tester.pumpAndSettle();
+    expect(selection!.serviceTier, 'default');
+  });
+
   testWidgets(
       'Fast is explicit, retained across effort changes, reset for unsupported models',
       (tester) async {

@@ -10,6 +10,20 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test('drafts preserve inheritance and migrate old implicit standard defaults', () {
+    TaskDraft create() => TaskDraft(
+        upload: (file, target, cancel, {onProgress}) async =>
+            throw StateError('Offline'));
+    final draft = create();
+    final restored = create()..restore(draft.toJson());
+    expect(restored.settings.serviceTier, isNull);
+    final legacy = create()..restore({'serviceTier': 'default'});
+    expect(legacy.settings.serviceTier, isNull);
+    draft.dispose();
+    restored.dispose();
+    legacy.dispose();
+  });
+
   test('video metadata survives draft persistence and completed uploads', () {
     TaskDraft create() => TaskDraft(
         canUpload: () => false,
