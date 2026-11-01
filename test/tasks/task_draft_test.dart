@@ -21,6 +21,9 @@ void main() {
     expect(restored.settings.serviceTier, isNull);
     final legacy = create()..restore({'serviceTier': 'default'});
     expect(legacy.settings.serviceTier, isNull);
+    final legacyOff = create()
+      ..restore({'model': 'model', 'serviceTier': 'default'});
+    expect(legacyOff.settings.serviceTier, 'default');
     for (final tier in ['default', 'fast', 'priority']) {
       draft.settings = TurnSettings(serviceTier: tier);
       final explicit = create()..restore(draft.toJson());
@@ -30,6 +33,7 @@ void main() {
     draft.dispose();
     restored.dispose();
     legacy.dispose();
+    legacyOff.dispose();
   });
 
   test('video metadata survives draft persistence and completed uploads', () {

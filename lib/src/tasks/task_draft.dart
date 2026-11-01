@@ -93,8 +93,11 @@ final class TaskDraft extends ChangeNotifier {
     settings = TurnSettings(
         model: value['model'] as String?,
         effort: value['effort'] as String?,
-        // Older drafts persisted "default" even without an explicit choice.
+        // Untouched legacy drafts saved "default" without a choice. Preserve
+        // configured legacy drafts: they may represent an explicit Fast-off.
         serviceTier: value['serviceTierSelectionVersion'] == null &&
+                value['model'] == null &&
+                value['effort'] == null &&
                 value['serviceTier'] == 'default'
             ? null
             : value['serviceTier'] as String?);
