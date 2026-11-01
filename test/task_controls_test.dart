@@ -103,6 +103,43 @@ void main() {
     await rpc.close();
   });
 
+  test('Desktop Fast update wins over an older resume response', () async {
+    final transport = Transport()..withheldMethods.add('thread/resume');
+    final rpc = JsonRpcClient(transport)..start();
+    final controller =
+        AppController.connectedForTesting(rpc: rpc, cachedTasks: [task()]);
+    final selecting = controller.selectTask('task');
+    await Future<void>.delayed(Duration.zero);
+    final resume = transport.calls.singleWhere((c) => c['method'] == 'thread/resume');
+    transport.notify('thread/settings/updated', {
+      'threadId': 'task',
+      'threadSettings': {'serviceTier': 'fast'},
+    });
+    transport.input.add(jsonEncode({
+      'id': resume['id'],
+      'result': {'model': 'model', 'reasoningEffort': 'high', 'serviceTier': null},
+    }));
+    await selecting;
+    expect(controller.selectedTask!.serviceTier, 'fast');
+    controller.dispose();
+    await rpc.close();
+  });
+
+  test('new tasks retain the server tier without forcing standard', () async {
+    final transport = Transport()
+      ..handle = (call) => call['method'] == 'thread/start'
+          ? {'thread': {'id': 'new'}, 'serviceTier': 'fast'}
+          : {};
+    final rpc = JsonRpcClient(transport)..start();
+    final controller = AppController.connectedForTesting(rpc: rpc);
+    await controller.startNewTask(cwd: '/repo', prompt: 'Hello');
+    expect(controller.selectedTask!.serviceTier, 'fast');
+    final start = transport.calls.singleWhere((c) => c['method'] == 'turn/start');
+    expect((start['params'] as Map).containsKey('serviceTierForTurn'), isFalse);
+    controller.dispose();
+    await rpc.close();
+  });
+
   test('queued videos retain media metadata but never create image inputs',
       () async {
     final transport = Transport();

@@ -81,6 +81,28 @@ void main() {
     expect(selection!.serviceTier, 'default');
   });
 
+  testWidgets('clearing a Fast override follows the latest server setting',
+      (tester) async {
+    TurnSettings? selection;
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: TurnSettingsPicker(
+      models: models,
+      value: const TurnSettings(model: 'gpt-5.6-sol', effort: 'high',
+          serviceTier: 'default'),
+      inheritedServiceTier: 'priority',
+      onChanged: (value) => selection = value,
+    ))));
+    await tester.tap(find.byKey(const Key('turn-settings-selector')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('turn-fast-inherit')));
+    await tester.tap(find.byKey(const Key('turn-fast-inherit')));
+    await tester.pumpAndSettle();
+    expect(tester.widget<SwitchListTile>(
+        find.byKey(const Key('turn-fast-toggle'))).value, isTrue);
+    await tester.tap(find.byKey(const Key('turn-settings-apply')));
+    await tester.pumpAndSettle();
+    expect(selection!.serviceTier, isNull);
+  });
+
   testWidgets(
       'Fast is explicit, retained across effort changes, reset for unsupported models',
       (tester) async {

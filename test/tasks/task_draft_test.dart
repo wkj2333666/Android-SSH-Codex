@@ -5,6 +5,7 @@ import 'package:android_ssh_codex/src/app_controller.dart';
 import 'package:android_ssh_codex/src/attachments.dart';
 import 'package:android_ssh_codex/src/profiles/host_profile.dart';
 import 'package:android_ssh_codex/src/tasks/task_draft.dart';
+import 'package:android_ssh_codex/src/tasks/turn_settings.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -19,6 +20,12 @@ void main() {
     expect(restored.settings.serviceTier, isNull);
     final legacy = create()..restore({'serviceTier': 'default'});
     expect(legacy.settings.serviceTier, isNull);
+    for (final tier in ['default', 'fast', 'priority']) {
+      draft.settings = TurnSettings(serviceTier: tier);
+      final explicit = create()..restore(draft.toJson());
+      expect(explicit.settings.serviceTier, tier);
+      explicit.dispose();
+    }
     draft.dispose();
     restored.dispose();
     legacy.dispose();
