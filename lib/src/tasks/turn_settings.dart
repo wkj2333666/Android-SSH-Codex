@@ -5,6 +5,7 @@ final class TurnSettings {
 
   final String? model;
   final String? effort;
+
   /// Null follows the server's thread setting, rather than forcing Standard.
   final String? serviceTier;
   bool get fast => serviceTier == 'fast' || serviceTier == 'priority';

@@ -88,8 +88,10 @@ class TurnSettingsPicker extends StatelessWidget {
 
 class _TurnSettingsSheet extends StatefulWidget {
   const _TurnSettingsSheet(
-      {required this.models, required this.value,
-      this.inheritedServiceTier, this.useCatalogDefault = true,
+      {required this.models,
+      required this.value,
+      this.inheritedServiceTier,
+      this.useCatalogDefault = true,
       this.accountUsage});
 
   final List<RemoteModel> models;
@@ -106,7 +108,8 @@ class _TurnSettingsSheetState extends State<_TurnSettingsSheet> {
   late TurnSettings _draft = widget.value;
 
   bool get _fast {
-    final tier = _draft.serviceTier ?? widget.inheritedServiceTier ??
+    final tier = _draft.serviceTier ??
+        widget.inheritedServiceTier ??
         (widget.useCatalogDefault
             ? _selectedModel(widget.models, _draft)?.defaultServiceTier
             : null);
@@ -160,8 +163,8 @@ class _TurnSettingsSheetState extends State<_TurnSettingsSheet> {
                           serviceTier: _fast && !candidate.supportsFast
                               ? 'default'
                               : _draft.fast
-                              ? candidate.fastServiceTier
-                              : _draft.serviceTier,
+                                  ? candidate.fastServiceTier
+                                  : _draft.serviceTier,
                         );
                       }),
                     ),

@@ -11,7 +11,8 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('drafts preserve inheritance and migrate old implicit standard defaults', () {
+  test('drafts preserve inheritance and migrate old implicit standard defaults',
+      () {
     TaskDraft create() => TaskDraft(
         upload: (file, target, cancel, {onProgress}) async =>
             throw StateError('Offline'));

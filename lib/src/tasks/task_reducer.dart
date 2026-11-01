@@ -121,6 +121,7 @@ final class TaskRecord {
   final bool isPinned;
   final String? model;
   final String? reasoningEffort;
+
   /// The server's saved thread tier, not a per-turn composer override.
   final String? serviceTier;
 

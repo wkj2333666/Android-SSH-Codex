@@ -2749,7 +2749,8 @@ final class AppController extends ChangeNotifier {
     if (method == 'thread/settings/updated') {
       final id = params['threadId'];
       final settings = params['threadSettings'];
-      if (id is String && settings is Map &&
+      if (id is String &&
+          settings is Map &&
           settings.containsKey('serviceTier')) {
         final tier = settings['serviceTier'];
         if (tier == null || tier is String) {

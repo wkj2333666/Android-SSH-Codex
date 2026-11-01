@@ -43,7 +43,9 @@ void main() {
   testWidgets('inherited Fast is shown but effort-only edits keep inheritance',
       (tester) async {
     TurnSettings? selection;
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: TurnSettingsPicker(
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: TurnSettingsPicker(
       models: models,
       value: const TurnSettings(model: 'gpt-5.6-sol', effort: 'high'),
       inheritedServiceTier: 'priority',
@@ -53,8 +55,11 @@ void main() {
     expect(find.text('GPT-5.6 Sol · high · Fast'), findsOneWidget);
     await tester.tap(find.byKey(const Key('turn-settings-selector')));
     await tester.pumpAndSettle();
-    expect(tester.widget<SwitchListTile>(
-        find.byKey(const Key('turn-fast-toggle'))).value, isTrue);
+    expect(
+        tester
+            .widget<SwitchListTile>(find.byKey(const Key('turn-fast-toggle')))
+            .value,
+        isTrue);
     await tester.ensureVisible(find.byKey(const Key('turn-effort-medium')));
     await tester.tap(find.byKey(const Key('turn-effort-medium')));
     await tester.tap(find.byKey(const Key('turn-settings-apply')));
@@ -66,7 +71,9 @@ void main() {
   testWidgets('turning inherited Fast off requests standard speed explicitly',
       (tester) async {
     TurnSettings? selection;
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: TurnSettingsPicker(
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: TurnSettingsPicker(
       models: models,
       value: const TurnSettings(model: 'gpt-5.6-sol', effort: 'high'),
       inheritedServiceTier: 'priority',
@@ -84,10 +91,12 @@ void main() {
   testWidgets('clearing a Fast override follows the latest server setting',
       (tester) async {
     TurnSettings? selection;
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: TurnSettingsPicker(
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: TurnSettingsPicker(
       models: models,
-      value: const TurnSettings(model: 'gpt-5.6-sol', effort: 'high',
-          serviceTier: 'default'),
+      value: const TurnSettings(
+          model: 'gpt-5.6-sol', effort: 'high', serviceTier: 'default'),
       inheritedServiceTier: 'priority',
       onChanged: (value) => selection = value,
     ))));
@@ -96,8 +105,11 @@ void main() {
     await tester.ensureVisible(find.byKey(const Key('turn-fast-inherit')));
     await tester.tap(find.byKey(const Key('turn-fast-inherit')));
     await tester.pumpAndSettle();
-    expect(tester.widget<SwitchListTile>(
-        find.byKey(const Key('turn-fast-toggle'))).value, isTrue);
+    expect(
+        tester
+            .widget<SwitchListTile>(find.byKey(const Key('turn-fast-toggle')))
+            .value,
+        isTrue);
     await tester.tap(find.byKey(const Key('turn-settings-apply')));
     await tester.pumpAndSettle();
     expect(selection!.serviceTier, isNull);

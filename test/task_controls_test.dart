@@ -67,11 +67,16 @@ void main() {
     expect(controller.selectedTask!.serviceTier, 'fast');
     expect(controller.draftForTask('task').settings.serviceTier, isNull);
     await controller.sendPrompt('Use remote settings');
-    final start = transport.calls.singleWhere((c) => c['method'] == 'turn/start');
+    final start =
+        transport.calls.singleWhere((c) => c['method'] == 'turn/start');
     expect((start['params'] as Map).containsKey('serviceTierForTurn'), isFalse);
     transport.notify('thread/settings/updated', {
       'threadId': 'task',
-      'threadSettings': {'model': 'model', 'effort': 'high', 'serviceTier': null},
+      'threadSettings': {
+        'model': 'model',
+        'effort': 'high',
+        'serviceTier': null
+      },
     });
     await Future<void>.delayed(Duration.zero);
     expect(controller.selectedTask!.serviceTier, isNull);
@@ -87,13 +92,18 @@ void main() {
         AppController.connectedForTesting(rpc: rpc, cachedTasks: [task()]);
     await controller.selectTask('task');
     await controller.sendPrompt('Fast next turn', serviceTier: 'fast');
-    expect(transport.calls.lastWhere((c) => c['method'] == 'turn/start')['params'],
+    expect(
+        transport.calls.lastWhere((c) => c['method'] == 'turn/start')['params'],
         containsPair('serviceTierForTurn', 'fast'));
     transport.handle = (call) => call['method'] == 'thread/turns/list'
-        ? {'data': [{'id': 'active', 'status': 'inProgress'}]}
+        ? {
+            'data': [
+              {'id': 'active', 'status': 'inProgress'}
+            ]
+          }
         : {};
-    await controller.sendPrompt('Steer', mode: TaskSendMode.steer,
-        serviceTier: 'default');
+    await controller.sendPrompt('Steer',
+        mode: TaskSendMode.steer, serviceTier: 'default');
     final steer = transport.calls.lastWhere((c) => c['method'] == 'turn/steer');
     expect((steer['params'] as Map).containsKey('serviceTierForTurn'), isFalse);
     await controller.disconnect();
@@ -110,14 +120,19 @@ void main() {
         AppController.connectedForTesting(rpc: rpc, cachedTasks: [task()]);
     final selecting = controller.selectTask('task');
     await Future<void>.delayed(Duration.zero);
-    final resume = transport.calls.singleWhere((c) => c['method'] == 'thread/resume');
+    final resume =
+        transport.calls.singleWhere((c) => c['method'] == 'thread/resume');
     transport.notify('thread/settings/updated', {
       'threadId': 'task',
       'threadSettings': {'serviceTier': 'fast'},
     });
     transport.input.add(jsonEncode({
       'id': resume['id'],
-      'result': {'model': 'model', 'reasoningEffort': 'high', 'serviceTier': null},
+      'result': {
+        'model': 'model',
+        'reasoningEffort': 'high',
+        'serviceTier': null
+      },
     }));
     await selecting;
     expect(controller.selectedTask!.serviceTier, 'fast');
@@ -128,13 +143,17 @@ void main() {
   test('new tasks retain the server tier without forcing standard', () async {
     final transport = Transport()
       ..handle = (call) => call['method'] == 'thread/start'
-          ? {'thread': {'id': 'new'}, 'serviceTier': 'fast'}
+          ? {
+              'thread': {'id': 'new'},
+              'serviceTier': 'fast'
+            }
           : {};
     final rpc = JsonRpcClient(transport)..start();
     final controller = AppController.connectedForTesting(rpc: rpc);
     await controller.startNewTask(cwd: '/repo', prompt: 'Hello');
     expect(controller.selectedTask!.serviceTier, 'fast');
-    final start = transport.calls.singleWhere((c) => c['method'] == 'turn/start');
+    final start =
+        transport.calls.singleWhere((c) => c['method'] == 'turn/start');
     expect((start['params'] as Map).containsKey('serviceTierForTurn'), isFalse);
     controller.dispose();
     await rpc.close();
