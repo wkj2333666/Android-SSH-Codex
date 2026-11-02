@@ -25,6 +25,17 @@ cmp "$repo_root/tool/android/AttachmentDownloads.kt" "$fixture/app/src/main/kotl
 cmp "$repo_root/tool/android/VideoPreviewActivity.kt" "$fixture/app/src/main/kotlin/io/github/wkj2333666/android_ssh_codex/VideoPreviewActivity.kt"
 grep -Fq 'android:name=".VideoPreviewActivity"' "$fixture/first.xml"
 grep -Fq '"playVideo"' "$repo_root/tool/android/MainActivity.kt"
+# Both plain Markdown links and attachment cards use this same native player.
+# It must export its existing private file, without a second SSH transfer.
+grep -Fq 'text = "Save"' "$repo_root/tool/android/VideoPreviewActivity.kt"
+grep -Fq 'exporter.saveVideo(file.absolutePath, name' "$repo_root/tool/android/VideoPreviewActivity.kt"
+grep -Fq 'requestCode == AttachmentDownloads.REQUEST' "$repo_root/tool/android/VideoPreviewActivity.kt"
+grep -Fq 'override fun finish()' "$repo_root/tool/android/VideoPreviewActivity.kt"
+grep -Fq 'closeAfterSave = true' "$repo_root/tool/android/VideoPreviewActivity.kt"
+grep -Fq 'downloads?.close()' "$repo_root/tool/android/VideoPreviewActivity.kt"
+grep -Fq 'VideoPreviewActivity.previewFile(activity, path)' "$repo_root/tool/android/AttachmentDownloads.kt"
+grep -Fq 'Intent.ACTION_CREATE_DOCUMENT' "$repo_root/tool/android/AttachmentDownloads.kt"
+grep -Fq 'copyTo(output, 65536)' "$repo_root/tool/android/AttachmentDownloads.kt"
 cmp "$repo_root/tool/android/ConnectionDiagnostics.kt" "$fixture/app/src/main/kotlin/io/github/wkj2333666/android_ssh_codex/ConnectionDiagnostics.kt"
 grep -Fq 'bash tool/configure_android_connection_service.sh' "$repo_root/tool/prepare_android.sh"
 echo 'android_connection_service_test: PASS'
