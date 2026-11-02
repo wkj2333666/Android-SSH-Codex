@@ -32,10 +32,11 @@ class AttachmentDownloads(private val activity: Activity) {
                     cached.length() <= 1024L * 1024L * 1024L)
                 cached
             }
-            val mime = if (video) MimeTypeMap.getSingleton().getMimeTypeFromExtension(
-                name.substringAfterLast('.', "").lowercase(Locale.ROOT))
-                ?.takeIf { it.startsWith("video/") } ?: "application/octet-stream"
-                else "application/octet-stream"
+            val mime = if (video) {
+                MimeTypeMap.getSingleton().getMimeTypeFromExtension(
+                    name.substringAfterLast('.', "").lowercase(Locale.ROOT))
+                    ?.takeIf { it.startsWith("video/") } ?: "application/octet-stream"
+            } else "application/octet-stream"
             source = file
             pending = result
             activity.startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT)

@@ -9,7 +9,8 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('ordinary Markdown video links open the shared save-capable player',
+  testWidgets(
+      'ordinary Markdown video links open the shared save-capable player',
       (tester) async {
     var plays = 0;
     var downloads = 0;
