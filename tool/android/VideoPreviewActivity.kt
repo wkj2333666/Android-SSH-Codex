@@ -16,6 +16,8 @@ import android.widget.MediaController
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.VideoView
+import android.widget.Toast
+import io.flutter.plugin.common.MethodChannel
 import java.io.File
 
 /** App-private local playback only. Never expose SSH credentials or a local
@@ -47,6 +49,11 @@ class VideoPreviewActivity : Activity() {
     private var resumePlayback = true
     private var position = 0
     private var foreground = false
+    private var downloads: AttachmentDownloads? = null
+    private var saveButton: Button? = null
+    private var saving = false
+    private var closeAfterSave = false
+    private var destroyed = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -60,6 +67,8 @@ class VideoPreviewActivity : Activity() {
         position = savedInstanceState?.getInt("position") ?: 0
         resumePlayback = savedInstanceState?.getBoolean("playing", true) ?: true
         setResult(RESULT_OK)
+        downloads = AttachmentDownloads(this)
+        val name = (intent.getStringExtra("name") ?: "Video").take(200)
         window.statusBarColor = Color.BLACK
         window.navigationBarColor = Color.BLACK
         val root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
@@ -89,13 +98,19 @@ class VideoPreviewActivity : Activity() {
             setBackgroundColor(0xAA000000.toInt())
         }
         val title = TextView(this).apply {
-            text = (intent.getStringExtra("name") ?: "Video").take(200)
+            text = name
             setTextColor(Color.WHITE)
             maxLines = 1
             ellipsize = android.text.TextUtils.TruncateAt.END
             setPadding(16, 8, 16, 8)
         }
         toolbar.addView(title, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        val save = Button(this).apply {
+            text = "Save"
+            setOnClickListener { saveVideo(file, name) }
+        }
+        saveButton = save
+        toolbar.addView(save)
         toolbar.addView(Button(this).apply {
             text = "Close"
             setOnClickListener { finish() }
@@ -122,7 +137,7 @@ class VideoPreviewActivity : Activity() {
             prepared = false
             player.keepScreenOn = false
             loading.visibility = View.GONE
-            val message = "This device cannot play the video format. You can download the original file instead."
+            val message = "This device cannot play the video format. Tap Save to keep the original file."
             DiagnosticLog.record(this, "video.playbackError", mapOf("what" to what, "extra" to extra))
             setResult(RESULT_CANCELED, Intent().putExtra("error", message))
             root.addView(TextView(this).apply {
@@ -138,6 +153,49 @@ class VideoPreviewActivity : Activity() {
         root.requestApplyInsets()
         player.setVideoPath(file.absolutePath)
         player.requestFocus()
+    }
+
+    private fun saveVideo(file: File, name: String) {
+        val exporter = downloads ?: return
+        if (saving || destroyed) return
+        saving = true
+        saveButton?.isEnabled = false
+        saveButton?.text = "Saving…"
+        // Export the current private file; do not open another SSH download.
+        exporter.saveVideo(file.absolutePath, name, object : MethodChannel.Result {
+            override fun success(value: Any?) {
+                completeSave(if (value == true) "Video saved" else "Save cancelled")
+            }
+            override fun error(code: String, message: String?, details: Any?) {
+                completeSave("Could not save video ($code). Try another location.")
+            }
+            override fun notImplemented() { completeSave("Video saving is unavailable") }
+        })
+    }
+
+    private fun completeSave(message: String) {
+        saving = false
+        if (destroyed) return
+        saveButton?.isEnabled = true
+        saveButton?.text = "Save"
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+        if (closeAfterSave) finish()
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == AttachmentDownloads.REQUEST) downloads?.onResult(resultCode, data)
+    }
+
+    override fun finish() {
+        if (saving && !destroyed) {
+            // MainActivity/Dart own the cached file until this player returns.
+            // A back/Close action must not release it while the copier needs it.
+            closeAfterSave = true
+            Toast.makeText(this, "Will close after saving", Toast.LENGTH_SHORT).show()
+            return
+        }
+        super.finish()
     }
 
     override fun onPause() {
@@ -165,6 +223,9 @@ class VideoPreviewActivity : Activity() {
     }
 
     override fun onDestroy() {
+        destroyed = true
+        downloads?.close()
+        downloads = null
         controls?.hide()
         video?.stopPlayback()
         video = null

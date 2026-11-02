@@ -183,7 +183,7 @@ class MainActivity : FlutterActivity() {
             else result?.success(resultCode == Activity.RESULT_OK)
             return
         }
-        if (requestCode == 4104) {
+        if (requestCode == AttachmentDownloads.REQUEST) {
             attachmentDownloads?.onResult(resultCode, data)
             return
         }
