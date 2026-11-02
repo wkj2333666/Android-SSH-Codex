@@ -331,7 +331,12 @@ frames automatically. Tap **Play video** in a reply or sent video attachment to
 open the in-app player with pause and seeking controls. The first tap streams
 the file over a dedicated resumable SSH connection to temporary phone storage
 (up to 1 GiB), with loading progress and cancellation; it does not open a save
-picker. Closing the player releases its temporary copy. A selected local video
+picker. The player's **Save** button opens the system file picker and copies
+the already-loaded original file; it does not download it again and works
+even when the device cannot decode the video. Cancelling returns to playback;
+closing during a save waits for the copy before releasing its temporary file.
+This same Save button is available after opening an ordinary video text link.
+Closing the player releases its temporary copy. A selected local video
 can also be played from its composer chip before sending. Playback uses the
 phone's supported codecs; **Download video** remains available for other players.
 If a document provider returns only an image thumbnail

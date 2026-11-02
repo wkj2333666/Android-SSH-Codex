@@ -9,6 +9,34 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets(
+      'ordinary Markdown video links open the shared save-capable player',
+      (tester) async {
+    var plays = 0;
+    var downloads = 0;
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: RemoteFileActions(
+      download: (_) async {
+        downloads++;
+        return true;
+      },
+      previewVideo: (path, {onProgress, onReady}) async {
+        expect(path, '/remote/a.mp4');
+        plays++;
+        onReady?.call();
+        return true;
+      },
+      child: const MarkdownContent(text: '[Watch video](/remote/a.mp4)'),
+    ))));
+    await tester.tap(find.text('Watch video'));
+    await tester.pumpAndSettle();
+    expect(plays, 1);
+    expect(downloads, 0);
+    expect(find.text('Download remote file?'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('video loading has progress, cancellation and decoder errors',
       (tester) async {
     final completion = Completer<bool>();
