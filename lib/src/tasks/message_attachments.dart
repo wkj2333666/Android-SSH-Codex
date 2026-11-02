@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '../attachment_media.dart';
 
 /// Presentation metadata only. The original prompt is never rewritten.
@@ -33,20 +35,57 @@ class AttachmentMessage {
   final List<MessageAttachment> attachments;
 }
 
+/// Only unwrap complete MCP content envelopes, not arbitrary prose/examples.
+Map<String, dynamic>? imageEnvelope(String text) {
+  if (text.length > 14 * 1024 * 1024 || !text.trimLeft().startsWith('{')) {
+    return null;
+  }
+  try {
+    final value = jsonDecode(text);
+    if (value is! Map<String, dynamic> ||
+        value['content'] is! List ||
+        value.keys.any((key) => !const [
+              'content',
+              'structuredContent',
+              'structured_content',
+              'isError',
+              'is_error',
+              '_meta'
+            ].contains(key))) {
+      return null;
+    }
+    return value;
+  } on FormatException {
+    return null;
+  }
+}
+
+bool imageDataTruncated(String source) =>
+    source.startsWith('data:image/') &&
+    RegExp(r'…\d+ chars truncated…').hasMatch(source);
+
 /// Read image blocks only from protocol content, never from tool arguments or
 /// arbitrary text. MCP embedded bytes and dynamic-tool image URLs share the
 /// same presentation model as user attachments.
 List<MessageAttachment> outputImageAttachments(Map<String, dynamic> item) {
   final images = <MessageAttachment>[];
   final seen = <String>{};
-  void blocks(Object? raw) {
-    if (raw is! List) return;
+  void blocks(Object? raw, [int depth = 0]) {
+    if (raw is! List || depth > 3) return;
     for (final block in raw) {
       if (block is! Map) continue;
       final type = block['type'];
+      if (type == 'text' &&
+          block['text'] is String &&
+          const ['mcpToolCall', 'dynamicToolCall'].contains(item['type'])) {
+        final envelope = imageEnvelope(block['text'] as String);
+        if (envelope != null) blocks(envelope['content'], depth + 1);
+      }
       if (type != 'image' &&
           type != 'localImage' &&
           type != 'inputImage' &&
+          type != 'input_image' &&
+          type != 'output_image' &&
           type != 'image_url') {
         continue;
       }
@@ -84,6 +123,8 @@ List<MessageAttachment> outputImageAttachments(Map<String, dynamic> item) {
   if (result is Map) {
     blocks(result['content']);
     blocks(result['contentItems']);
+  } else if (result is String) {
+    blocks(imageEnvelope(result)?['content']);
   }
   return List.unmodifiable(images);
 }
