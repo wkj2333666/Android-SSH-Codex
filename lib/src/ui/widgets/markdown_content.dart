@@ -11,6 +11,8 @@ import 'inline_attachment_image.dart';
 import 'remote_file_actions.dart';
 import '../../tasks/message_attachments.dart';
 import '../../transport/file_download.dart';
+import '../../ports/port_forward.dart';
+import 'remote_port_link_scope.dart';
 
 typedef ExternalLinkOpener = Future<bool> Function(Uri uri);
 typedef MarkdownTextCopier = Future<void> Function(String text);
@@ -40,6 +42,11 @@ Future<void> openWebLink(
     return;
   }
   try {
+    final scope = RemotePortLinkScope.maybeOf(context);
+    if (scope != null && isRemoteLoopbackUri(uri)) {
+      await scope.onOpen(context, uri, opener);
+      return;
+    }
     if (!await opener(uri) && context.mounted) {
       _showLinkError(context, 'Could not open link.');
     }

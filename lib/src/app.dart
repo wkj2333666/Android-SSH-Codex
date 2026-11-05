@@ -5,6 +5,8 @@ import 'connection_lifecycle.dart';
 import 'diagnostics.dart';
 import 'ui/hosts_view.dart';
 import 'ui/tasks_view.dart';
+import 'ui/port_forwards_view.dart';
+import 'ui/widgets/remote_port_link_scope.dart';
 
 class AndroidSshCodexApp extends StatefulWidget {
   const AndroidSshCodexApp({required this.controller, super.key});
@@ -85,7 +87,9 @@ class _Workspace extends StatelessWidget {
         animation: controller,
         builder: (context, _) {
           final wide = MediaQuery.sizeOf(context).width >= 800;
-          return Stack(
+          return RemotePortLinkScope(
+            onOpen: (context, uri, opener) => openRemotePortLink(context, controller, uri, opener),
+            child: Stack(
             children: [
               Scaffold(
                 appBar: wide
@@ -93,6 +97,7 @@ class _Workspace extends StatelessWidget {
                     : AppBar(
                         title: const Text('Remote Codex'),
                         actions: [
+                          _PortsAction(controller: controller),
                           if (Diagnostics.supported) const _DiagnosticExport(),
                           _ConnectionAction(controller: controller),
                         ],
@@ -135,7 +140,7 @@ class _Workspace extends StatelessWidget {
               if (controller.hostKeyChallenge != null)
                 _HostKeyPrompt(controller: controller),
             ],
-          );
+          ));
         },
       );
 
@@ -181,6 +186,7 @@ class _DesktopNavigation extends StatelessWidget {
                   onPressed: () => controller.selectSection(AppSection.tasks),
                 ),
                 const Divider(indent: 12, endIndent: 12),
+                _PortsAction(controller: controller),
                 if (Diagnostics.supported) const _DiagnosticExport(),
                 _ConnectionAction(controller: controller),
                 const SizedBox(height: 12),
@@ -189,6 +195,17 @@ class _DesktopNavigation extends StatelessWidget {
           ),
         ),
       );
+}
+
+class _PortsAction extends StatelessWidget {
+  const _PortsAction({required this.controller});
+  final AppController controller;
+  @override
+  Widget build(BuildContext context) => IconButton(
+    key: const Key('open-ports'), tooltip: 'SSH ports',
+    onPressed: controller.selectedHostId == null ? null : () => showPortForwards(context, controller),
+    icon: const Icon(Icons.settings_ethernet),
+  );
 }
 
 class _DiagnosticExport extends StatefulWidget {

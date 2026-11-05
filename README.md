@@ -32,6 +32,41 @@ settings. Neither guarantees that a VPN or changing mobile network stays alive.
 SSH reply timeouts detect unresponsive transports without depending on model
 response time; a timeout is not proof of which network component failed.
 
+### SSH port forwarding
+
+Open **SSH ports** (the ethernet icon in the top bar or tablet navigation rail)
+to add, edit, stop or remove TCP forwards for the selected host. Set the target
+host/port as seen **from the SSH server** and a phone port; `0` means Auto,
+which tries the remote port first and then chooses a free port. Fixed-port
+conflicts show an error instead of silently changing your selection. Copy the
+actual local address or open its HTTP/HTTPS URL from the rule's menu.
+
+Rules are saved per host, remain editable offline, and enabled rules resume
+after reconnecting to that same host. Leaving a task does not stop its forwards.
+Disconnecting or switching hosts closes local listeners and their active TCP
+connections. Renaming a rule does not interrupt it; changing its route does.
+There are up to 32 rules per host, 16 clients per rule and 64 clients in total.
+
+Ports reuses the authenticated SSH transport and its jump host. It needs no
+server-side proxy. **Discover listening ports** optionally reads `ss` or
+`netstat` on the target host, without sudo or process arguments; discovery is
+bounded and is not a background scanner. Detected ports are not automatically
+forwarded. Manual rules work even when discovery tools are unavailable.
+
+When Codex starts a development server and provides a localhost HTTP(S) link,
+tapping it asks to forward the remote port, or reuses an already-enabled
+matching rule. Paths, query strings and fragments survive local-port remapping.
+Merely receiving a message never starts forwarding. This coordinates with the
+remote service, not another Desktop client's private forwarding registry.
+
+Listeners bind **only to phone loopback `127.0.0.1`**, never the LAN; other apps
+on the same phone can still reach loopback. Only forward services you trust.
+Browser URLs do not bypass TLS certificate checks or rewrite application
+headers/redirects. A listener being active does not prove the remote service is
+ready. Existing streams cannot survive SSH loss, app termination or force-stop;
+saved rules let new connections resume after SSH reconnects. Reverse forwarding,
+UDP and public/shared tunnels are not provided.
+
 ### File downloads
 
 Android downloads use a dedicated SSH/SFTP connection with bounded parallel

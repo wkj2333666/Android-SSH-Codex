@@ -148,26 +148,30 @@ garbage localhost:6000
     final client = SSHClient(await SSHSocket.connect('127.0.0.1', 22229),
         username: Platform.environment['USER']!, identities: SSHKeyPair.fromPem(
             await File(Platform.environment['DOWNLOAD_TEST_KEY']!).readAsString()));
-    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-    final sub = server.listen((request) async {
-      request.response.write('forwarded'); await request.response.close();
+    final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+    final peers = <Socket>[];
+    final sub = server.listen((socket) {
+      peers.add(socket);
+      unawaited(socket.cast<List<int>>().pipe(socket));
     });
     final manager = PortForwardManager();
-    final http = HttpClient();
+    Socket? socket;
     try {
       await manager.upsert(rule(remote: server.port));
       await manager.attach('pi', (host, port) async =>
           SshPortForwardChannel(await client.forwardLocal(host, port)));
-      final request = await http.get('127.0.0.1', manager.stateFor('a').localPort!, '/');
-      final response = await request.close();
-      expect(String.fromCharCodes(await response.fold<List<int>>([], (a, b) => a..addAll(b))),
-          'forwarded');
+      socket = await Socket.connect('127.0.0.1', manager.stateFor('a').localPort!);
+      final payload = Uint8List.fromList(List.generate(4 * 1024 * 1024 + 37, (i) => i % 251));
+      final response = socket.fold<BytesBuilder>(BytesBuilder(), (buffer, chunk) => buffer..add(chunk));
+      socket.add(payload); await socket.flush(); await socket.close();
+      expect((await response.timeout(const Duration(seconds: 30))).takeBytes(), payload);
       await manager.detach();
       await client.ping();
       expect(client.isClosed, isFalse);
     } finally {
-      manager.dispose(); http.close(force: true); client.close();
-      await sub.cancel(); await server.close(force: true);
+      manager.dispose(); socket?.destroy(); client.close();
+      for (final peer in peers) { peer.destroy(); }
+      await sub.cancel(); await server.close();
     }
   }, skip: !Platform.environment.containsKey('DOWNLOAD_TEST_KEY'));
 }

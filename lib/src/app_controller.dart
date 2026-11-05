@@ -13,6 +13,9 @@ import 'projects/remote_project.dart';
 import 'projects/shared_project_sync.dart';
 import 'protocol/codex_remote_api.dart';
 import 'account_usage.dart';
+import 'ports/port_forward.dart';
+import 'ports/port_forward_manager.dart';
+import 'ports/port_discovery.dart';
 import 'protocol/user_input_request.dart';
 import 'protocol/foreground_probe.dart';
 import 'protocol/json_rpc_client.dart';
@@ -227,6 +230,52 @@ final class AppController extends ChangeNotifier {
   List<RemoteProject> _projects = const [];
   List<RemoteModel> _models = const [];
   final AccountUsageController accountUsage = AccountUsageController();
+  final PortForwardManager portForwards = PortForwardManager();
+  bool get canDiscoverPorts => isConnected && _ssh != null;
+
+  Future<void> savePortForward(PortForwardRule rule) async {
+    if (rule.hostId != _selectedHostId) throw StateError('The selected SSH host changed.');
+    await portForwards.upsert(rule);
+    await _saveWorkspace();
+  }
+
+  Future<void> removePortForward(String id) async {
+    await portForwards.remove(id);
+    await _saveWorkspace();
+  }
+
+  Future<List<ListeningPort>> discoverPorts(String hostId) async {
+    final ssh = _ssh;
+    if (!isConnected || ssh == null || hostId != _selectedHostId) {
+      throw StateError('Connect to this SSH host to discover ports.');
+    }
+    final ports = await discoverListeningPorts(ssh.client);
+    if (!identical(ssh, _ssh) || hostId != _selectedHostId) {
+      throw StateError('SSH connection changed during port discovery.');
+    }
+    return ports;
+  }
+
+  Future<Uri> forwardLoopbackUrl(String hostId, Uri source) async {
+    // Validate before creating/persisting any rule. Never log URL query tokens.
+    mapForwardedUri(source, 1024);
+    if (!isConnected || hostId != _selectedHostId) {
+      throw StateError('Reconnect to this SSH host before opening its localhost URL.');
+    }
+    final existing = portForwards.loopbackRule(hostId, source.port, source.host);
+    final rule = existing?.copyWith(enabled: true) ?? PortForwardRule(
+      id: portForwards.newId(), hostId: hostId,
+      remoteHost: source.host, remotePort: source.port,
+      scheme: source.scheme, label: 'From localhost link',
+    );
+    await savePortForward(rule);
+    if (!isConnected || hostId != _selectedHostId) {
+      throw StateError('SSH host changed while opening the forwarded URL.');
+    }
+    final state = portForwards.stateFor(rule.id);
+    if (state.localPort == null) throw StateError(state.error ?? 'Forwarding is waiting for SSH.');
+    return mapForwardedUri(source, state.localPort!);
+  }
   AppSection _section = AppSection.hosts;
   RemoteConnectionPhase _connectionPhase = RemoteConnectionPhase.disconnected;
   String? _selectedHostId;
@@ -325,6 +374,7 @@ final class AppController extends ChangeNotifier {
     final store = _store;
     if (store is! WorkspaceStore) return;
     final saved = await (store as WorkspaceStore).readWorkspace();
+    portForwards.restore(saved['portForwards']);
     for (final raw in saved['drafts'] as List? ?? const []) {
       final entry = raw as Map;
       _savedDrafts[(entry['host'] as String, entry['task'] as String)] =
@@ -351,6 +401,7 @@ final class AppController extends ChangeNotifier {
       return Future.error(StateError('Draft storage has not been restored.'));
     }
     final snapshot = <String, dynamic>{
+      'portForwards': portForwards.rules.map((rule) => rule.toJson()).toList(),
       'drafts': [
         for (final entry in _savedDrafts.entries)
           {'host': entry.key.$1, 'task': entry.key.$2, 'draft': entry.value}
@@ -501,6 +552,7 @@ final class AppController extends ChangeNotifier {
     }
     _savedDrafts.removeWhere((key, _) => key.$1 == id);
     _outboxes.remove(id);
+    await portForwards.removeHost(id);
     await _saveWorkspace();
     await _store.deleteProfile(id);
     _profiles = await _store.readProfiles();
@@ -696,6 +748,9 @@ final class AppController extends ChangeNotifier {
           stage.name, () => refreshTasks(throwOnError: true, resetPages: true));
       if (attempt != _connectionAttempt) return;
       _connectionPhase = RemoteConnectionPhase.connected;
+      // Optional forwarding failures are isolated from chat connectivity.
+      unawaited(portForwards.attach(profile.id, (host, port) async =>
+          SshPortForwardChannel(await ssh!.client.forwardLocal(host, port))));
       setup.dispose();
       if (identical(_openingAttempt, setup)) _openingAttempt = null;
       accountUsage.bind(api);
@@ -2976,6 +3031,7 @@ final class AppController extends ChangeNotifier {
 
   Future<void> _closeTransport(
       {String reason = 'connection_replaced_or_closed'}) async {
+    final closingPorts = portForwards.detach();
     accountUsage.bind(null);
     _userInputRequests = const [];
     Diagnostics.record('connection.closeRequested', {'closeReason': reason});
@@ -3004,6 +3060,7 @@ final class AppController extends ChangeNotifier {
     _tunnel = null;
     _ssh = null;
     await Future.wait([
+      boundedConnectionCleanup('portForwards', () => closingPorts),
       if (notificationSubscription != null)
         boundedConnectionCleanup(
             'notifications', notificationSubscription.cancel),
@@ -3044,6 +3101,7 @@ final class AppController extends ChangeNotifier {
     _agentDeltaBatcher.dispose();
     unawaited(_closeTransport(reason: 'controller_disposed'));
     accountUsage.dispose();
+    portForwards.dispose();
     unawaited(_setKeepAlive(false));
     super.dispose();
   }
