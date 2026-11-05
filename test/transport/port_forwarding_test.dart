@@ -100,9 +100,12 @@ garbage localhost:6000
       final socket = await Socket.connect('127.0.0.1', port);
       final bytes = Uint8List.fromList(
           List.generate(4 * 1024 * 1024 + 37, (i) => i % 251));
-      final receiving = socket.fold<BytesBuilder>(
-          BytesBuilder(), (builder, chunk) => builder..add(chunk)).catchError((Object error) {
-        throw StateError('Receive failed: $error; bridge: ${manager.stateFor("a").error}');
+      final receiving = socket
+          .fold<BytesBuilder>(
+              BytesBuilder(), (builder, chunk) => builder..add(chunk))
+          .catchError((Object error) {
+        throw StateError(
+            'Receive failed: $error; bridge: ${manager.stateFor("a").error}');
       });
       socket.add(bytes);
       await socket.flush();
