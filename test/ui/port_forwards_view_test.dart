@@ -41,8 +41,14 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     final controller = AppController.memory();
-    await controller.saveProfile(HostProfile(id: 'test', label: 'Test',
-        hostName: 'host.example', user: 'coder', port: 22), const HostSecret());
+    await controller.saveProfile(
+        HostProfile(
+            id: 'test',
+            label: 'Test',
+            hostName: 'host.example',
+            user: 'coder',
+            port: 22),
+        const HostSecret());
     await tester.pumpWidget(MaterialApp(
         home: Scaffold(
             body: PortForwardsPanel(

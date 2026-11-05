@@ -124,8 +124,9 @@ garbage localhost:6000
         await socket.flush();
         await socket.close();
       }();
-      final completed = await Future.wait<dynamic>([receiving, sending],
-          eagerError: true).timeout(const Duration(seconds: 15));
+      final completed =
+          await Future.wait<dynamic>([receiving, sending], eagerError: true)
+              .timeout(const Duration(seconds: 15));
       final response = (completed.first as BytesBuilder).takeBytes();
       expect(response, bytes);
       await manager.detach();
@@ -252,8 +253,9 @@ garbage localhost:6000
         await writingSocket.flush();
         await writingSocket.close();
       }();
-      final completed = await Future.wait<dynamic>([response, sending],
-          eagerError: true).timeout(const Duration(seconds: 30));
+      final completed =
+          await Future.wait<dynamic>([response, sending], eagerError: true)
+              .timeout(const Duration(seconds: 30));
       expect((completed.first as BytesBuilder).takeBytes(), payload);
       await manager.detach();
       await client.ping();
