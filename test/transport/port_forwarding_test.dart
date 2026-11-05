@@ -52,6 +52,25 @@ PortForwardRule rule(
         enabled: enabled);
 
 void main() {
+  test('saved-rule limits match restore limits instead of silently losing rules',
+      () async {
+    final manager = PortForwardManager();
+    try {
+      for (var i = 0; i < PortForwardManager.maxSavedRules; i++) {
+        await manager.upsert(rule(id: 'saved-$i', host: 'host-${i ~/ 32}',
+            remote: 10000 + i));
+      }
+      expect(() => manager.upsert(rule(id: 'overflow', host: 'extra')),
+          throwsArgumentError);
+      final restored = PortForwardManager();
+      restored.restore(manager.rules.map((rule) => rule.toJson()).toList());
+      expect(restored.rules.length, manager.rules.length);
+      restored.dispose();
+    } finally {
+      manager.dispose();
+    }
+  });
+
   test('rules validate ports/targets and round trip without credentials', () {
     final value = rule();
     expect(PortForwardRule.fromJson(value.toJson()).toJson(), value.toJson());

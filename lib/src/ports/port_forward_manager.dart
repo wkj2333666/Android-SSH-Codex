@@ -36,6 +36,7 @@ typedef PortForwardOpener = Future<PortForwardChannel> Function(
 /// UI-independent, host-scoped listeners. Never owns/closes the SSH client.
 final class PortForwardManager extends ChangeNotifier {
   static const maxRulesPerHost = 32;
+  static const maxSavedRules = 256;
   static const maxConnections = 64;
   final Map<String, PortForwardRule> _rules = {};
   final Map<String, _Listener> _listeners = {};
@@ -79,7 +80,7 @@ final class PortForwardManager extends ChangeNotifier {
 
   void restore(Object? raw) {
     if (_disposed || raw is! List) return;
-    for (final entry in raw.take(256)) {
+    for (final entry in raw.take(maxSavedRules)) {
       try {
         if (entry is! Map) continue;
         final rule = PortForwardRule.fromJson(entry);
@@ -108,6 +109,9 @@ final class PortForwardManager extends ChangeNotifier {
     }
     if (_duplicate(rule)) {
       throw ArgumentError('This remote target already has a forwarding rule.');
+    }
+    if (previous == null && _rules.length >= maxSavedRules) {
+      throw ArgumentError('Maximum $maxSavedRules saved forwarding rules.');
     }
     if (previous == null && forHost(rule.hostId).length >= maxRulesPerHost) {
       throw ArgumentError(

@@ -45,7 +45,8 @@ Rules are saved per host, remain editable offline, and enabled rules resume
 after reconnecting to that same host. Leaving a task does not stop its forwards.
 Disconnecting or switching hosts closes local listeners and their active TCP
 connections. Renaming a rule does not interrupt it; changing its route does.
-There are up to 32 rules per host, 16 clients per rule and 64 clients in total.
+There are up to 32 rules per host (256 saved in total), 16 clients per rule and
+64 simultaneous clients in total.
 
 Ports reuses the authenticated SSH transport and its jump host. It needs no
 server-side proxy. **Discover listening ports** optionally reads `ss` or
