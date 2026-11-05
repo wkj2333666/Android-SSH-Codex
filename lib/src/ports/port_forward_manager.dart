@@ -320,12 +320,22 @@ final class _Bridge {
       final channel = _channel!;
       if (_closed || owner.stopped) return;
       unawaited(channel.done.then((_) {}, onError: (Object error) {
+        if (!owner.stopped && !_closed) {
+          owner.failed(error);
+          Diagnostics.record('portForward.remoteError',
+              {'rule': owner.rule.id, ...Diagnostics.errorFields(error)});
+        }
         abort();
       }));
       Future<void> transfer(Future<dynamic> operation) async {
         try {
           await operation;
-        } catch (_) {
+        } catch (error) {
+          if (!owner.stopped && !_closed) {
+            owner.failed(error);
+            Diagnostics.record('portForward.streamError',
+                {'rule': owner.rule.id, ...Diagnostics.errorFields(error)});
+          }
           abort();
           rethrow;
         }
@@ -340,6 +350,7 @@ final class _Bridge {
     } catch (error) {
       if (!_closed && !owner.stopped) {
         owner.failed(error);
+        debugPrint('SSH port forwarding failed: $error');
         Diagnostics.record('portForward.channelFailed',
             {'rule': owner.rule.id, ...Diagnostics.errorFields(error)});
       }

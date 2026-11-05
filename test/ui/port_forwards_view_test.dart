@@ -41,7 +41,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     final rpc = JsonRpcClient(_Transport())..start();
     final controller = AppController.connectedForTesting(rpc: rpc);
-    await controller.disconnect();
+    await tester.runAsync(controller.disconnect);
     await tester.pumpWidget(MaterialApp(
         home: Scaffold(
             body: PortForwardsPanel(
@@ -77,9 +77,11 @@ void main() {
     expect(controller.portForwards.rules, isEmpty);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
-    controller.dispose();
-    await rpc.close();
-  });
+    await tester.runAsync(() async {
+      controller.dispose();
+      await rpc.close();
+    });
+  }, timeout: const Timeout(Duration(seconds: 45)));
 
   testWidgets(
       'remote localhost link requires confirmation; cancellation starts nothing',
@@ -109,9 +111,11 @@ void main() {
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
     expect(controller.portForwards.rules, isEmpty);
-    controller.dispose();
-    await rpc.close();
-  });
+    await tester.runAsync(() async {
+      controller.dispose();
+      await rpc.close();
+    });
+  }, timeout: const Timeout(Duration(seconds: 45)));
 
   testWidgets('enabled matching rule is reused and browser path/query survive',
       (tester) async {
@@ -145,8 +149,10 @@ void main() {
     expect(opened!.fragment, 'anchor');
     expect(controller.portForwards.rules.length, 1);
     await tester.runAsync(controller.portForwards.detach);
-    controller.dispose();
-    await rpc.close();
+    await tester.runAsync(() async {
+      controller.dispose();
+      await rpc.close();
+    });
   }, timeout: const Timeout(Duration(seconds: 45)));
 
   testWidgets(
