@@ -11,6 +11,7 @@ import 'preview_browser.dart';
 
 Future<bool> openForwardedPage(Uri uri, Future<bool> Function(Uri) external,
     {Future<bool> Function(Uri)? inApp}) async {
+  if (inApp == null && !PreviewBrowser.supported) return external(uri);
   try {
     if (await (inApp ?? PreviewBrowser.openPage)(uri)) return true;
   } on PlatformException {

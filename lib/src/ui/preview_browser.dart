@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 /// System WebView only; no JavaScript bridge is exposed to preview content.
 abstract final class PreviewBrowser {
   static const channel = MethodChannel('android_ssh_codex/previews');
+  static bool get supported => !kIsWeb && Platform.isAndroid;
 
   static Future<bool> openPage(Uri uri) async {
     if (!{'http', 'https'}.contains(uri.scheme) ||
@@ -53,7 +54,7 @@ abstract final class PreviewBrowser {
 
 Future<void> showImagePreview(BuildContext context, Uint8List bytes,
     {String label = 'Image'}) async {
-  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+  if (PreviewBrowser.supported) {
     try {
       if (await PreviewBrowser.openImage(bytes, label)) return;
     } on PlatformException {

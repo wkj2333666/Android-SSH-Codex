@@ -35,7 +35,7 @@ void main() {
     ))));
     await tester.tap(find.text('1 work event'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Reasoning'));
+    await tester.tap(find.text('Reasoning').last);
     await tester.pumpAndSettle();
     await _settleImage(tester);
     await tester.ensureVisible(find.byType(Image));

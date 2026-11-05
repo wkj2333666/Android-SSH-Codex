@@ -71,7 +71,8 @@ class InlineAttachmentImageState extends State<InlineAttachmentImage> {
 
   @override
   Widget build(BuildContext context) => ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 480, maxHeight: 280),
+        constraints:
+            const BoxConstraints(minHeight: 80, maxWidth: 480, maxHeight: 280),
         child: FutureBuilder<Uint8List?>(
           future: _preview,
           builder: (context, snapshot) {
