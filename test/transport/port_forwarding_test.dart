@@ -52,13 +52,19 @@ PortForwardRule rule(
         enabled: enabled);
 
 void main() {
-  test('saved-rule limits match restore limits instead of silently losing rules',
+  test(
+      'saved-rule limits match restore limits instead of silently losing rules',
       () async {
     final manager = PortForwardManager();
     try {
       for (var i = 0; i < PortForwardManager.maxSavedRules; i++) {
-        await manager.upsert(rule(id: 'saved-$i', host: 'host-${i ~/ 32}',
-            remote: 10000 + i));
+        await manager.upsert(
+          rule(
+            id: 'saved-$i',
+            host: 'host-${i ~/ 32}',
+            remote: 10000 + i,
+          ),
+        );
       }
       expect(() => manager.upsert(rule(id: 'overflow', host: 'extra')),
           throwsArgumentError);
