@@ -5,6 +5,8 @@ import 'connection_lifecycle.dart';
 import 'diagnostics.dart';
 import 'ui/hosts_view.dart';
 import 'ui/tasks_view.dart';
+import 'ui/port_forwards_view.dart';
+import 'ui/widgets/remote_port_link_scope.dart';
 
 class AndroidSshCodexApp extends StatefulWidget {
   const AndroidSshCodexApp({required this.controller, super.key});
@@ -85,57 +87,62 @@ class _Workspace extends StatelessWidget {
         animation: controller,
         builder: (context, _) {
           final wide = MediaQuery.sizeOf(context).width >= 800;
-          return Stack(
-            children: [
-              Scaffold(
-                appBar: wide
-                    ? null
-                    : AppBar(
-                        title: const Text('Remote Codex'),
-                        actions: [
-                          if (Diagnostics.supported) const _DiagnosticExport(),
-                          _ConnectionAction(controller: controller),
-                        ],
-                      ),
-                body: wide
-                    ? Row(
-                        children: [
-                          _DesktopNavigation(controller: controller),
-                          const VerticalDivider(width: 1),
-                          Expanded(child: _section(controller)),
-                        ],
-                      )
-                    : _section(controller),
-                bottomNavigationBar: wide ||
-                        (controller.section == AppSection.tasks &&
-                            controller.selectedTask != null)
-                    ? null
-                    : NavigationBar(
-                        height: 56,
-                        selectedIndex: controller.section.index,
-                        onDestinationSelected: (index) =>
-                            controller.selectSection(AppSection.values[index]),
-                        destinations: const [
-                          NavigationDestination(
-                            icon: Icon(Icons.dns_outlined),
-                            selectedIcon: Icon(Icons.dns),
-                            label: 'Hosts',
+          return RemotePortLinkScope(
+              onOpen: (context, uri, opener) =>
+                  openRemotePortLink(context, controller, uri, opener),
+              child: Stack(
+                children: [
+                  Scaffold(
+                    appBar: wide
+                        ? null
+                        : AppBar(
+                            title: const Text('Remote Codex'),
+                            actions: [
+                              _PortsAction(controller: controller),
+                              if (Diagnostics.supported)
+                                const _DiagnosticExport(),
+                              _ConnectionAction(controller: controller),
+                            ],
                           ),
-                          NavigationDestination(
-                            icon: Icon(Icons.forum_outlined),
-                            selectedIcon: Icon(Icons.forum),
-                            label: 'Tasks',
+                    body: wide
+                        ? Row(
+                            children: [
+                              _DesktopNavigation(controller: controller),
+                              const VerticalDivider(width: 1),
+                              Expanded(child: _section(controller)),
+                            ],
+                          )
+                        : _section(controller),
+                    bottomNavigationBar: wide ||
+                            (controller.section == AppSection.tasks &&
+                                controller.selectedTask != null)
+                        ? null
+                        : NavigationBar(
+                            height: 56,
+                            selectedIndex: controller.section.index,
+                            onDestinationSelected: (index) => controller
+                                .selectSection(AppSection.values[index]),
+                            destinations: const [
+                              NavigationDestination(
+                                icon: Icon(Icons.dns_outlined),
+                                selectedIcon: Icon(Icons.dns),
+                                label: 'Hosts',
+                              ),
+                              NavigationDestination(
+                                icon: Icon(Icons.forum_outlined),
+                                selectedIcon: Icon(Icons.forum),
+                                label: 'Tasks',
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-              ),
-              if (controller.error != null)
-                _ErrorBanner(
-                    controller: controller, message: controller.error!),
-              if (controller.hostKeyChallenge != null)
-                _HostKeyPrompt(controller: controller),
-            ],
-          );
+                  ),
+                  if (controller.error != null)
+                    _ErrorBanner(
+                        controller: controller, message: controller.error!),
+                  if (controller.hostKeyChallenge != null)
+                    _HostKeyPrompt(controller: controller),
+                ],
+              ));
         },
       );
 
@@ -181,6 +188,7 @@ class _DesktopNavigation extends StatelessWidget {
                   onPressed: () => controller.selectSection(AppSection.tasks),
                 ),
                 const Divider(indent: 12, endIndent: 12),
+                _PortsAction(controller: controller),
                 if (Diagnostics.supported) const _DiagnosticExport(),
                 _ConnectionAction(controller: controller),
                 const SizedBox(height: 12),
@@ -188,6 +196,20 @@ class _DesktopNavigation extends StatelessWidget {
             ),
           ),
         ),
+      );
+}
+
+class _PortsAction extends StatelessWidget {
+  const _PortsAction({required this.controller});
+  final AppController controller;
+  @override
+  Widget build(BuildContext context) => IconButton(
+        key: const Key('open-ports'),
+        tooltip: 'SSH ports',
+        onPressed: controller.selectedHostId == null
+            ? null
+            : () => showPortForwards(context, controller),
+        icon: const Icon(Icons.settings_ethernet),
       );
 }
 
