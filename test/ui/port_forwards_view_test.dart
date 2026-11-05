@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:android_ssh_codex/src/app_controller.dart';
 import 'package:android_ssh_codex/src/ports/port_forward.dart';
 import 'package:android_ssh_codex/src/profiles/profile_store.dart';
+import 'package:android_ssh_codex/src/profiles/host_profile.dart';
 import 'package:android_ssh_codex/src/protocol/json_rpc_client.dart';
 import 'package:android_ssh_codex/src/protocol/rpc_transport.dart';
 import 'package:android_ssh_codex/src/ui/port_forwards_view.dart';
@@ -39,9 +40,9 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    final rpc = JsonRpcClient(_Transport())..start();
-    final controller = AppController.connectedForTesting(rpc: rpc);
-    await tester.runAsync(controller.disconnect);
+    final controller = AppController.memory();
+    await controller.saveProfile(HostProfile(id: 'test', label: 'Test',
+        hostName: 'host.example', user: 'coder', port: 22), const HostSecret());
     await tester.pumpWidget(MaterialApp(
         home: Scaffold(
             body: PortForwardsPanel(
@@ -77,17 +78,18 @@ void main() {
     expect(controller.portForwards.rules, isEmpty);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
-    await tester.runAsync(() async {
-      controller.dispose();
-      await rpc.close();
-    });
+    controller.dispose();
   }, timeout: const Timeout(Duration(seconds: 45)));
 
   testWidgets(
       'remote localhost link requires confirmation; cancellation starts nothing',
       (tester) async {
-    final rpc = JsonRpcClient(_Transport())..start();
-    final controller = AppController.connectedForTesting(rpc: rpc);
+    late JsonRpcClient rpc;
+    late AppController controller;
+    await tester.runAsync(() async {
+      rpc = JsonRpcClient(_Transport())..start();
+      controller = AppController.connectedForTesting(rpc: rpc);
+    });
     var opened = 0;
     await tester.pumpWidget(MaterialApp(
         home: Scaffold(
@@ -119,8 +121,12 @@ void main() {
 
   testWidgets('enabled matching rule is reused and browser path/query survive',
       (tester) async {
-    final rpc = JsonRpcClient(_Transport())..start();
-    final controller = AppController.connectedForTesting(rpc: rpc);
+    late JsonRpcClient rpc;
+    late AppController controller;
+    await tester.runAsync(() async {
+      rpc = JsonRpcClient(_Transport())..start();
+      controller = AppController.connectedForTesting(rpc: rpc);
+    });
     final rule = PortForwardRule(
         id: 'dev', hostId: 'test', remoteHost: 'localhost', remotePort: 3000);
     await tester.runAsync(() async {

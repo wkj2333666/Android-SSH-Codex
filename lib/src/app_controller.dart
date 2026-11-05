@@ -231,7 +231,8 @@ final class AppController extends ChangeNotifier {
   List<RemoteModel> _models = const [];
   final AccountUsageController accountUsage = AccountUsageController();
   final PortForwardManager portForwards = PortForwardManager();
-  bool get canDiscoverPorts => isConnected && _ssh != null;
+  bool get canDiscoverPorts => isConnected && _ssh != null &&
+      _workspaceHostId == _selectedHostId;
 
   Future<void> savePortForward(PortForwardRule rule) async {
     if (rule.hostId != _selectedHostId) {
@@ -248,7 +249,8 @@ final class AppController extends ChangeNotifier {
 
   Future<List<ListeningPort>> discoverPorts(String hostId) async {
     final ssh = _ssh;
-    if (!isConnected || ssh == null || hostId != _selectedHostId) {
+    if (!isConnected || ssh == null || hostId != _selectedHostId ||
+        hostId != _workspaceHostId) {
       throw StateError('Connect to this SSH host to discover ports.');
     }
     final ports = await discoverListeningPorts(ssh.client);
@@ -261,7 +263,7 @@ final class AppController extends ChangeNotifier {
   Future<Uri> forwardLoopbackUrl(String hostId, Uri source) async {
     // Validate before creating/persisting any rule. Never log URL query tokens.
     mapForwardedUri(source, 1024);
-    if (!isConnected || hostId != _selectedHostId) {
+    if (!isConnected || hostId != _selectedHostId || hostId != _workspaceHostId) {
       throw StateError(
           'Reconnect to this SSH host before opening its localhost URL.');
     }
