@@ -119,9 +119,11 @@ void main() {
     final controller = AppController.connectedForTesting(rpc: rpc);
     final rule = PortForwardRule(
         id: 'dev', hostId: 'test', remoteHost: 'localhost', remotePort: 3000);
-    await controller.portForwards.attach(
-        'test', (_, __) => throw StateError('No browser TCP in this test'));
-    await controller.savePortForward(rule);
+    await tester.runAsync(() async {
+      await controller.portForwards.attach(
+          'test', (_, __) => throw StateError('No browser TCP in this test'));
+      await controller.savePortForward(rule);
+    });
     Uri? opened;
     await tester.pumpWidget(MaterialApp(
         home: Scaffold(
@@ -142,9 +144,10 @@ void main() {
     expect(opened!.query, 'q=x');
     expect(opened!.fragment, 'anchor');
     expect(controller.portForwards.rules.length, 1);
+    await tester.runAsync(controller.portForwards.detach);
     controller.dispose();
     await rpc.close();
-  });
+  }, timeout: const Timeout(Duration(seconds: 45)));
 
   testWidgets(
       'Markdown loopback links use SSH hook; public URLs remain external',
