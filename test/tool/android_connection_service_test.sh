@@ -24,6 +24,15 @@ cmp "$repo_root/tool/android/AttachmentPicker.kt" "$fixture/app/src/main/kotlin/
 cmp "$repo_root/tool/android/AttachmentDownloads.kt" "$fixture/app/src/main/kotlin/io/github/wkj2333666/android_ssh_codex/AttachmentDownloads.kt"
 cmp "$repo_root/tool/android/VideoPreviewActivity.kt" "$fixture/app/src/main/kotlin/io/github/wkj2333666/android_ssh_codex/VideoPreviewActivity.kt"
 grep -Fq 'android:name=".VideoPreviewActivity"' "$fixture/first.xml"
+grep -Fq 'android:name=".BrowserPreviewActivity"' "$fixture/first.xml"
+cmp "$repo_root/tool/android/BrowserPreviewActivity.kt" "$fixture/app/src/main/kotlin/io/github/wkj2333666/android_ssh_codex/BrowserPreviewActivity.kt"
+test -s "$fixture/app/src/main/res/xml/preview_network_security.xml"
+grep -Fq 'android:networkSecurityConfig="@xml/preview_network_security"' "$fixture/first.xml"
+grep -Fq 'allowFileAccess = false' "$repo_root/tool/android/BrowserPreviewActivity.kt"
+if grep -q 'addJavascriptInterface\|handler.proceed()' "$repo_root/tool/android/BrowserPreviewActivity.kt"; then
+  echo 'Untrusted preview pages must not have an app bridge or bypass TLS' >&2
+  exit 1
+fi
 grep -Fq '"playVideo"' "$repo_root/tool/android/MainActivity.kt"
 # Both plain Markdown links and attachment cards use this same native player.
 # It must export its existing private file, without a second SSH transfer.
