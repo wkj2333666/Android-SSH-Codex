@@ -27,6 +27,7 @@ grep -Fq 'android:name=".VideoPreviewActivity"' "$fixture/first.xml"
 grep -Fq 'android:name=".BrowserPreviewActivity"' "$fixture/first.xml"
 cmp "$repo_root/tool/android/BrowserPreviewActivity.kt" "$fixture/app/src/main/kotlin/io/github/wkj2333666/android_ssh_codex/BrowserPreviewActivity.kt"
 test -s "$fixture/app/src/main/res/xml/preview_network_security.xml"
+grep -Fq '<domain includeSubdomains="false">127.0.0.1</domain>' "$fixture/app/src/main/res/xml/preview_network_security.xml"
 grep -Fq 'android:networkSecurityConfig="@xml/preview_network_security"' "$fixture/first.xml"
 grep -Fq 'allowFileAccess = false' "$repo_root/tool/android/BrowserPreviewActivity.kt"
 if grep -q 'addJavascriptInterface\|handler.proceed()' "$repo_root/tool/android/BrowserPreviewActivity.kt"; then
