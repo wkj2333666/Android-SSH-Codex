@@ -9,7 +9,8 @@ class RemotePortLinkScope extends InheritedWidget {
       {required this.onOpen, required super.child, super.key});
   final RemotePortLinkHandler onOpen;
   static RemotePortLinkScope? maybeOf(BuildContext context) =>
-      context.dependOnInheritedWidgetOfExactType<RemotePortLinkScope>();
+      // Action-only lookup: port handlers must not invalidate long timelines.
+      context.getInheritedWidgetOfExactType<RemotePortLinkScope>();
   @override
   bool updateShouldNotify(RemotePortLinkScope oldWidget) =>
       onOpen != oldWidget.onOpen;
