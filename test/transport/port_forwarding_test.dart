@@ -19,13 +19,25 @@ class _Channel implements PortForwardChannel {
   @override
   Future<void> get done => socket.done;
   @override
-  void destroy() { destroyed = true; socket.destroy(); }
+  void destroy() {
+    destroyed = true;
+    socket.destroy();
+  }
 }
 
-PortForwardRule rule({String id = 'a', String host = 'pi', int remote = 3000,
-    int local = 0, bool enabled = true}) => PortForwardRule(
-        id: id, hostId: host, remoteHost: '127.0.0.1',
-        remotePort: remote, localPort: local, enabled: enabled);
+PortForwardRule rule(
+        {String id = 'a',
+        String host = 'pi',
+        int remote = 3000,
+        int local = 0,
+        bool enabled = true}) =>
+    PortForwardRule(
+        id: id,
+        hostId: host,
+        remoteHost: '127.0.0.1',
+        remotePort: remote,
+        localPort: local,
+        enabled: enabled);
 
 void main() {
   test('rules validate ports/targets and round trip without credentials', () {
@@ -36,7 +48,8 @@ void main() {
     expect(() => normalizeForwardHost('user@host'), throwsArgumentError);
     expect(normalizeForwardHost('[::1]'), '::1');
     expect(normalizeForwardHost('LOCALHOST'), '127.0.0.1');
-    expect(normalizeForwardHost('api_service.internal.'), 'api_service.internal.');
+    expect(
+        normalizeForwardHost('api_service.internal.'), 'api_service.internal.');
   });
 
   test('listening discovery handles ss/netstat, wildcard and IPv6 safely', () {
@@ -53,10 +66,12 @@ garbage localhost:6000
     expect(found.firstWhere((p) => p.port == 8000).host, '::1');
   });
 
-  test('only loopback HTTP links are eligible and mapped paths are preserved', () {
+  test('only loopback HTTP links are eligible and mapped paths are preserved',
+      () {
     expect(isRemoteLoopbackUri(Uri.parse('http://localhost:3000/a')), isTrue);
     expect(isRemoteLoopbackUri(Uri.parse('https://[::1]:8443/')), isTrue);
-    expect(isRemoteLoopbackUri(Uri.parse('http://localhost.evil:3000/')), isFalse);
+    expect(
+        isRemoteLoopbackUri(Uri.parse('http://localhost.evil:3000/')), isFalse);
     expect(isRemoteLoopbackUri(Uri.parse('ftp://localhost:3000/')), isFalse);
     final source = Uri.parse('http://localhost:3000/a?q=secret#fragment');
     final mapped = mapForwardedUri(source, 43123);
@@ -65,7 +80,9 @@ garbage localhost:6000
         throwsArgumentError);
   });
 
-  test('TCP forwarding crosses window sizes, preserves half-close and cleans up', () async {
+  test(
+      'TCP forwarding crosses window sizes, preserves half-close and cleans up',
+      () async {
     final target = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
     final accepted = <Socket>[];
     final sub = target.listen((socket) {
@@ -75,27 +92,32 @@ garbage localhost:6000
     final manager = PortForwardManager();
     try {
       await manager.upsert(rule(remote: target.port));
-      await manager.attach('pi', (host, port) async =>
-          _Channel(await Socket.connect(host, port)));
+      await manager.attach('pi',
+          (host, port) async => _Channel(await Socket.connect(host, port)));
       final port = manager.stateFor('a').localPort!;
-      expect(port, isNot(target.port)); // Auto falls back if preferred port is busy.
+      expect(port,
+          isNot(target.port)); // Auto falls back if preferred port is busy.
       final socket = await Socket.connect('127.0.0.1', port);
-      final bytes = Uint8List.fromList(List.generate(4 * 1024 * 1024 + 37,
-          (i) => i % 251));
-      final receiving = socket.fold<BytesBuilder>(BytesBuilder(),
-          (builder, chunk) => builder..add(chunk));
+      final bytes = Uint8List.fromList(
+          List.generate(4 * 1024 * 1024 + 37, (i) => i % 251));
+      final receiving = socket.fold<BytesBuilder>(
+          BytesBuilder(), (builder, chunk) => builder..add(chunk));
       socket.add(bytes);
       await socket.flush();
       await socket.close(); // Client EOF must not discard the echo response.
-      final response = (await receiving.timeout(const Duration(seconds: 15))).takeBytes();
+      final response =
+          (await receiving.timeout(const Duration(seconds: 15))).takeBytes();
       expect(response, bytes);
       await manager.detach();
       expect(manager.stateFor('a').localPort, isNull);
-      final reclaimed = await ServerSocket.bind(InternetAddress.loopbackIPv4, port);
+      final reclaimed =
+          await ServerSocket.bind(InternetAddress.loopbackIPv4, port);
       await reclaimed.close();
     } finally {
       manager.dispose();
-      for (final socket in accepted) { socket.destroy(); }
+      for (final socket in accepted) {
+        socket.destroy();
+      }
       await sub.cancel();
       await target.close();
     }
@@ -113,10 +135,14 @@ garbage localhost:6000
       expect(manager.stateFor('a').localPort, before);
       await manager.remove('b');
       expect(manager.stateFor('a').localPort, before);
-    } finally { manager.dispose(); }
+    } finally {
+      manager.dispose();
+    }
   });
 
-  test('conflicting fixed port fails only that rule; disabling does not resurrect', () async {
+  test(
+      'conflicting fixed port fails only that rule; disabling does not resurrect',
+      () async {
     final busy = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
     final manager = PortForwardManager();
     try {
@@ -130,10 +156,15 @@ garbage localhost:6000
       await manager.attach('pi', (_, __) => throw StateError('unused'));
       expect(manager.stateFor('b').localPort, isNull);
       expect(manager.rules.singleWhere((r) => r.id == 'b').enabled, isFalse);
-    } finally { manager.dispose(); await busy.close(); }
+    } finally {
+      manager.dispose();
+      await busy.close();
+    }
   });
 
-  test('late channel after host switch is destroyed, never attached to new host', () async {
+  test(
+      'late channel after host switch is destroyed, never attached to new host',
+      () async {
     final opening = Completer<PortForwardChannel>();
     final requested = Completer<void>();
     final target = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
@@ -143,8 +174,12 @@ garbage localhost:6000
     Socket? client;
     try {
       await manager.upsert(rule());
-      await manager.attach('pi', (_, __) { requested.complete(); return opening.future; });
-      client = await Socket.connect('127.0.0.1', manager.stateFor('a').localPort!);
+      await manager.attach('pi', (_, __) {
+        requested.complete();
+        return opening.future;
+      });
+      client =
+          await Socket.connect('127.0.0.1', manager.stateFor('a').localPort!);
       client.listen((_) {}, onError: (_) {});
       await requested.future;
       await manager.attach('other', (_, __) => throw StateError('wrong host'));
@@ -154,16 +189,23 @@ garbage localhost:6000
       expect(channel.destroyed, isTrue);
       expect(manager.stateFor('a').localPort, isNull);
     } finally {
-      client?.destroy(); manager.dispose();
-      for (final socket in peers) { socket.destroy(); }
-      await sub.cancel(); await target.close();
+      client?.destroy();
+      manager.dispose();
+      for (final socket in peers) {
+        socket.destroy();
+      }
+      await sub.cancel();
+      await target.close();
     }
   });
 
-  test('real SSH forward uses direct-tcpip and survives shared client use', () async {
+  test('real SSH forward uses direct-tcpip and survives shared client use',
+      () async {
     final client = SSHClient(await SSHSocket.connect('127.0.0.1', 22229),
-        username: Platform.environment['USER']!, identities: SSHKeyPair.fromPem(
-            await File(Platform.environment['DOWNLOAD_TEST_KEY']!).readAsString()));
+        username: Platform.environment['USER']!,
+        identities: SSHKeyPair.fromPem(
+            await File(Platform.environment['DOWNLOAD_TEST_KEY']!)
+                .readAsString()));
     final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
     final peers = <Socket>[];
     final sub = server.listen((socket) {
@@ -174,20 +216,33 @@ garbage localhost:6000
     Socket? socket;
     try {
       await manager.upsert(rule(remote: server.port));
-      await manager.attach('pi', (host, port) async =>
-          SshPortForwardChannel(await client.forwardLocal(host, port)));
-      socket = await Socket.connect('127.0.0.1', manager.stateFor('a').localPort!);
-      final payload = Uint8List.fromList(List.generate(4 * 1024 * 1024 + 37, (i) => i % 251));
-      final response = socket.fold<BytesBuilder>(BytesBuilder(), (buffer, chunk) => buffer..add(chunk));
-      socket.add(payload); await socket.flush(); await socket.close();
-      expect((await response.timeout(const Duration(seconds: 30))).takeBytes(), payload);
+      await manager.attach(
+          'pi',
+          (host, port) async =>
+              SshPortForwardChannel(await client.forwardLocal(host, port)));
+      socket =
+          await Socket.connect('127.0.0.1', manager.stateFor('a').localPort!);
+      final payload = Uint8List.fromList(
+          List.generate(4 * 1024 * 1024 + 37, (i) => i % 251));
+      final response = socket.fold<BytesBuilder>(
+          BytesBuilder(), (buffer, chunk) => buffer..add(chunk));
+      socket.add(payload);
+      await socket.flush();
+      await socket.close();
+      expect((await response.timeout(const Duration(seconds: 30))).takeBytes(),
+          payload);
       await manager.detach();
       await client.ping();
       expect(client.isClosed, isFalse);
     } finally {
-      manager.dispose(); socket?.destroy(); client.close();
-      for (final peer in peers) { peer.destroy(); }
-      await sub.cancel(); await server.close();
+      manager.dispose();
+      socket?.destroy();
+      client.close();
+      for (final peer in peers) {
+        peer.destroy();
+      }
+      await sub.cancel();
+      await server.close();
     }
   }, skip: !Platform.environment.containsKey('DOWNLOAD_TEST_KEY'));
 }

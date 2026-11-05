@@ -234,7 +234,8 @@ final class AppController extends ChangeNotifier {
   bool get canDiscoverPorts => isConnected && _ssh != null;
 
   Future<void> savePortForward(PortForwardRule rule) async {
-    if (rule.hostId != _selectedHostId) throw StateError('The selected SSH host changed.');
+    if (rule.hostId != _selectedHostId)
+      throw StateError('The selected SSH host changed.');
     await portForwards.upsert(rule);
     await _saveWorkspace();
   }
@@ -260,22 +261,30 @@ final class AppController extends ChangeNotifier {
     // Validate before creating/persisting any rule. Never log URL query tokens.
     mapForwardedUri(source, 1024);
     if (!isConnected || hostId != _selectedHostId) {
-      throw StateError('Reconnect to this SSH host before opening its localhost URL.');
+      throw StateError(
+          'Reconnect to this SSH host before opening its localhost URL.');
     }
-    final existing = portForwards.loopbackRule(hostId, source.port, source.host);
-    final rule = existing?.copyWith(enabled: true) ?? PortForwardRule(
-      id: portForwards.newId(), hostId: hostId,
-      remoteHost: source.host, remotePort: source.port,
-      scheme: source.scheme, label: 'From localhost link',
-    );
+    final existing =
+        portForwards.loopbackRule(hostId, source.port, source.host);
+    final rule = existing?.copyWith(enabled: true) ??
+        PortForwardRule(
+          id: portForwards.newId(),
+          hostId: hostId,
+          remoteHost: source.host,
+          remotePort: source.port,
+          scheme: source.scheme,
+          label: 'From localhost link',
+        );
     await savePortForward(rule);
     if (!isConnected || hostId != _selectedHostId) {
       throw StateError('SSH host changed while opening the forwarded URL.');
     }
     final state = portForwards.stateFor(rule.id);
-    if (state.localPort == null) throw StateError(state.error ?? 'Forwarding is waiting for SSH.');
+    if (state.localPort == null)
+      throw StateError(state.error ?? 'Forwarding is waiting for SSH.');
     return mapForwardedUri(source, state.localPort!);
   }
+
   AppSection _section = AppSection.hosts;
   RemoteConnectionPhase _connectionPhase = RemoteConnectionPhase.disconnected;
   String? _selectedHostId;
@@ -749,8 +758,10 @@ final class AppController extends ChangeNotifier {
       if (attempt != _connectionAttempt) return;
       _connectionPhase = RemoteConnectionPhase.connected;
       // Optional forwarding failures are isolated from chat connectivity.
-      unawaited(portForwards.attach(profile.id, (host, port) async =>
-          SshPortForwardChannel(await ssh!.client.forwardLocal(host, port))));
+      unawaited(portForwards.attach(
+          profile.id,
+          (host, port) async => SshPortForwardChannel(
+              await ssh!.client.forwardLocal(host, port))));
       setup.dispose();
       if (identical(_openingAttempt, setup)) _openingAttempt = null;
       accountUsage.bind(api);

@@ -22,7 +22,8 @@ List<ListeningPort> parseListeningPorts(String output) {
     } else if (parts.length >= 6 && parts[1] == 'LISTEN') {
       address = parts[4];
     } else if (parts.length >= 6 &&
-        (parts[0] == 'tcp' || parts[0] == 'tcp6') && parts.contains('LISTEN')) {
+        (parts[0] == 'tcp' || parts[0] == 'tcp6') &&
+        parts.contains('LISTEN')) {
       address = parts[3];
     }
     if (address == null) continue;
@@ -33,13 +34,16 @@ List<ListeningPort> parseListeningPorts(String output) {
     try {
       final host = normalizeForwardHost(address.substring(0, split));
       found['$host:$port'] = ListeningPort(host, port);
-    } on ArgumentError { continue; }
+    } on ArgumentError {
+      continue;
+    }
     if (found.length >= 200) break;
   }
-  return found.values.toList()..sort((a, b) {
-    final byPort = a.port.compareTo(b.port);
-    return byPort == 0 ? a.host.compareTo(b.host) : byPort;
-  });
+  return found.values.toList()
+    ..sort((a, b) {
+      final byPort = a.port.compareTo(b.port);
+      return byPort == 0 ? a.host.compareTo(b.host) : byPort;
+    });
 }
 
 // Read-only, no process names/arguments, no sudo or new server dependencies.
@@ -52,7 +56,10 @@ Future<List<ListeningPort>> discoverListeningPorts(SSHClient client) async {
   var finished = false;
   try {
     session = await client.execute(listeningPortsCommand).then((value) {
-      if (finished) { value.close(); throw StateError('Discarded late port discovery'); }
+      if (finished) {
+        value.close();
+        throw StateError('Discarded late port discovery');
+      }
       return value;
     }).timeout(const Duration(seconds: 8));
     final reading = session;
@@ -69,10 +76,15 @@ Future<List<ListeningPort>> discoverListeningPorts(SSHClient client) async {
         if (errors.length < 512) errors.addAll(chunk.take(512 - errors.length));
       }),
       reading.done,
-    ], eagerError: true).timeout(const Duration(seconds: 8));
+    ], eagerError: true)
+        .timeout(const Duration(seconds: 8));
     if (reading.exitCode != 0 || errors.isNotEmpty) {
-      throw StateError('Port discovery needs ss or netstat on the SSH host. Add ports manually if unavailable.');
+      throw StateError(
+          'Port discovery needs ss or netstat on the SSH host. Add ports manually if unavailable.');
     }
     return parseListeningPorts(utf8.decode(output, allowMalformed: true));
-  } finally { finished = true; session?.close(); }
+  } finally {
+    finished = true;
+    session?.close();
+  }
 }

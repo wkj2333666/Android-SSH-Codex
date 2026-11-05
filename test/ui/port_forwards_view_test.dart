@@ -20,14 +20,20 @@ class _Transport implements RpcTransport {
   @override
   void send(String message) {
     final request = jsonDecode(message) as Map;
-    if (request.containsKey('id')) input.add(jsonEncode({'id': request['id'], 'result': {}}));
+    if (request.containsKey('id'))
+      input.add(jsonEncode({'id': request['id'], 'result': {}}));
   }
+
   @override
-  Future<void> close() async { if (!input.isClosed) await input.close(); }
+  Future<void> close() async {
+    if (!input.isClosed) await input.close();
+  }
 }
 
 void main() {
-  testWidgets('offline rules can be added, edited, stopped and removed without layout overflow', (tester) async {
+  testWidgets(
+      'offline rules can be added, edited, stopped and removed without layout overflow',
+      (tester) async {
     tester.view.physicalSize = const Size(360, 800);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -35,8 +41,10 @@ void main() {
     final rpc = JsonRpcClient(_Transport())..start();
     final controller = AppController.connectedForTesting(rpc: rpc);
     await controller.disconnect();
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: PortForwardsPanel(
-        controller: controller, hostId: 'test', hostLabel: 'Test'))));
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: PortForwardsPanel(
+                controller: controller, hostId: 'test', hostLabel: 'Test'))));
     await tester.tap(find.byKey(const Key('ports-add')));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const Key('port-remote-port')), '3000');
@@ -68,17 +76,30 @@ void main() {
     expect(controller.portForwards.rules, isEmpty);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
-    controller.dispose(); await rpc.close();
+    controller.dispose();
+    await rpc.close();
   });
 
-  testWidgets('remote localhost link requires confirmation; cancellation starts nothing', (tester) async {
+  testWidgets(
+      'remote localhost link requires confirmation; cancellation starts nothing',
+      (tester) async {
     final rpc = JsonRpcClient(_Transport())..start();
     final controller = AppController.connectedForTesting(rpc: rpc);
     var opened = 0;
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: Builder(builder: (context) => TextButton(
-        onPressed: () => openRemotePortLink(context, controller,
-            Uri.parse('http://localhost:3000/path?token=private'), (_) async { opened++; return true; }),
-        child: const Text('Visit'))))));
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: Builder(
+                builder: (context) => TextButton(
+                    onPressed: () => openRemotePortLink(
+                            context,
+                            controller,
+                            Uri.parse(
+                                'http://localhost:3000/path?token=private'),
+                            (_) async {
+                          opened++;
+                          return true;
+                        }),
+                    child: const Text('Visit'))))));
     await tester.tap(find.text('Visit'));
     await tester.pumpAndSettle();
     expect(find.text('Forward remote port?'), findsOneWidget);
@@ -87,36 +108,60 @@ void main() {
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
     expect(controller.portForwards.rules, isEmpty);
-    controller.dispose(); await rpc.close();
+    controller.dispose();
+    await rpc.close();
   });
 
-  testWidgets('enabled matching rule is reused and browser path/query survive', (tester) async {
+  testWidgets('enabled matching rule is reused and browser path/query survive',
+      (tester) async {
     final rpc = JsonRpcClient(_Transport())..start();
     final controller = AppController.connectedForTesting(rpc: rpc);
-    final rule = PortForwardRule(id: 'dev', hostId: 'test', remoteHost: 'localhost', remotePort: 3000);
-    await controller.portForwards.attach('test', (_, __) => throw StateError('No browser TCP in this test'));
+    final rule = PortForwardRule(
+        id: 'dev', hostId: 'test', remoteHost: 'localhost', remotePort: 3000);
+    await controller.portForwards.attach(
+        'test', (_, __) => throw StateError('No browser TCP in this test'));
     await controller.savePortForward(rule);
     Uri? opened;
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: Builder(builder: (context) => TextButton(
-        onPressed: () => openRemotePortLink(context, controller,
-            Uri.parse('http://localhost:3000/path?q=x#anchor'), (uri) async { opened = uri; return true; }),
-        child: const Text('Visit'))))));
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: Builder(
+                builder: (context) => TextButton(
+                    onPressed: () => openRemotePortLink(context, controller,
+                            Uri.parse('http://localhost:3000/path?q=x#anchor'),
+                            (uri) async {
+                          opened = uri;
+                          return true;
+                        }),
+                    child: const Text('Visit'))))));
     await tester.tap(find.text('Visit'));
     await tester.pumpAndSettle();
     expect(find.text('Forward remote port?'), findsNothing);
     expect(opened!.port, controller.portForwards.stateFor('dev').localPort);
-    expect(opened!.path, '/path'); expect(opened!.query, 'q=x'); expect(opened!.fragment, 'anchor');
+    expect(opened!.path, '/path');
+    expect(opened!.query, 'q=x');
+    expect(opened!.fragment, 'anchor');
     expect(controller.portForwards.rules.length, 1);
-    controller.dispose(); await rpc.close();
+    controller.dispose();
+    await rpc.close();
   });
 
-  testWidgets('Markdown loopback links use SSH hook; public URLs remain external', (tester) async {
+  testWidgets(
+      'Markdown loopback links use SSH hook; public URLs remain external',
+      (tester) async {
     final forwarded = <Uri>[];
     final external = <Uri>[];
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: RemotePortLinkScope(
-      onOpen: (_, uri, __) async { forwarded.add(uri); },
-      child: MarkdownContent(text: '[Dev](http://localhost:3000/) [Web](https://example.com/)',
-        openExternalLink: (uri) async { external.add(uri); return true; }),
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: RemotePortLinkScope(
+      onOpen: (_, uri, __) async {
+        forwarded.add(uri);
+      },
+      child: MarkdownContent(
+          text: '[Dev](http://localhost:3000/) [Web](https://example.com/)',
+          openExternalLink: (uri) async {
+            external.add(uri);
+            return true;
+          }),
     ))));
     final markdown = tester.widget<MarkdownBody>(find.byType(MarkdownBody));
     markdown.onTapLink!('Dev', 'http://localhost:3000/', '');
@@ -126,20 +171,32 @@ void main() {
     expect(external.single.host, 'example.com');
   });
 
-  test('rules persist per host across disconnect/recreation, including disabled intent', () async {
+  test(
+      'rules persist per host across disconnect/recreation, including disabled intent',
+      () async {
     final store = MemoryProfileStore();
     final rpc = JsonRpcClient(_Transport())..start();
-    final controller = AppController.connectedForTesting(rpc: rpc, store: store);
-    await controller.savePortForward(PortForwardRule(id: 'saved', hostId: 'test',
-        remoteHost: 'localhost', remotePort: 8080, localPort: 9000, enabled: false));
-    await controller.disconnect(); await controller.flushWorkspace(); controller.dispose();
+    final controller =
+        AppController.connectedForTesting(rpc: rpc, store: store);
+    await controller.savePortForward(PortForwardRule(
+        id: 'saved',
+        hostId: 'test',
+        remoteHost: 'localhost',
+        remotePort: 8080,
+        localPort: 9000,
+        enabled: false));
+    await controller.disconnect();
+    await controller.flushWorkspace();
+    controller.dispose();
     final nextRpc = JsonRpcClient(_Transport())..start();
     final next = AppController.connectedForTesting(rpc: nextRpc, store: store);
     await next.initialize();
     final restored = next.portForwards.forHost('test').single;
-    expect(restored.localPort, 9000); expect(restored.enabled, isFalse);
+    expect(restored.localPort, 9000);
+    expect(restored.enabled, isFalse);
     expect(next.portForwards.forHost('other'), isEmpty);
     expect(next.portForwards.stateFor(restored.id).localPort, isNull);
-    next.dispose(); await nextRpc.close();
+    next.dispose();
+    await nextRpc.close();
   });
 }

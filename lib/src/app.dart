@@ -88,59 +88,61 @@ class _Workspace extends StatelessWidget {
         builder: (context, _) {
           final wide = MediaQuery.sizeOf(context).width >= 800;
           return RemotePortLinkScope(
-            onOpen: (context, uri, opener) => openRemotePortLink(context, controller, uri, opener),
-            child: Stack(
-            children: [
-              Scaffold(
-                appBar: wide
-                    ? null
-                    : AppBar(
-                        title: const Text('Remote Codex'),
-                        actions: [
-                          _PortsAction(controller: controller),
-                          if (Diagnostics.supported) const _DiagnosticExport(),
-                          _ConnectionAction(controller: controller),
-                        ],
-                      ),
-                body: wide
-                    ? Row(
-                        children: [
-                          _DesktopNavigation(controller: controller),
-                          const VerticalDivider(width: 1),
-                          Expanded(child: _section(controller)),
-                        ],
-                      )
-                    : _section(controller),
-                bottomNavigationBar: wide ||
-                        (controller.section == AppSection.tasks &&
-                            controller.selectedTask != null)
-                    ? null
-                    : NavigationBar(
-                        height: 56,
-                        selectedIndex: controller.section.index,
-                        onDestinationSelected: (index) =>
-                            controller.selectSection(AppSection.values[index]),
-                        destinations: const [
-                          NavigationDestination(
-                            icon: Icon(Icons.dns_outlined),
-                            selectedIcon: Icon(Icons.dns),
-                            label: 'Hosts',
+              onOpen: (context, uri, opener) =>
+                  openRemotePortLink(context, controller, uri, opener),
+              child: Stack(
+                children: [
+                  Scaffold(
+                    appBar: wide
+                        ? null
+                        : AppBar(
+                            title: const Text('Remote Codex'),
+                            actions: [
+                              _PortsAction(controller: controller),
+                              if (Diagnostics.supported)
+                                const _DiagnosticExport(),
+                              _ConnectionAction(controller: controller),
+                            ],
                           ),
-                          NavigationDestination(
-                            icon: Icon(Icons.forum_outlined),
-                            selectedIcon: Icon(Icons.forum),
-                            label: 'Tasks',
+                    body: wide
+                        ? Row(
+                            children: [
+                              _DesktopNavigation(controller: controller),
+                              const VerticalDivider(width: 1),
+                              Expanded(child: _section(controller)),
+                            ],
+                          )
+                        : _section(controller),
+                    bottomNavigationBar: wide ||
+                            (controller.section == AppSection.tasks &&
+                                controller.selectedTask != null)
+                        ? null
+                        : NavigationBar(
+                            height: 56,
+                            selectedIndex: controller.section.index,
+                            onDestinationSelected: (index) => controller
+                                .selectSection(AppSection.values[index]),
+                            destinations: const [
+                              NavigationDestination(
+                                icon: Icon(Icons.dns_outlined),
+                                selectedIcon: Icon(Icons.dns),
+                                label: 'Hosts',
+                              ),
+                              NavigationDestination(
+                                icon: Icon(Icons.forum_outlined),
+                                selectedIcon: Icon(Icons.forum),
+                                label: 'Tasks',
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-              ),
-              if (controller.error != null)
-                _ErrorBanner(
-                    controller: controller, message: controller.error!),
-              if (controller.hostKeyChallenge != null)
-                _HostKeyPrompt(controller: controller),
-            ],
-          ));
+                  ),
+                  if (controller.error != null)
+                    _ErrorBanner(
+                        controller: controller, message: controller.error!),
+                  if (controller.hostKeyChallenge != null)
+                    _HostKeyPrompt(controller: controller),
+                ],
+              ));
         },
       );
 
@@ -202,10 +204,13 @@ class _PortsAction extends StatelessWidget {
   final AppController controller;
   @override
   Widget build(BuildContext context) => IconButton(
-    key: const Key('open-ports'), tooltip: 'SSH ports',
-    onPressed: controller.selectedHostId == null ? null : () => showPortForwards(context, controller),
-    icon: const Icon(Icons.settings_ethernet),
-  );
+        key: const Key('open-ports'),
+        tooltip: 'SSH ports',
+        onPressed: controller.selectedHostId == null
+            ? null
+            : () => showPortForwards(context, controller),
+        icon: const Icon(Icons.settings_ethernet),
+      );
 }
 
 class _DiagnosticExport extends StatefulWidget {
