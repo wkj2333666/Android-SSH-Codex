@@ -51,16 +51,21 @@ class InlineAttachmentImageState extends State<InlineAttachmentImage> {
   void didUpdateWidget(InlineAttachmentImage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.attachment.path != widget.attachment.path ||
-        (oldWidget.loadImage == null && widget.loadImage != null)) _preview = _load();
+        (oldWidget.loadImage == null && widget.loadImage != null))
+      _preview = _load();
   }
 
-  Future<Uint8List?> _load() => loadAttachmentPreview(widget.attachment, widget.loadImage);
+  Future<Uint8List?> _load() =>
+      loadAttachmentPreview(widget.attachment, widget.loadImage);
 
   Future<void> _open(Uint8List bytes) async {
     if (_opening) return;
     _opening = true;
-    try { await showImagePreview(context, bytes, label: widget.attachment.label); }
-    finally { _opening = false; }
+    try {
+      await showImagePreview(context, bytes, label: widget.attachment.label);
+    } finally {
+      _opening = false;
+    }
   }
 
   @override
@@ -70,13 +75,17 @@ class InlineAttachmentImageState extends State<InlineAttachmentImage> {
           future: _preview,
           builder: (context, snapshot) {
             if (snapshot.connectionState != ConnectionState.done) {
-              return const SizedBox(width: 280, height: 120,
-                child: Center(child: CircularProgressIndicator()));
+              return const SizedBox(
+                  width: 280,
+                  height: 120,
+                  child: Center(child: CircularProgressIndicator()));
             }
             final bytes = snapshot.data;
             if (bytes == null) {
               return TextButton.icon(
-                onPressed: () => setState(() { _preview = _load(); }),
+                onPressed: () => setState(() {
+                  _preview = _load();
+                }),
                 icon: const Icon(Icons.refresh),
                 label: const Text('Image unavailable · Retry'),
               );
@@ -97,19 +106,20 @@ class InlineAttachmentImageState extends State<InlineAttachmentImage> {
 }
 
 Future<Uint8List?> loadAttachmentPreview(MessageAttachment attachment,
-    Future<Uint8List> Function(String)? loadImage) => loadPreviewImage(Future.sync(() {
-        final path = attachment.path;
-        if (!path.startsWith('data:')) {
-          if (loadImage == null) throw StateError('Image loader unavailable');
-          return loadImage(path);
-        }
-        final match = RegExp(r'^data:image/(?:png|jpeg|webp|gif);base64,')
-            .firstMatch(path);
-        if (match == null || path.length > 14 * 1024 * 1024) {
-          throw const FormatException('Unsupported or oversized image');
-        }
-        return base64Decode(path.substring(match.end));
-      }));
+        Future<Uint8List> Function(String)? loadImage) =>
+    loadPreviewImage(Future.sync(() {
+      final path = attachment.path;
+      if (!path.startsWith('data:')) {
+        if (loadImage == null) throw StateError('Image loader unavailable');
+        return loadImage(path);
+      }
+      final match =
+          RegExp(r'^data:image/(?:png|jpeg|webp|gif);base64,').firstMatch(path);
+      if (match == null || path.length > 14 * 1024 * 1024) {
+        throw const FormatException('Unsupported or oversized image');
+      }
+      return base64Decode(path.substring(match.end));
+    }));
 
 Future<Uint8List?> loadPreviewImage(Future<Uint8List> loading) async {
   try {

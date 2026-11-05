@@ -200,12 +200,12 @@ class _PortForwardsPanelState extends State<PortForwardsPanel> {
                 host: '127.0.0.1',
                 port: state.localPort,
                 path: '/');
-            Future<bool> external(Uri value) => launchUrl(value, mode: LaunchMode.externalApplication);
+            Future<bool> external(Uri value) =>
+                launchUrl(value, mode: LaunchMode.externalApplication);
             final opened = action == 'external'
                 ? await external(uri)
                 : await openForwardedPage(uri, external);
-            if (!opened &&
-                mounted) {
+            if (!opened && mounted) {
               _message(context, 'Could not open the browser.');
             }
           }

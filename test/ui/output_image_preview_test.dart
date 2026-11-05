@@ -19,10 +19,18 @@ Future<void> _settleImage(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets('expanded reasoning Markdown images use the same zoom viewer', (tester) async {
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: TimelineActivityGroup(
-      items: const [TaskItem(id: 'cot', kind: TaskItemKind.reasoning,
-        text: 'Inspect camera', detail: '![Camera](/remote/camera.png)')],
+  testWidgets('expanded reasoning Markdown images use the same zoom viewer',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: TimelineActivityGroup(
+      items: const [
+        TaskItem(
+            id: 'cot',
+            kind: TaskItemKind.reasoning,
+            text: 'Inspect camera',
+            detail: '![Camera](/remote/camera.png)')
+      ],
       loadImage: (_) async => base64Decode(_png),
     ))));
     await tester.tap(find.text('1 work event'));

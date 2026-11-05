@@ -35,6 +35,7 @@ class BrowserPreviewActivity : Activity() {
     private var web: WebView? = null
     private var origin: Uri? = null
     private var image: File? = null
+    private var fitScale = 1f
     private lateinit var status: TextView
     private lateinit var progress: ProgressBar
 
@@ -86,7 +87,10 @@ class BrowserPreviewActivity : Activity() {
         if (image != null) {
             button("−") { web?.zoomOut() }
             button("+") { web?.zoomIn() }
-            button("Fit") { web?.loadUrl("$IMAGE_ORIGIN/") }
+            button("Fit") {
+                @Suppress("DEPRECATION")
+                web?.let { if (it.scale > 0f) it.zoomBy(fitScale / it.scale) }
+            }
         } else {
             button("Back") { goBack() }
             button("Reload") { web?.reload() }
@@ -132,6 +136,10 @@ class BrowserPreviewActivity : Activity() {
             override fun onPermissionRequest(request: PermissionRequest) { request.deny() }
         }
         view.webViewClient = object : WebViewClient() {
+            @Suppress("DEPRECATION")
+            override fun onPageFinished(view: WebView, url: String) {
+                if (image != null) fitScale = view.scale
+            }
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val uri = request.url
                 if (image != null) return uri.toString() != "$IMAGE_ORIGIN/"
@@ -145,7 +153,7 @@ class BrowserPreviewActivity : Activity() {
                 if (image == null) return null
                 val url = request.url.toString()
                 if (request.method == "GET" && url == "$IMAGE_ORIGIN/") {
-                    val html = """<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=8, user-scalable=yes"><style>html,body{margin:0;background:#000;width:100%;min-height:100%}body{display:flex;align-items:center;justify-content:center;min-height:100vh}img{display:block;width:100%;height:auto}</style><img src="/image" alt="Image">"""
+                    val html = """<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=8, user-scalable=yes"><style>html,body{margin:0;background:#000;width:100%;height:100%}img{display:block;width:100vw;height:100vh;object-fit:contain}</style><img src="/image" alt="Image">"""
                     return WebResourceResponse("text/html", "UTF-8", ByteArrayInputStream(html.toByteArray()))
                 }
                 if (request.method == "GET" && url == "$IMAGE_ORIGIN/image") {

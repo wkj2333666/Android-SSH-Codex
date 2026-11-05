@@ -614,9 +614,18 @@ class _TaskViewState extends State<TaskView> {
   }
 
   Future<void> _previewAttachment(LocalAttachment attachment) async {
-    final bytes = await loadPreviewImage(File(attachment.path).readAsBytes());
+    final bytes = await loadPreviewImage(Future.sync(() async {
+      final file = File(attachment.path);
+      if (await file.length() > Attachments.maxImagePreviewBytes) {
+        throw StateError('Image preview is too large');
+      }
+      return file.readAsBytes();
+    }));
     if (!mounted) return;
-    if (bytes == null) { _showError('Cannot preview image (maximum 10 MiB).'); return; }
+    if (bytes == null) {
+      _showError('Cannot preview image (maximum 10 MiB).');
+      return;
+    }
     await showImagePreview(context, bytes, label: attachment.name);
   }
 

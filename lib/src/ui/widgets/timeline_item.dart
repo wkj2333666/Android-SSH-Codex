@@ -403,14 +403,17 @@ class _AttachmentCard extends StatelessWidget {
                           attachment.path.startsWith('data:image/')))
                     TextButton(
                       onPressed: () async {
-                        final bytes = await loadAttachmentPreview(attachment, loadImage);
+                        final bytes =
+                            await loadAttachmentPreview(attachment, loadImage);
                         if (!context.mounted) return;
                         if (bytes == null) {
                           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                            content: Text('Could not load image. Reconnect and try again (maximum 10 MiB).')));
+                              content: Text(
+                                  'Could not load image. Reconnect and try again (maximum 10 MiB).')));
                           return;
                         }
-                        await showImagePreview(context, bytes, label: attachment.label);
+                        await showImagePreview(context, bytes,
+                            label: attachment.label);
                       },
                       child: const Text('Preview image'),
                     ),
