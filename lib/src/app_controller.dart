@@ -234,8 +234,9 @@ final class AppController extends ChangeNotifier {
   bool get canDiscoverPorts => isConnected && _ssh != null;
 
   Future<void> savePortForward(PortForwardRule rule) async {
-    if (rule.hostId != _selectedHostId)
+    if (rule.hostId != _selectedHostId) {
       throw StateError('The selected SSH host changed.');
+    }
     await portForwards.upsert(rule);
     await _saveWorkspace();
   }
@@ -280,8 +281,9 @@ final class AppController extends ChangeNotifier {
       throw StateError('SSH host changed while opening the forwarded URL.');
     }
     final state = portForwards.stateFor(rule.id);
-    if (state.localPort == null)
+    if (state.localPort == null) {
       throw StateError(state.error ?? 'Forwarding is waiting for SSH.');
+    }
     return mapForwardedUri(source, state.localPort!);
   }
 

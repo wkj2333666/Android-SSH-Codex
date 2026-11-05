@@ -68,9 +68,12 @@ Future<void> openRemotePortLink(BuildContext context, AppController controller,
     }
     if (!context.mounted ||
         controller.selectedHostId != hostId ||
-        !controller.isConnected) return;
-    if (!await openBrowser(mapped) && context.mounted)
+        !controller.isConnected) {
+      return;
+    }
+    if (!await openBrowser(mapped) && context.mounted) {
       _message(context, 'Could not open the browser.');
+    }
   } catch (error) {
     if (context.mounted) _message(context, '$error');
   }
@@ -164,8 +167,9 @@ class _PortForwardsPanelState extends State<PortForwardsPanel> {
                             onPressed: () => Navigator.pop(context, true),
                             child: const Text('Remove')),
                       ]));
-          if (confirmed == true && mounted && _sameHost)
+          if (confirmed == true && mounted && _sameHost) {
             await widget.controller.removePortForward(rule.id);
+          }
           break;
         case 'retry':
           await widget.controller.portForwards.retry();

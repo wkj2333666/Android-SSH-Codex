@@ -20,8 +20,9 @@ class _Transport implements RpcTransport {
   @override
   void send(String message) {
     final request = jsonDecode(message) as Map;
-    if (request.containsKey('id'))
+    if (request.containsKey('id')) {
       input.add(jsonEncode({'id': request['id'], 'result': {}}));
+    }
   }
 
   @override

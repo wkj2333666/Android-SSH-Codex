@@ -67,7 +67,9 @@ final class PortForwardManager extends ChangeNotifier {
     for (final rule in _rules.values) {
       if (rule.hostId == hostId &&
           rule.remotePort == remotePort &&
-          rule.remoteHost == target) return rule;
+          rule.remoteHost == target) {
+        return rule;
+      }
     }
     return null;
   }
@@ -80,7 +82,9 @@ final class PortForwardManager extends ChangeNotifier {
         final rule = PortForwardRule.fromJson(entry);
         if (_rules.containsKey(rule.id) ||
             forHost(rule.hostId).length >= maxRulesPerHost ||
-            _duplicate(rule)) continue;
+            _duplicate(rule)) {
+          continue;
+        }
         _rules[rule.id] = rule;
       } on Object {/* Ignore malformed preferences, never block connection. */}
     }
@@ -99,8 +103,9 @@ final class PortForwardManager extends ChangeNotifier {
     if (previous != null && previous.hostId != rule.hostId) {
       throw ArgumentError('A rule cannot move between hosts.');
     }
-    if (_duplicate(rule))
+    if (_duplicate(rule)) {
       throw ArgumentError('This remote target already has a forwarding rule.');
+    }
     if (previous == null && forHost(rule.hostId).length >= maxRulesPerHost) {
       throw ArgumentError(
           'Maximum $maxRulesPerHost forwarding rules per host.');
@@ -211,8 +216,9 @@ final class PortForwardManager extends ChangeNotifier {
           });
         } catch (error) {
           await server?.close();
-          if (!_disposed && revision == _revision)
+          if (!_disposed && revision == _revision) {
             _errors[rule.id] = error.toString();
+          }
           Diagnostics.record('portForward.bindFailed',
               {'rule': rule.id, ...Diagnostics.errorFields(error)});
         }

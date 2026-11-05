@@ -5,8 +5,9 @@ String normalizeForwardHost(String value) {
   if (host.startsWith('[') && host.endsWith(']')) {
     host = host.substring(1, host.length - 1);
   }
-  if (host == 'localhost' || host == '0.0.0.0' || host == '*')
+  if (host == 'localhost' || host == '0.0.0.0' || host == '*') {
     return '127.0.0.1';
+  }
   if (host == '::') return '::1';
   if (host.isEmpty ||
       host.length > 253 ||
