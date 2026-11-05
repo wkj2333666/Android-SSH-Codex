@@ -21,6 +21,8 @@ import 'widgets/user_input_panel.dart';
 import 'widgets/remote_file_actions.dart';
 import 'widgets/task_question_panel.dart';
 import 'task_manager.dart';
+import 'preview_browser.dart';
+import 'widgets/inline_attachment_image.dart';
 
 bool isTaskComposerInputEnabled({
   required TaskRecord task,
@@ -612,21 +614,19 @@ class _TaskViewState extends State<TaskView> {
   }
 
   Future<void> _previewAttachment(LocalAttachment attachment) async {
-    await showDialog<void>(
-        context: context,
-        builder: (context) => Dialog(
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                Flexible(
-                    child: InteractiveViewer(
-                        child: Image.file(File(attachment.path),
-                            cacheWidth: 1200,
-                            errorBuilder: (_, __, ___) =>
-                                const Text('Cannot preview image')))),
-                TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Close')),
-              ]),
-            ));
+    final bytes = await loadPreviewImage(Future.sync(() async {
+      final file = File(attachment.path);
+      if (await file.length() > Attachments.maxImagePreviewBytes) {
+        throw StateError('Image preview is too large');
+      }
+      return file.readAsBytes();
+    }));
+    if (!mounted) return;
+    if (bytes == null) {
+      _showError('Cannot preview image (maximum 10 MiB).');
+      return;
+    }
+    await showImagePreview(context, bytes, label: attachment.name);
   }
 
   Future<void> _steerQueuedMessage(String messageId) => _runQueueAction(

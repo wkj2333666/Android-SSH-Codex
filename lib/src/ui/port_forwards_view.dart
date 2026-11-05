@@ -7,6 +7,18 @@ import 'package:url_launcher/url_launcher.dart';
 import '../app_controller.dart';
 import '../ports/port_forward.dart';
 import '../ports/port_discovery.dart';
+import 'preview_browser.dart';
+
+Future<bool> openForwardedPage(Uri uri, Future<bool> Function(Uri) external,
+    {Future<bool> Function(Uri)? inApp}) async {
+  if (inApp == null && !PreviewBrowser.supported) return external(uri);
+  try {
+    if (await (inApp ?? PreviewBrowser.openPage)(uri)) return true;
+  } on PlatformException {
+    // Devices without an enabled system WebView can still use their browser.
+  }
+  return external(uri);
+}
 
 Future<void> showPortForwards(
     BuildContext context, AppController controller) async {
@@ -71,7 +83,7 @@ Future<void> openRemotePortLink(BuildContext context, AppController controller,
         !controller.isConnected) {
       return;
     }
-    if (!await openBrowser(mapped) && context.mounted) {
+    if (!await openForwardedPage(mapped, openBrowser) && context.mounted) {
       _message(context, 'Could not open the browser.');
     }
   } catch (error) {
@@ -182,14 +194,19 @@ class _PortForwardsPanelState extends State<PortForwardsPanel> {
           }
           break;
         case 'open':
+        case 'external':
           if (state.localPort != null) {
             final uri = Uri(
                 scheme: rule.scheme,
                 host: '127.0.0.1',
                 port: state.localPort,
                 path: '/');
-            if (!await launchUrl(uri, mode: LaunchMode.externalApplication) &&
-                mounted) {
+            Future<bool> external(Uri value) =>
+                launchUrl(value, mode: LaunchMode.externalApplication);
+            final opened = action == 'external'
+                ? await external(uri)
+                : await openForwardedPage(uri, external);
+            if (!opened && mounted) {
               _message(context, 'Could not open the browser.');
             }
           }
@@ -322,7 +339,11 @@ class _PortForwardsPanelState extends State<PortForwardsPanel> {
                       PopupMenuItem(
                           value: 'open',
                           enabled: state.listening,
-                          child: const Text('Open in browser')),
+                          child: const Text('Open in app')),
+                      PopupMenuItem(
+                          value: 'external',
+                          enabled: state.listening,
+                          child: const Text('Open in external browser')),
                       PopupMenuItem(
                           value: 'copy',
                           enabled: state.listening,

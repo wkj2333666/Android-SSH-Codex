@@ -40,6 +40,14 @@ host/port as seen **from the SSH server** and a phone port; `0` means Auto,
 which tries the remote port first and then chooses a free port. Fixed-port
 conflicts show an error instead of silently changing your selection. Copy the
 actual local address or open its HTTP/HTTPS URL from the rule's menu.
+On Android, **Open in app** uses the system WebView, with Back, Reload and
+External controls. **Open in external browser** remains available in the ports
+menu. Localhost links in chat also prefer this in-app preview, falling back to
+the external browser if WebView is unavailable. No browser engine is bundled.
+The preview has no SSH/native JavaScript bridge or local-file access; only the
+forwarded origin stays inside it. Use the external browser for web downloads,
+file-upload forms, camera/microphone access and browser-specific features.
+Invalid TLS certificates are never accepted automatically.
 
 Rules are saved per host, remain editable offline, and enabled rules resume
 after reconnecting to that same host. Leaving a task does not stop its forwards.
@@ -384,6 +392,11 @@ image previews stay visible outside collapsed work events; raw image Base64
 is not printed in tool details. External HTTP images remain blocked. Tap a
 thumbnail to zoom; if loading fails, use Retry. Only mounted timeline images
 are requested, and inline remote previews remain capped at 10 MiB.
+CoT/tool images, reply images, attachment details and composer images use the
+same full-screen viewer. On Android this reuses the system WebView with pinch,
+double-tap and explicit zoom/fit controls, without exposing the private cache
+to remote web pages. A Flutter viewer with zoom controls is available as a
+fallback. Thumbnails preserve their aspect ratio within a bounded area.
 Question prompts and answer options support Markdown formatting.
 
 Selecting a file uploads it into a private, randomly named directory under

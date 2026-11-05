@@ -19,6 +19,8 @@ class MainActivity : FlutterActivity() {
     private var permissionResult: MethodChannel.Result? = null
     private var exportResult: MethodChannel.Result? = null
     private var videoResult: MethodChannel.Result? = null
+    private var imageResult: MethodChannel.Result? = null
+    private var pageResult: MethodChannel.Result? = null
     private var exportSnapshot: String? = null
     private var attachmentPicker: AttachmentPicker? = null
     private var attachmentDownloads: AttachmentDownloads? = null
@@ -48,6 +50,38 @@ class MainActivity : FlutterActivity() {
         attachmentPicker = AttachmentPicker(this)
         attachmentDownloads = AttachmentDownloads(this)
         connectionDiagnostics = ConnectionRuntime.observer()
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger,
+            "android_ssh_codex/previews").setMethodCallHandler { call, result ->
+            try {
+                when (call.method) {
+                    "cacheDirectory" -> result.success(cacheDir.absolutePath)
+                    "openPage" -> {
+                        val uri = android.net.Uri.parse(call.argument<String>("url") ?: "")
+                        require(BrowserPreviewActivity.validPage(uri))
+                        if (pageResult != null) result.error("BUSY", "A web preview is already open", null)
+                        else {
+                            pageResult = result
+                            startActivityForResult(Intent(this, BrowserPreviewActivity::class.java).putExtra("url", uri.toString()), BrowserPreviewActivity.PAGE_REQUEST)
+                        }
+                    }
+                    "openImage" -> {
+                        if (imageResult != null) result.error("BUSY", "An image preview is already open", null)
+                        else {
+                            val file = BrowserPreviewActivity.imageFile(this, call.argument<String>("path") ?: "")
+                            imageResult = result
+                            startActivityForResult(Intent(this, BrowserPreviewActivity::class.java)
+                                .putExtra("path", file.absolutePath)
+                                .putExtra("name", call.argument<String>("name") ?: "Image"), BrowserPreviewActivity.IMAGE_REQUEST)
+                        }
+                    }
+                    else -> result.notImplemented()
+                }
+            } catch (_: Exception) {
+                if (imageResult === result) imageResult = null
+                if (pageResult === result) pageResult = null
+                result.error("PREVIEW_UNAVAILABLE", "Cannot open system WebView preview", null)
+            }
+        }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger,
             "android_ssh_codex/attachments").setMethodCallHandler { call, result ->
             if (call.method == "downloadDirectory") result.success(cacheDir.absolutePath)
@@ -175,6 +209,16 @@ class MainActivity : FlutterActivity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == BrowserPreviewActivity.PAGE_REQUEST) {
+            pageResult?.success(resultCode == Activity.RESULT_OK)
+            pageResult = null
+            return
+        }
+        if (requestCode == BrowserPreviewActivity.IMAGE_REQUEST) {
+            imageResult?.success(resultCode == Activity.RESULT_OK)
+            imageResult = null
+            return
+        }
         if (requestCode == VideoPreviewActivity.REQUEST) {
             val result = videoResult
             videoResult = null
@@ -231,6 +275,10 @@ class MainActivity : FlutterActivity() {
         permissionResult = null
         videoResult?.error("ACTIVITY_CLOSED", "Video preview activity closed", null)
         videoResult = null
+        imageResult?.error("ACTIVITY_CLOSED", "Image preview activity closed", null)
+        imageResult = null
+        pageResult?.error("ACTIVITY_CLOSED", "Web preview activity closed", null)
+        pageResult = null
         super.cleanUpFlutterEngine(flutterEngine)
     }
 }
