@@ -11,6 +11,7 @@ abstract interface class PortForwardChannel {
   Stream<List<int>> get stream;
   StreamSink<List<int>> get sink;
   Future<void> get done;
+  Future<void> flush();
   void destroy();
 }
 
@@ -23,6 +24,8 @@ final class SshPortForwardChannel implements PortForwardChannel {
   StreamSink<List<int>> get sink => channel.sink;
   @override
   Future<void> get done => channel.done;
+  @override
+  Future<void> flush() => channel.flush();
   @override
   void destroy() => channel.destroy();
 }
@@ -341,11 +344,23 @@ final class _Bridge {
         }
       }
 
-      // pipe/addStream propagate backpressure and EOF independently. In
-      // particular, a client write-half-close must not truncate the response.
+      Future<void> upload() async {
+        await channel.sink.addStream(socket.cast<List<int>>());
+        await channel.flush();
+        await channel.sink.close();
+      }
+
+      Future<void> download() async {
+        await socket.addStream(channel.stream);
+        await socket.flush();
+        await socket.close();
+      }
+
+      // addStream propagates backpressure. Explicit flush-before-close keeps
+      // buffered writes and half-closed requests from losing their responses.
       await Future.wait([
-        transfer(socket.cast<List<int>>().pipe(channel.sink)),
-        transfer(channel.stream.pipe(socket)),
+        transfer(upload()),
+        transfer(download()),
       ]);
     } catch (error) {
       if (!_closed && !owner.stopped) {

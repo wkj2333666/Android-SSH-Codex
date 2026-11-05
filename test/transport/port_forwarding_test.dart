@@ -19,8 +19,20 @@ class _Channel implements PortForwardChannel {
   @override
   Future<void> get done => socket.done;
   @override
+  Future<void> flush() => socket.flush();
+  @override
   void destroy() {
     destroyed = true;
+    socket.destroy();
+  }
+}
+
+Future<void> _echo(Socket socket) async {
+  try {
+    await socket.addStream(socket.cast<List<int>>());
+    await socket.flush();
+    await socket.close();
+  } catch (_) {
     socket.destroy();
   }
 }
@@ -87,7 +99,7 @@ garbage localhost:6000
     final accepted = <Socket>[];
     final sub = target.listen((socket) {
       accepted.add(socket);
-      unawaited(socket.cast<List<int>>().pipe(socket));
+      unawaited(_echo(socket));
     });
     final manager = PortForwardManager();
     try {
@@ -107,11 +119,14 @@ garbage localhost:6000
         throw StateError(
             'Receive failed: $error; bridge: ${manager.stateFor("a").error}');
       });
-      socket.add(bytes);
-      await socket.flush();
-      await socket.close(); // Client EOF must not discard the echo response.
-      final response =
-          (await receiving.timeout(const Duration(seconds: 15))).takeBytes();
+      final sending = () async {
+        socket.add(bytes);
+        await socket.flush();
+        await socket.close();
+      }();
+      final completed = await Future.wait<dynamic>([receiving, sending],
+          eagerError: true).timeout(const Duration(seconds: 15));
+      final response = (completed.first as BytesBuilder).takeBytes();
       expect(response, bytes);
       await manager.detach();
       expect(manager.stateFor('a').localPort, isNull);
@@ -215,7 +230,7 @@ garbage localhost:6000
     final peers = <Socket>[];
     final sub = server.listen((socket) {
       peers.add(socket);
-      unawaited(socket.cast<List<int>>().pipe(socket));
+      unawaited(_echo(socket));
     });
     final manager = PortForwardManager();
     Socket? socket;
@@ -231,11 +246,15 @@ garbage localhost:6000
           List.generate(4 * 1024 * 1024 + 37, (i) => i % 251));
       final response = socket.fold<BytesBuilder>(
           BytesBuilder(), (buffer, chunk) => buffer..add(chunk));
-      socket.add(payload);
-      await socket.flush();
-      await socket.close();
-      expect((await response.timeout(const Duration(seconds: 30))).takeBytes(),
-          payload);
+      final writingSocket = socket;
+      final sending = () async {
+        writingSocket.add(payload);
+        await writingSocket.flush();
+        await writingSocket.close();
+      }();
+      final completed = await Future.wait<dynamic>([response, sending],
+          eagerError: true).timeout(const Duration(seconds: 30));
+      expect((completed.first as BytesBuilder).takeBytes(), payload);
       await manager.detach();
       await client.ping();
       expect(client.isClosed, isFalse);
