@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -85,10 +84,9 @@ class _ImagePreviewPageState extends State<ImagePreviewPage> {
     final scale = _transform.value.getMaxScaleOnAxis();
     final target = (scale * factor).clamp(1.0, 8.0);
     final applied = target / scale;
-    final matrix = Matrix4.identity()
-      ..translate(center.dx, center.dy)
-      ..scale(applied)
-      ..translate(-center.dx, -center.dy);
+    final matrix = Matrix4.diagonal3Values(applied, applied, 1)
+      ..setEntry(0, 3, center.dx * (1 - applied))
+      ..setEntry(1, 3, center.dy * (1 - applied));
     setState(() => _transform.value = matrix * _transform.value);
   }
 

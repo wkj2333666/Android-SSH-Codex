@@ -51,8 +51,9 @@ class InlineAttachmentImageState extends State<InlineAttachmentImage> {
   void didUpdateWidget(InlineAttachmentImage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.attachment.path != widget.attachment.path ||
-        (oldWidget.loadImage == null && widget.loadImage != null))
+        (oldWidget.loadImage == null && widget.loadImage != null)) {
       _preview = _load();
+    }
   }
 
   Future<Uint8List?> _load() =>

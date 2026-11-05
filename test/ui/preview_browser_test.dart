@@ -77,8 +77,8 @@ void main() {
       'https://example.com/',
       'http://user:pass@127.0.0.1/'
     ]) {
-      expect(
-          () => PreviewBrowser.openPage(Uri.parse(url)), throwsArgumentError);
+      await expectLater(
+          PreviewBrowser.openPage(Uri.parse(url)), throwsArgumentError);
     }
     expect(calls, hasLength(1));
   });
