@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
@@ -12,6 +11,7 @@ import 'inline_attachment_image.dart';
 import 'remote_file_actions.dart';
 import 'task_question_panel.dart';
 import 'task_question_content.dart';
+import '../preview_browser.dart';
 
 typedef MessageTextCopier = Future<void> Function(String text);
 
@@ -402,61 +402,15 @@ class _AttachmentCard extends StatelessWidget {
                       ((attachment.path.startsWith('/') && loadImage != null) ||
                           attachment.path.startsWith('data:image/')))
                     TextButton(
-                      onPressed: () {
-                        final loading = attachment.path.startsWith('data:')
-                            ? Future<Uint8List>.sync(() {
-                                final match = RegExp(
-                                        r'^data:image/(?:png|jpeg|webp|gif);base64,')
-                                    .firstMatch(attachment.path);
-                                if (match == null ||
-                                    attachment.path.length > 14 * 1024 * 1024) {
-                                  throw const FormatException(
-                                      'Unsupported or oversized image');
-                                }
-                                return base64Decode(
-                                    attachment.path.substring(match.end));
-                              })
-                            : loadImage!(attachment.path);
-                        final preview = loadPreviewImage(loading);
-                        unawaited(showDialog<void>(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            title: const Text('Image preview'),
-                            content: SizedBox(
-                              width: 500,
-                              height: 400,
-                              child: FutureBuilder<Uint8List?>(
-                                future: preview,
-                                builder: (context, snapshot) {
-                                  if (snapshot.connectionState ==
-                                          ConnectionState.done &&
-                                      !snapshot.hasData) {
-                                    return const Text(
-                                        'Could not load image. Reconnect and try again (maximum 10 MiB).');
-                                  }
-                                  if (!snapshot.hasData) {
-                                    return const Center(
-                                        child: CircularProgressIndicator());
-                                  }
-                                  return InteractiveViewer(
-                                    child: Image.memory(
-                                      snapshot.data!,
-                                      cacheWidth: 1200,
-                                      fit: BoxFit.contain,
-                                      errorBuilder: (_, __, ___) => const Text(
-                                          'Image format is not supported.'),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                            actions: [
-                              TextButton(
-                                  onPressed: () => Navigator.pop(context),
-                                  child: const Text('Close'))
-                            ],
-                          ),
-                        ));
+                      onPressed: () async {
+                        final bytes = await loadAttachmentPreview(attachment, loadImage);
+                        if (!context.mounted) return;
+                        if (bytes == null) {
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                            content: Text('Could not load image. Reconnect and try again (maximum 10 MiB).')));
+                          return;
+                        }
+                        await showImagePreview(context, bytes, label: attachment.label);
                       },
                       child: const Text('Preview image'),
                     ),

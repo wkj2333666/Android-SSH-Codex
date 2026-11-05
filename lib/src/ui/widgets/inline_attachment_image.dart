@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../tasks/message_attachments.dart';
+import '../preview_browser.dart';
 
 class ImagePreviewScope extends InheritedWidget {
   const ImagePreviewScope(
@@ -38,6 +39,7 @@ class InlineAttachmentImage extends StatefulWidget {
 
 class InlineAttachmentImageState extends State<InlineAttachmentImage> {
   late Future<Uint8List?> _preview;
+  bool _opening = false;
 
   @override
   void initState() {
@@ -48,66 +50,42 @@ class InlineAttachmentImageState extends State<InlineAttachmentImage> {
   @override
   void didUpdateWidget(InlineAttachmentImage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.attachment.path != widget.attachment.path) _preview = _load();
+    if (oldWidget.attachment.path != widget.attachment.path ||
+        (oldWidget.loadImage == null && widget.loadImage != null)) _preview = _load();
   }
 
-  Future<Uint8List?> _load() => loadPreviewImage(Future.sync(() {
-        final path = widget.attachment.path;
-        if (!path.startsWith('data:')) return widget.loadImage!(path);
-        final match = RegExp(r'^data:image/(?:png|jpeg|webp|gif);base64,')
-            .firstMatch(path);
-        if (match == null || path.length > 14 * 1024 * 1024) {
-          throw const FormatException('Unsupported or oversized image');
-        }
-        return base64Decode(path.substring(match.end));
-      }));
+  Future<Uint8List?> _load() => loadAttachmentPreview(widget.attachment, widget.loadImage);
+
+  Future<void> _open(Uint8List bytes) async {
+    if (_opening) return;
+    _opening = true;
+    try { await showImagePreview(context, bytes, label: widget.attachment.label); }
+    finally { _opening = false; }
+  }
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-        width: 280,
-        height: 180,
+  Widget build(BuildContext context) => ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 480, maxHeight: 280),
         child: FutureBuilder<Uint8List?>(
           future: _preview,
           builder: (context, snapshot) {
             if (snapshot.connectionState != ConnectionState.done) {
-              return const Center(child: CircularProgressIndicator());
+              return const SizedBox(width: 280, height: 120,
+                child: Center(child: CircularProgressIndicator()));
             }
             final bytes = snapshot.data;
             if (bytes == null) {
               return TextButton.icon(
-                onPressed: () => setState(() {
-                  _preview = _load();
-                }),
+                onPressed: () => setState(() { _preview = _load(); }),
                 icon: const Icon(Icons.refresh),
                 label: const Text('Image unavailable · Retry'),
               );
             }
             return InkWell(
-              onTap: () => showDialog<void>(
-                context: context,
-                builder: (context) => Dialog(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Flexible(
-                        child: InteractiveViewer(
-                          child: Image.memory(bytes,
-                              cacheWidth: 1200,
-                              fit: BoxFit.contain,
-                              errorBuilder: (_, __, ___) =>
-                                  const Text('Image format is not supported.')),
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text('Close'),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              onTap: () => _open(bytes),
               child: Image.memory(bytes,
-                  cacheWidth: 560,
+                  width: 480,
+                  cacheWidth: 960,
                   fit: BoxFit.contain,
                   semanticLabel: widget.attachment.label,
                   errorBuilder: (_, __, ___) => const Center(
@@ -117,6 +95,21 @@ class InlineAttachmentImageState extends State<InlineAttachmentImage> {
         ),
       );
 }
+
+Future<Uint8List?> loadAttachmentPreview(MessageAttachment attachment,
+    Future<Uint8List> Function(String)? loadImage) => loadPreviewImage(Future.sync(() {
+        final path = attachment.path;
+        if (!path.startsWith('data:')) {
+          if (loadImage == null) throw StateError('Image loader unavailable');
+          return loadImage(path);
+        }
+        final match = RegExp(r'^data:image/(?:png|jpeg|webp|gif);base64,')
+            .firstMatch(path);
+        if (match == null || path.length > 14 * 1024 * 1024) {
+          throw const FormatException('Unsupported or oversized image');
+        }
+        return base64Decode(path.substring(match.end));
+      }));
 
 Future<Uint8List?> loadPreviewImage(Future<Uint8List> loading) async {
   try {

@@ -19,6 +19,25 @@ Future<void> _settleImage(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets('expanded reasoning Markdown images use the same zoom viewer', (tester) async {
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: TimelineActivityGroup(
+      items: const [TaskItem(id: 'cot', kind: TaskItemKind.reasoning,
+        text: 'Inspect camera', detail: '![Camera](/remote/camera.png)')],
+      loadImage: (_) async => base64Decode(_png),
+    ))));
+    await tester.tap(find.text('1 work event'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Reasoning'));
+    await tester.pumpAndSettle();
+    await _settleImage(tester);
+    await tester.ensureVisible(find.byType(Image));
+    await tester.tap(find.byType(Image));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('image-preview-page')), findsOneWidget);
+    expect(find.byTooltip('Zoom in'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Markdown video preview plays on tap without a save picker',
       (tester) async {
     final played = <String>[];
@@ -189,6 +208,10 @@ void main() {
     await _settleImage(tester);
     expect(reads, 1);
     expect(find.byType(Image), findsOneWidget);
+    await tester.tap(find.byType(Image));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('image-preview-page')), findsOneWidget);
+    expect(find.byTooltip('Zoom in'), findsOneWidget);
     expect(find.text('Download remote file?'), findsNothing);
     expect(tester.takeException(), isNull);
   });

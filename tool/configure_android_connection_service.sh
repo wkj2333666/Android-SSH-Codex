@@ -15,6 +15,16 @@ if ! grep -Fq 'android:name=".VideoPreviewActivity"' "$manifest"; then
   sed -i '/<\/application>/i\        <activity android:name=".VideoPreviewActivity" android:exported="false" android:configChanges="orientation|screenSize" android:theme="@android:style/Theme.Material.NoActionBar" />' "$manifest"
 fi
 kotlin_dir="$android_root/app/src/main/kotlin/io/github/wkj2333666/android_ssh_codex"
+if ! grep -Fq 'android:name=".BrowserPreviewActivity"' "$manifest"; then
+  sed -i '/<\/application>/i\        <activity android:name=".BrowserPreviewActivity" android:exported="false" android:configChanges="orientation|screenSize" android:theme="@android:style/Theme.Material.NoActionBar" />' "$manifest"
+fi
+if ! grep -Fq 'android:networkSecurityConfig=' "$manifest"; then
+  sed -i '/<application/a\        android:networkSecurityConfig="@xml/preview_network_security"' "$manifest"
+fi
+mkdir -p "$android_root/app/src/main/res/xml"
+cp "$template_root/preview_network_security.xml" "$android_root/app/src/main/res/xml/"
+mkdir -p "$kotlin_dir"
+cp "$template_root/BrowserPreviewActivity.kt" "$kotlin_dir/"
 sed -i 's/android:stopWithTask="true"/android:stopWithTask="false"/' "$manifest"
 mkdir -p "$kotlin_dir" "$android_root/app/src/main/res/drawable"
 cp "$template_root/MainActivity.kt" "$template_root/ConnectionService.kt" "$template_root/DiagnosticLog.kt" "$kotlin_dir/"

@@ -77,5 +77,9 @@ object ConnectionRuntime {
                 if (call.method == "downloadDirectory") result.success(app.cacheDir.absolutePath)
                 else result.error("ACTIVITY_CLOSED", "Open the app to select or save files", null)
             }
+        MethodChannel(messenger, "android_ssh_codex/previews")
+            .setMethodCallHandler { _, result ->
+                result.error("ACTIVITY_CLOSED", "Open the app to preview content", null)
+            }
     }
 }
