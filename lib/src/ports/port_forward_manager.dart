@@ -151,10 +151,12 @@ final class PortForwardManager extends ChangeNotifier {
           }
           server ??= await ServerSocket.bind(InternetAddress.loopbackIPv4, rule.localPort);
           if (_disposed || revision != _revision) { await server.close(); return; }
-          final run = _Listener(rule, _session, server, open,
+          final session = _session;
+          final run = _Listener(rule, session, server, open,
               () => _connections < maxConnections, () => _changed(),
               (error) {
-                if (!_disposed && _listeners[rule.id]?.session == _session) {
+                if (!_disposed && identical(_session, session) &&
+                    identical(_listeners[rule.id]?.session, session)) {
                   _errors[rule.id] = error.toString(); _changed();
                 }
               });

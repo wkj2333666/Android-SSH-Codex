@@ -9,7 +9,7 @@ String normalizeForwardHost(String value) {
   if (host == '::') return '::1';
   if (host.isEmpty || host.length > 253 ||
       (InternetAddress.tryParse(host) == null &&
-          !RegExp(r'^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$').hasMatch(host))) {
+          !RegExp(r'^[a-z0-9_][a-z0-9_.-]*$').hasMatch(host))) {
     throw ArgumentError('Enter an IP address or hostname, without a URL or credentials.');
   }
   return host;

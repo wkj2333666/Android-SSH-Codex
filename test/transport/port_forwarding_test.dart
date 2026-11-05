@@ -36,6 +36,7 @@ void main() {
     expect(() => normalizeForwardHost('user@host'), throwsArgumentError);
     expect(normalizeForwardHost('[::1]'), '::1');
     expect(normalizeForwardHost('LOCALHOST'), '127.0.0.1');
+    expect(normalizeForwardHost('api_service.internal.'), 'api_service.internal.');
   });
 
   test('listening discovery handles ss/netstat, wildcard and IPv6 safely', () {
@@ -98,6 +99,21 @@ garbage localhost:6000
       await sub.cancel();
       await target.close();
     }
+  });
+
+  test('renaming a rule preserves its listener and unrelated rules', () async {
+    final manager = PortForwardManager();
+    try {
+      await manager.attach('pi', (_, __) => throw StateError('unused'));
+      await manager.upsert(rule());
+      final before = manager.stateFor('a').localPort;
+      await manager.upsert(rule().copyWith(label: 'Renamed'));
+      expect(manager.stateFor('a').localPort, before);
+      await manager.upsert(rule(id: 'b', remote: 33333));
+      expect(manager.stateFor('a').localPort, before);
+      await manager.remove('b');
+      expect(manager.stateFor('a').localPort, before);
+    } finally { manager.dispose(); }
   });
 
   test('conflicting fixed port fails only that rule; disabling does not resurrect', () async {
