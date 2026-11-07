@@ -404,7 +404,10 @@ class _TaskViewState extends State<TaskView> {
       _ => null,
     };
     if (localCommand != null) {
+      _lastCommandSucceeded = true;
       await _handleCommand(localCommand);
+      if (mounted && !draft.disposed && identical(_draft, draft) &&
+          _lastCommandSucceeded && _composer.text == submittedText) _composer.clear();
       return;
     }
     if (text.isEmpty && _attachments.isEmpty) return;
@@ -814,8 +817,10 @@ class _TaskViewState extends State<TaskView> {
   }
 
   Future<void> _showMcp() async {
+    final taskId = widget.task.id;
+    final hostId = widget.controller.selectedHostId;
     final servers = await _runCommand(widget.controller.listMcpForSelectedTask);
-    if (!mounted || servers == null) return;
+    if (!mounted || servers == null || widget.task.id != taskId || widget.controller.selectedHostId != hostId) return;
     await showDialog<void>(context: context, builder: (context) => AlertDialog(
       title: const Text('MCP servers and tools'),
       content: SizedBox(width: 480, child: servers.isEmpty
@@ -825,6 +830,7 @@ class _TaskViewState extends State<TaskView> {
           children: [for (final tool in server.tools) ListTile(
             title: Text(tool), trailing: const Icon(Icons.add_comment_outlined),
             onTap: () {
+              if (!mounted || widget.task.id != taskId || widget.controller.selectedHostId != hostId) return;
               final editor = _composer;
               final current = editor.text.trim();
               final prefix = current.toLowerCase() == '/mcp' ? '' : editor.text;

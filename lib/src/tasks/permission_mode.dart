@@ -9,12 +9,21 @@ enum PermissionMode {
   final String description;
 
   Map<String, dynamic> get turnParams => switch (this) {
-    inherit => const {},
-    readOnly => const {'approvalPolicy': 'on-request', 'sandboxPolicy': {'type': 'readOnly'}},
-    workspace => const {'approvalPolicy': 'on-request', 'sandboxPolicy': {'type': 'workspaceWrite', 'networkAccess': false}},
-    fullAccess => const {'approvalPolicy': 'never', 'sandboxPolicy': {'type': 'dangerFullAccess'}},
-  };
+        inherit => const {},
+        readOnly => const {
+            'approvalPolicy': 'on-request',
+            'sandboxPolicy': {'type': 'readOnly'}
+          },
+        workspace => const {
+            'approvalPolicy': 'on-request',
+            'sandboxPolicy': {'type': 'workspaceWrite', 'networkAccess': false}
+          },
+        fullAccess => const {
+            'approvalPolicy': 'never',
+            'sandboxPolicy': {'type': 'dangerFullAccess'}
+          },
+      };
 
-  static PermissionMode restore(Object? value) => values.firstWhere(
-    (mode) => mode.name == value, orElse: () => inherit);
+  static PermissionMode restore(Object? value) =>
+      values.firstWhere((mode) => mode.name == value, orElse: () => inherit);
 }

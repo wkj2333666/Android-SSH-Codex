@@ -2554,7 +2554,14 @@ final class AppController extends ChangeNotifier {
   Future<List<RemoteMcpServer>> listMcpForSelectedTask() async {
     final id = _selectedTaskId;
     if (id == null) throw StateError('Select a task first.');
-    return _requireApi().listMcpServers(id);
+    final api = _requireApi();
+    final attempt = _connectionAttempt;
+    final epoch = _epoch;
+    final profileId = _selectedHostId!;
+    await _ensureThreadSubscribed(id, api: api, attempt: attempt, epoch: epoch, profileId: profileId);
+    final result = await api.listMcpServers(id);
+    _ensureCurrentSession(api, attempt, epoch, profileId);
+    return result;
   }
 
   Future<List<RemoteSkill>> listSkillsForSelectedTask() async {

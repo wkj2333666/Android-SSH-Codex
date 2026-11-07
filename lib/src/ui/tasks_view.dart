@@ -127,54 +127,67 @@ class _TaskList extends StatelessWidget {
         title: const Text('New task'),
         content: SizedBox(
           width: 480,
-          child: Form(key: form, child: SingleChildScrollView(child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (project == null)
-                TextFormField(
-                  initialValue: cwd,
-                  onChanged: (value) => cwd = value,
-                  key: const Key('new-task-cwd'),
-                  decoration: const InputDecoration(
-                    labelText: 'Remote working directory (optional)',
-                    helperText: 'Leave blank to use the server default. No project is created.',
-                    helperMaxLines: 2,
-                    prefixIcon: Icon(Icons.folder_outlined),
+          child: Form(
+              key: form,
+              child: SingleChildScrollView(
+                  child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (project == null)
+                    TextFormField(
+                      initialValue: cwd,
+                      onChanged: (value) => cwd = value,
+                      key: const Key('new-task-cwd'),
+                      decoration: const InputDecoration(
+                        labelText: 'Remote working directory (optional)',
+                        helperText:
+                            'Leave blank to use the server default. No project is created.',
+                        helperMaxLines: 2,
+                        prefixIcon: Icon(Icons.folder_outlined),
+                      ),
+                    )
+                  else
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.folder_outlined),
+                      title: Text(project.name),
+                      subtitle: Text(project.cwd),
+                    ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    initialValue: prompt,
+                    onChanged: (value) => prompt = value,
+                    key: const Key('new-task-prompt'),
+                    validator: (value) => value == null || value.trim().isEmpty
+                        ? 'Enter a task message.'
+                        : null,
+                    minLines: 3,
+                    maxLines: 6,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Task',
+                      alignLabelWithHint: true,
+                    ),
                   ),
-                )
-              else
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.folder_outlined),
-                  title: Text(project.name),
-                  subtitle: Text(project.cwd),
-                ),
-              const SizedBox(height: 12),
-              TextFormField(
-                initialValue: prompt,
-                onChanged: (value) => prompt = value,
-                key: const Key('new-task-prompt'),
-                validator: (value) => value == null || value.trim().isEmpty ? 'Enter a task message.' : null,
-                minLines: 3,
-                maxLines: 6,
-                autofocus: true,
-                decoration: const InputDecoration(
-                  labelText: 'Task',
-                  alignLabelWithHint: true,
-                ),
-              ),
-              const SizedBox(height: 12),
-              StatefulBuilder(
-                builder: (context, setDialogState) => Column(mainAxisSize: MainAxisSize.min, children: [TurnSettingsPicker(
-                  accountUsage: controller.accountUsage,
-                  models: controller.models,
-                  value: turnSettings,
-                  onChanged: (value) =>
-                      setDialogState(() => turnSettings = value),
-                ), PermissionPicker(value: permissionMode, onChanged: (value) => setDialogState(() => permissionMode = value))]),
-              ),
-            ],
-          ))),
+                  const SizedBox(height: 12),
+                  StatefulBuilder(
+                    builder: (context, setDialogState) =>
+                        Column(mainAxisSize: MainAxisSize.min, children: [
+                      TurnSettingsPicker(
+                        accountUsage: controller.accountUsage,
+                        models: controller.models,
+                        value: turnSettings,
+                        onChanged: (value) =>
+                            setDialogState(() => turnSettings = value),
+                      ),
+                      PermissionPicker(
+                          value: permissionMode,
+                          onChanged: (value) =>
+                              setDialogState(() => permissionMode = value))
+                    ]),
+                  ),
+                ],
+              ))),
         ),
         actions: [
           TextButton(
@@ -183,7 +196,8 @@ class _TaskList extends StatelessWidget {
           ),
           FilledButton.icon(
             onPressed: () {
-              if (form.currentState?.validate() == true) Navigator.pop(context, true);
+              if (form.currentState?.validate() == true)
+                Navigator.pop(context, true);
             },
             icon: const Icon(Icons.arrow_forward),
             label: const Text('Start'),
@@ -191,8 +205,7 @@ class _TaskList extends StatelessWidget {
         ],
       ),
     );
-    if (accepted == true &&
-        prompt.trim().isNotEmpty) {
+    if (accepted == true && prompt.trim().isNotEmpty) {
       try {
         await controller.startNewTask(
           cwd: cwd.trim(),

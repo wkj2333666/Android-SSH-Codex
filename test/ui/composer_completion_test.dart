@@ -28,7 +28,8 @@ void main() {
 
   test('MCP and permission commands are recognized before sending', () {
     expect(composerCompletions('/mc', 3, skills).single.value, '/mcp');
-    expect(composerCompletions('/perm', 5, skills).single.value, '/permissions');
+    expect(
+        composerCompletions('/perm', 5, skills).single.value, '/permissions');
   });
 
   test('dollar completion filters enabled remote skills', () {

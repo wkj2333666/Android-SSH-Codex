@@ -433,7 +433,7 @@ final class CodexRemoteApi {
     String? cursor;
     do {
       final result = _map(await _rpc.request('mcpServerStatus/list', {
-        'threadId': threadId, 'limit': 50,
+        'threadId': threadId, 'limit': 50, 'detail': 'toolsAndAuthOnly',
         if (cursor != null) 'cursor': cursor,
       }));
       for (final raw in result['data'] as List? ?? const []) {

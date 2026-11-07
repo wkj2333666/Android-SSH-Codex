@@ -140,7 +140,19 @@ not imply Play approval.
   immediately, bypassing queued messages), and **Queue** (send when idle).
   Queued messages also have a visible **Steer** button. Explicit Steer requires
   an active turn and does not silently start a new one.
-- Use `/goal`, `/compact`, `/skills`, `/interrupt`, and remote skill completion.
+- Use `/goal`, `/compact`, `/skills`, `/mcp`, `/permissions`, `/interrupt`, and remote skill completion.
+- `/mcp` lists the current task's configured servers and tools. Selecting a tool
+  inserts its server/tool name into your message; it does not execute it or
+  change remote MCP configuration. Exact slash commands work through Send as
+  well as the completion picker.
+- The shield beside the model selector chooses permissions for the next new
+  turn: current thread policy, read-only, workspace-write, or full access.
+  Full access requires confirmation; managed server restrictions still apply.
+  Changes do not alter a running turn when steering. Drafts and queued messages
+  retain their permission selection.
+- A task outside a project may leave the working directory blank to use the
+  remote server's default directory, or supply a working directory without
+  adding a project. This is not a temporary or anonymous filesystem sandbox.
   An existing goal has a compact progress row above the composer. Tap to edit,
   or pause/resume using its button; status changes preserve accumulated usage.
 - Open very long conversations without loading the entire history at once.
