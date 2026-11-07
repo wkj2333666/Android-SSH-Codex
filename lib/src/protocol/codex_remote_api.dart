@@ -8,7 +8,11 @@ import 'json_rpc_client.dart';
 import '../tasks/permission_mode.dart';
 
 final class RemoteMcpServer {
-  const RemoteMcpServer({required this.name, required this.authStatus, required this.tools, this.error});
+  const RemoteMcpServer(
+      {required this.name,
+      required this.authStatus,
+      required this.tools,
+      this.error});
   final String name;
   final String authStatus;
   final List<String> tools;
@@ -433,19 +437,31 @@ final class CodexRemoteApi {
     String? cursor;
     do {
       final result = _map(await _rpc.request('mcpServerStatus/list', {
-        'threadId': threadId, 'limit': 50, 'detail': 'toolsAndAuthOnly',
+        'threadId': threadId,
+        'limit': 50,
+        'detail': 'toolsAndAuthOnly',
         if (cursor != null) 'cursor': cursor,
       }));
       for (final raw in result['data'] as List? ?? const []) {
         final server = _map(raw);
         final name = server['name'] as String?;
         if (name == null || !seen.add(name)) continue;
-        final tools = (server['tools'] as Map? ?? const {}).keys.cast<String>().toList()..sort();
-        servers.add(RemoteMcpServer(name: name, authStatus: server['authStatus'] as String? ?? 'unknown', tools: tools, error: server['toolsError'] as String?));
+        final tools = (server['tools'] as Map? ?? const {})
+            .keys
+            .cast<String>()
+            .toList()
+          ..sort();
+        servers.add(RemoteMcpServer(
+            name: name,
+            authStatus: server['authStatus'] as String? ?? 'unknown',
+            tools: tools,
+            error: server['toolsError'] as String?));
       }
       final next = result['nextCursor'] as String?;
       if (next == null) break;
-      if (!cursors.add(next)) throw StateError('MCP pagination did not advance');
+      if (!cursors.add(next)) {
+        throw StateError('MCP pagination did not advance');
+      }
       cursor = next;
     } while (true);
     return servers;

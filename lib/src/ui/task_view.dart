@@ -306,8 +306,14 @@ class _TaskViewState extends State<TaskView> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 10),
           child: Row(children: [
-            PermissionPicker(value: draft.permissionMode, compact: true, enabled: !_sending,
-              onChanged: (value) { draft.permissionMode = value; draft.changed(); }),
+            PermissionPicker(
+                value: draft.permissionMode,
+                compact: true,
+                enabled: !_sending,
+                onChanged: (value) {
+                  draft.permissionMode = value;
+                  draft.changed();
+                }),
             Expanded(
                 child: TurnSettingsPicker(
               accountUsage: widget.controller.accountUsage,
@@ -389,7 +395,7 @@ class _TaskViewState extends State<TaskView> {
   }
 
   Future<void> _send() async {
-    if (_sending) return;
+    if (_sending || _commandBusy) return;
     final draft = _draft;
     final controller = widget.controller;
     final submittedText = _composer.text;
@@ -406,8 +412,13 @@ class _TaskViewState extends State<TaskView> {
     if (localCommand != null) {
       _lastCommandSucceeded = true;
       await _handleCommand(localCommand);
-      if (mounted && !draft.disposed && identical(_draft, draft) &&
-          _lastCommandSucceeded && _composer.text == submittedText) _composer.clear();
+      if (mounted &&
+          !draft.disposed &&
+          identical(_draft, draft) &&
+          _lastCommandSucceeded &&
+          _composer.text == submittedText) {
+        _composer.clear();
+      }
       return;
     }
     if (text.isEmpty && _attachments.isEmpty) return;
@@ -742,7 +753,8 @@ class _TaskViewState extends State<TaskView> {
       case TaskCommand.mcp:
         await _showMcp();
       case TaskCommand.permissions:
-        final value = await choosePermissionMode(context, _draft.permissionMode);
+        final value =
+            await choosePermissionMode(context, _draft.permissionMode);
         if (mounted && value != null) {
           _draft.permissionMode = value;
           _draft.changed();
@@ -820,28 +832,63 @@ class _TaskViewState extends State<TaskView> {
     final taskId = widget.task.id;
     final hostId = widget.controller.selectedHostId;
     final servers = await _runCommand(widget.controller.listMcpForSelectedTask);
-    if (!mounted || servers == null || widget.task.id != taskId || widget.controller.selectedHostId != hostId) return;
-    await showDialog<void>(context: context, builder: (context) => AlertDialog(
-      title: const Text('MCP servers and tools'),
-      content: SizedBox(width: 480, child: servers.isEmpty
-        ? const Text('No configured MCP servers were returned for this task.')
-        : ListView(shrinkWrap: true, children: [for (final server in servers) ExpansionTile(
-          title: Text(server.name), subtitle: Text('${server.authStatus} · ${server.tools.length} tools${server.error == null ? '' : '\n${server.error}'}'),
-          children: [for (final tool in server.tools) ListTile(
-            title: Text(tool), trailing: const Icon(Icons.add_comment_outlined),
-            onTap: () {
-              if (!mounted || widget.task.id != taskId || widget.controller.selectedHostId != hostId) return;
-              final editor = _composer;
-              final current = editor.text.trim();
-              final prefix = current.toLowerCase() == '/mcp' ? '' : editor.text;
-              editor.text = '${prefix.isEmpty ? '' : '$prefix\n'}Use the configured MCP server "${server.name}", tool "$tool". ';
-              editor.selection = TextSelection.collapsed(offset: editor.text.length);
-              Navigator.pop(context);
-            },
-          )],
-        )])),
-      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))],
-    ));
+    if (!mounted ||
+        servers == null ||
+        widget.task.id != taskId ||
+        widget.controller.selectedHostId != hostId) {
+      return;
+    }
+    await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+              title: const Text('MCP servers and tools'),
+              content: SizedBox(
+                  width: 480,
+                  child: servers.isEmpty
+                      ? const Text(
+                          'No configured MCP servers were returned for this task.')
+                      : ListView(shrinkWrap: true, children: [
+                          for (final server in servers)
+                            ExpansionTile(
+                              title: Text(server.name),
+                              subtitle: Text(
+                                  '${server.authStatus} · ${server.tools.length} tools${server.error == null ? '' : '\n${server.error}'}'),
+                              children: [
+                                for (final tool in server.tools)
+                                  ListTile(
+                                    title: Text(tool),
+                                    trailing:
+                                        const Icon(Icons.add_comment_outlined),
+                                    onTap: () {
+                                      if (!mounted ||
+                                          widget.task.id != taskId ||
+                                          widget.controller.selectedHostId !=
+                                              hostId) {
+                                        return;
+                                      }
+                                      final editor = _composer;
+                                      final current = editor.text.trim();
+                                      final prefix =
+                                          current.toLowerCase() == '/mcp'
+                                              ? ''
+                                              : editor.text;
+                                      editor.text =
+                                          '${prefix.isEmpty ? '' : '$prefix\n'}Use the configured MCP server "${server.name}", tool "$tool". ';
+                                      editor.selection =
+                                          TextSelection.collapsed(
+                                              offset: editor.text.length);
+                                      Navigator.pop(context);
+                                    },
+                                  )
+                              ],
+                            )
+                        ])),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Close'))
+              ],
+            ));
   }
 
   void _updateCompletions() {
@@ -1209,8 +1256,11 @@ class TaskCommandMenu extends StatelessWidget {
         tooltip: 'Task commands',
         onSelected: onSelected,
         itemBuilder: (context) => const [
-          PopupMenuItem(value: TaskCommand.mcp, child: Text('MCP servers and tools')),
-          PopupMenuItem(value: TaskCommand.permissions, child: Text('Permissions · next new turn')),
+          PopupMenuItem(
+              value: TaskCommand.mcp, child: Text('MCP servers and tools')),
+          PopupMenuItem(
+              value: TaskCommand.permissions,
+              child: Text('Permissions · next new turn')),
           PopupMenuItem(value: TaskCommand.rename, child: Text('Rename')),
           PopupMenuItem(value: TaskCommand.pin, child: Text('Pin / unpin')),
           PopupMenuItem(value: TaskCommand.archive, child: Text('Archive')),

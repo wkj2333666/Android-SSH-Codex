@@ -2558,7 +2558,8 @@ final class AppController extends ChangeNotifier {
     final attempt = _connectionAttempt;
     final epoch = _epoch;
     final profileId = _selectedHostId!;
-    await _ensureThreadSubscribed(id, api: api, attempt: attempt, epoch: epoch, profileId: profileId);
+    await _ensureThreadSubscribed(id,
+        api: api, attempt: attempt, epoch: epoch, profileId: profileId);
     final result = await api.listMcpServers(id);
     _ensureCurrentSession(api, attempt, epoch, profileId);
     return result;

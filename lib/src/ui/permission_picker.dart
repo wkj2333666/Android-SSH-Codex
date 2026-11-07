@@ -30,7 +30,9 @@ Future<PermissionMode?> choosePermissionMode(
   );
   if (result != PermissionMode.fullAccess ||
       value == result ||
-      !context.mounted) return result;
+      !context.mounted) {
+    return result;
+  }
   final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(

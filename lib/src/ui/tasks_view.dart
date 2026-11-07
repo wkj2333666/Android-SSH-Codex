@@ -196,8 +196,9 @@ class _TaskList extends StatelessWidget {
           ),
           FilledButton.icon(
             onPressed: () {
-              if (form.currentState?.validate() == true)
+              if (form.currentState?.validate() == true) {
                 Navigator.pop(context, true);
+              }
             },
             icon: const Icon(Icons.arrow_forward),
             label: const Text('Start'),
