@@ -7,7 +7,7 @@ void main() {
   const models = [
     RemoteModel(
       id: 'sol-entry',
-      serviceTiers: ['priority'],
+      serviceTiers: ['priority', 'ultrafast'],
       model: 'gpt-5.6-sol',
       displayName: 'GPT-5.6 Sol',
       description: 'Frontier coding model',
@@ -39,6 +39,23 @@ void main() {
       ],
     ),
   ];
+
+  testWidgets('Ultra Fast uses the advertised id and excludes Fast', (tester) async {
+    TurnSettings? selected;
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: TurnSettingsPicker(
+      models: models, value: const TurnSettings(serviceTier: 'priority'),
+      onChanged: (value) => selected = value,
+    ))));
+    await tester.tap(find.byKey(const Key('turn-settings-selector')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('turn-ultrafast-toggle')));
+    await tester.tap(find.byKey(const Key('turn-ultrafast-toggle')));
+    await tester.pumpAndSettle();
+    expect(tester.widget<SwitchListTile>(find.byKey(const Key('turn-fast-toggle'))).value, isFalse);
+    await tester.tap(find.byKey(const Key('turn-settings-apply')));
+    await tester.pumpAndSettle();
+    expect(selected?.serviceTier, 'ultrafast');
+  });
 
   testWidgets('inherited Fast is shown but effort-only edits keep inheritance',
       (tester) async {
