@@ -6,16 +6,19 @@ import '../tasks/message_attachments.dart';
 import '../projects/remote_project.dart';
 import 'json_rpc_client.dart';
 import '../tasks/permission_mode.dart';
+import '../tasks/mcp_mentions.dart';
 
 final class RemoteMcpServer {
   const RemoteMcpServer(
       {required this.name,
       required this.authStatus,
       required this.tools,
+      this.pluginId,
       this.error});
   final String name;
   final String authStatus;
   final List<String> tools;
+  final String? pluginId;
   final String? error;
 }
 
@@ -91,7 +94,11 @@ final class RemoteModel {
           : null;
   bool get supportsFast =>
       serviceTiers.contains('fast') || serviceTiers.contains('priority');
+  String? get ultraFastServiceTier => serviceTiers.where(isUltraFastTier).firstOrNull;
 }
+
+bool isUltraFastTier(String? tier) =>
+    tier?.toLowerCase().replaceAll(RegExp('[-_]'), '') == 'ultrafast';
 
 final class RemoteThreadGoal {
   const RemoteThreadGoal({
@@ -128,6 +135,7 @@ final class PendingApproval {
 }
 
 final class CodexRemoteApi {
+  final _mcpCatalog = <String, ({DateTime expires, Future<List<RemoteMcpServer>> load})>{};
   CodexRemoteApi(this._rpc);
 
   final JsonRpcClient _rpc;
@@ -390,6 +398,7 @@ final class CodexRemoteApi {
     String? serviceTier,
     List<String> imagePaths = const [],
     PermissionMode permissionMode = PermissionMode.inherit,
+    List<McpMention> mcpMentions = const [],
   }) async {
     await _rpc.request('turn/start', {
       'threadId': threadId,
@@ -397,6 +406,7 @@ final class CodexRemoteApi {
       'input': [
         {'type': 'text', 'text': text},
         for (final path in imagePaths) {'type': 'localImage', 'path': path},
+        for (final mention in mcpMentions) mention.toInput(),
         if (skill != null)
           {
             'type': 'skill',
@@ -430,7 +440,54 @@ final class CodexRemoteApi {
     return List.unmodifiable(models);
   }
 
-  Future<List<RemoteMcpServer>> listMcpServers(String threadId) async {
+  Future<List<McpMention>> resolveMcpMentions(String threadId, String text, {String? skillName}) async {
+    final names = mcpMentionNames(text, skillName: skillName);
+    if (names.isEmpty) return const [];
+    try {
+      final catalog = await listMcpServers(threadId);
+      final available = <String, String?>{};
+      final plugins = <String, Set<String>>{};
+      for (final server in catalog) {
+        final id = server.pluginId;
+        if (id == null || !_pluginId.hasMatch(id)) {
+          available[server.name] = null;
+          continue;
+        }
+        available[server.name] = id;
+        plugins.putIfAbsent(id.split('@').first, () => {}).add(id);
+      }
+      return [for (final name in names)
+        if (available.containsKey(name)) McpMention(name, pluginId: available[name])
+        else if (plugins[name]?.length == 1) McpMention(name, pluginId: plugins[name]!.single),
+      ];
+    } on RpcRemoteException catch (error) {
+      // Older app servers can still accept plain messages.
+      if (error.code == -32601) return const [];
+      rethrow;
+    }
+  }
+
+  Future<List<RemoteMcpServer>> listMcpServers(String threadId, {bool refresh = false}) async {
+    final now = DateTime.now();
+    final cached = _mcpCatalog.remove(threadId);
+    if (!refresh && cached != null && cached.expires.isAfter(now)) {
+      _mcpCatalog[threadId] = cached;
+      return cached.load;
+    }
+    final load = _readMcpServers(threadId);
+    _mcpCatalog[threadId] = (expires: now.add(const Duration(seconds: 30)), load: load);
+    if (_mcpCatalog.length > 16) _mcpCatalog.remove(_mcpCatalog.keys.first);
+    try {
+      return await load;
+    } catch (_) {
+      if (identical(_mcpCatalog[threadId]?.load, load)) {
+        _mcpCatalog.remove(threadId);
+      }
+      rethrow;
+    }
+  }
+
+  Future<List<RemoteMcpServer>> _readMcpServers(String threadId) async {
     final servers = <RemoteMcpServer>[];
     final seen = <String>{};
     final cursors = <String>{};
@@ -455,6 +512,7 @@ final class CodexRemoteApi {
             name: name,
             authStatus: server['authStatus'] as String? ?? 'unknown',
             tools: tools,
+            pluginId: server['pluginId'] as String?,
             error: server['toolsError'] as String?));
       }
       final next = result['nextCursor'] as String?;
@@ -574,6 +632,7 @@ final class CodexRemoteApi {
     String expectedTurnId,
     String text, {
     List<String> imagePaths = const [],
+    List<McpMention> mcpMentions = const [],
   }) async {
     await _rpc.request('turn/steer', {
       'threadId': threadId,
@@ -581,6 +640,7 @@ final class CodexRemoteApi {
       'input': [
         {'type': 'text', 'text': text},
         for (final path in imagePaths) {'type': 'localImage', 'path': path},
+        for (final mention in mcpMentions) mention.toInput(),
       ],
     });
   }
@@ -998,6 +1058,8 @@ Map<String, dynamic> _map(Object? value) {
   if (value is Map) return value.cast<String, dynamic>();
   return const {};
 }
+
+final _pluginId = RegExp(r'^[A-Za-z0-9_.-]+@[A-Za-z0-9_.-]+$');
 
 extension<T> on Iterable<T> {
   T? get firstOrNull {

@@ -873,7 +873,7 @@ class _TaskViewState extends State<TaskView> {
                                               ? ''
                                               : editor.text;
                                       editor.text =
-                                          '${prefix.isEmpty ? '' : '$prefix\n'}Use the configured MCP server "${server.name}", tool "$tool". ';
+                                          '${prefix.isEmpty ? '' : '$prefix\n'}Use \$${server.name}, tool "$tool". ';
                                       editor.selection =
                                           TextSelection.collapsed(
                                               offset: editor.text.length);

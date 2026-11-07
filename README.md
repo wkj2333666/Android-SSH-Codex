@@ -142,9 +142,16 @@ not imply Play approval.
   an active turn and does not silently start a new one.
 - Use `/goal`, `/compact`, `/skills`, `/mcp`, `/permissions`, `/interrupt`, and remote skill completion.
 - `/mcp` lists the current task's configured servers and tools. Selecting a tool
-  inserts its server/tool name into your message; it does not execute it or
+  inserts a `$server-name` reference and tool name into your message; it does not execute it or
   change remote MCP configuration. Exact slash commands work through Send as
   well as the completion picker.
+- Typed `$server-name` references are resolved against the current task's MCP
+  catalog and sent as structured mentions on a new turn or when steering.
+  Installed MCP-backed plugins can be referenced by an unambiguous plugin name.
+  Unrecognized names remain text. Queued text is resolved when delivered.
+- Ultra Fast appears in the model picker when advertised by the remote model
+  catalog. It is mutually exclusive with Fast and applies to the next new turn,
+  not a running turn being steered. Actual availability is server-owned.
 - The shield beside the model selector chooses permissions for the next new
   turn: current thread policy, read-only, workspace-write, or full access.
   Full access requires confirmation; managed server restrictions still apply.

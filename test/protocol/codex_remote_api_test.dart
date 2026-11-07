@@ -25,6 +25,44 @@ final class _RecordingTransport implements RpcTransport {
 }
 
 void main() {
+  test('typed MCP mentions resolve against the task catalog and survive start and steer', () async {
+    final transport = _RecordingTransport();
+    final rpc = JsonRpcClient(transport)..start();
+    final api = CodexRemoteApi(rpc);
+    try {
+      expect(await api.resolveMcpMentions('task', 'ordinary message'), isEmpty);
+      expect(transport.sent, isEmpty);
+      const text = r'Use $ssh-bridge and $camera-plugin, not $unknown';
+      final resolving = api.resolveMcpMentions('task', text);
+      final discovery = jsonDecode(transport.sent.single) as Map;
+      expect(discovery['method'], 'mcpServerStatus/list');
+      expect(discovery['params']['threadId'], 'task');
+      transport.incoming.add(jsonEncode({'id': discovery['id'], 'result': {'data': [
+        {'name': 'ssh-bridge', 'tools': {}},
+        {'name': 'plugin__camera__mcp', 'pluginId': 'camera-plugin@local', 'tools': {}},
+      ]}}));
+      final mentions = await resolving;
+      expect(mentions.map((value) => value.toInput()['path']), ['mcp://ssh-bridge', 'plugin://camera-plugin@local']);
+      expect(await api.resolveMcpMentions('task', text), hasLength(2));
+      expect(transport.sent, hasLength(1));
+      for (final steer in [false, true]) {
+        final sending = steer
+          ? api.steerTurn('task', 'active', text, mcpMentions: mentions)
+          : api.startTurn('task', text, mcpMentions: mentions, serviceTier: 'ultrafast');
+        final request = jsonDecode(transport.sent.last) as Map;
+        expect(request['params']['input'], [
+          {'type': 'text', 'text': text},
+          {'type': 'mention', 'name': 'ssh-bridge', 'path': 'mcp://ssh-bridge'},
+          {'type': 'mention', 'name': 'camera-plugin', 'path': 'plugin://camera-plugin@local'},
+        ]);
+        expect(request['params']['serviceTierForTurn'], steer ? null : 'ultrafast');
+        transport.incoming.add(jsonEncode({'id': request['id'], 'result': {}}));
+        await sending;
+      }
+    } finally {
+      await rpc.close();
+    }
+  });
   test(
       'standalone start omits empty cwd and project instead of sending invalid cwd',
       () async {
