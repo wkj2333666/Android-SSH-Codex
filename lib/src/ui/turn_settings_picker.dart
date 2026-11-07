@@ -39,12 +39,13 @@ class TurnSettingsPicker extends StatelessWidget {
     final tier = settings.serviceTier ??
         inheritedServiceTier ??
         (useCatalogDefault ? model?.defaultServiceTier : null);
-    final fast = tier == 'fast' || tier == 'priority';
+    final speed = isUltraFastTier(tier)
+        ? ' · Ultra Fast'
+        : tier == 'fast' || tier == 'priority' ? ' · Fast' : '';
     final label = settings.model == null
         ? 'Model unavailable'
         : '${model?.displayName ?? settings.model} · '
-            '${settings.effort ?? 'Effort unavailable'}'
-            '${fast ? ' · Fast' : ''}';
+            '${settings.effort ?? 'Effort unavailable'}$speed';
     return Align(
       alignment: Alignment.centerLeft,
       child: OutlinedButton(
@@ -107,13 +108,24 @@ class _TurnSettingsSheet extends StatefulWidget {
 class _TurnSettingsSheetState extends State<_TurnSettingsSheet> {
   late TurnSettings _draft = widget.value;
 
-  bool get _fast {
-    final tier = _draft.serviceTier ??
+  String? get _effectiveTier => _draft.serviceTier ??
         widget.inheritedServiceTier ??
         (widget.useCatalogDefault
             ? _selectedModel(widget.models, _draft)?.defaultServiceTier
             : null);
-    return tier == 'fast' || tier == 'priority';
+  bool get _fast => _effectiveTier == 'fast' || _effectiveTier == 'priority';
+  bool get _ultraFast => isUltraFastTier(_effectiveTier);
+
+  String? _speedFor(RemoteModel candidate) {
+    if (_fast) {
+      if (!candidate.supportsFast) return 'default';
+      if (_draft.serviceTier != null) return candidate.fastServiceTier;
+    }
+    if (_ultraFast) {
+      if (candidate.ultraFastServiceTier == null) return 'default';
+      if (_draft.serviceTier != null) return candidate.ultraFastServiceTier;
+    }
+    return _draft.serviceTier;
   }
 
   @override
@@ -160,11 +172,7 @@ class _TurnSettingsSheetState extends State<_TurnSettingsSheet> {
                         _draft = TurnSettings(
                           model: candidate.model,
                           effort: candidate.defaultReasoningEffort,
-                          serviceTier: _fast && !candidate.supportsFast
-                              ? 'default'
-                              : _draft.fast
-                                  ? candidate.fastServiceTier
-                                  : _draft.serviceTier,
+                          serviceTier: _speedFor(candidate),
                         );
                       }),
                     ),
@@ -204,6 +212,24 @@ class _TurnSettingsSheetState extends State<_TurnSettingsSheet> {
                                 })
                             : null,
                       ),
+                      if (model.ultraFastServiceTier != null || _ultraFast)
+                        SwitchListTile.adaptive(
+                          key: const Key('turn-ultrafast-toggle'),
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                          title: const Text('Ultra Fast · next new turn'),
+                          subtitle: const Text('Higher usage · replaces Fast for this turn'),
+                          value: _ultraFast,
+                          onChanged: model.ultraFastServiceTier != null || _ultraFast
+                              ? (enabled) => setState(() {
+                                    _draft = TurnSettings(
+                                      model: _draft.model,
+                                      effort: _draft.effort,
+                                      serviceTier: enabled ? model.ultraFastServiceTier : 'default',
+                                    );
+                                  })
+                              : null,
+                        ),
                       if (_draft.serviceTier != null)
                         TextButton(
                           key: const Key('turn-fast-inherit'),
@@ -213,7 +239,7 @@ class _TurnSettingsSheetState extends State<_TurnSettingsSheet> {
                               effort: _draft.effort,
                             );
                           }),
-                          child: const Text('Follow server Fast setting'),
+                          child: const Text('Follow thread speed setting'),
                         ),
                       const Text('Reasoning effort'),
                       Wrap(
