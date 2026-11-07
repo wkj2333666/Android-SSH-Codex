@@ -23,6 +23,7 @@ import 'protocol/websocket_rpc_transport.dart';
 import 'tasks/task_catalog.dart';
 import 'tasks/task_draft.dart';
 import 'tasks/turn_settings.dart';
+import 'tasks/permission_mode.dart';
 import 'tasks/task_event_batcher.dart';
 import 'tasks/task_message_queue.dart';
 import 'tasks/task_operation_lock.dart';
@@ -58,6 +59,7 @@ final class QueuedTaskMessage {
     this.model,
     this.effort,
     this.serviceTier,
+    this.permissionMode = PermissionMode.inherit,
     this.imagePaths = const [],
   });
 
@@ -67,6 +69,7 @@ final class QueuedTaskMessage {
   final String? model;
   final String? effort;
   final String? serviceTier;
+  final PermissionMode permissionMode;
   final List<String> imagePaths;
 
   String get timelineItemId => 'local-user:$id';
@@ -77,6 +80,7 @@ final class QueuedTaskMessage {
         'model': model,
         'effort': effort,
         'serviceTier': serviceTier,
+        'permissionMode': permissionMode.name,
         'imagePaths': imagePaths,
         if (skill case final s?)
           'skill': {
@@ -94,6 +98,7 @@ final class QueuedTaskMessage {
         model: value['model'] as String?,
         effort: value['effort'] as String?,
         serviceTier: value['serviceTier'] as String?,
+        permissionMode: PermissionMode.restore(value['permissionMode']),
         imagePaths: (value['imagePaths'] as List? ?? const []).cast<String>(),
         skill: s == null
             ? null
@@ -1740,12 +1745,13 @@ final class AppController extends ChangeNotifier {
   }
 
   Future<void> startNewTask({
-    required String cwd,
+    String? cwd,
     required String prompt,
     String? projectId,
     String? model,
     String? effort,
     String? serviceTier,
+    PermissionMode permissionMode = PermissionMode.inherit,
   }) async {
     final api = _requireApi();
     final attempt = _connectionAttempt;
@@ -1759,6 +1765,7 @@ final class AppController extends ChangeNotifier {
         await api.startThread(cwd: cwd, projectId: project?.remoteId);
     if (!_isCurrentSession(api, attempt, epoch, profileId)) return;
     final threadId = created.id;
+    draftForTask(threadId).permissionMode = permissionMode;
     _subscribedThreadIds = {..._subscribedThreadIds, threadId};
     draftForTask(threadId).settings = TurnSettings(
       model: model,
@@ -1775,6 +1782,7 @@ final class AppController extends ChangeNotifier {
     await api.startTurn(
       threadId,
       prompt,
+      permissionMode: permissionMode,
       model: model,
       effort: effort,
       serviceTier: serviceTier,
@@ -1961,6 +1969,7 @@ final class AppController extends ChangeNotifier {
     String? model,
     String? effort,
     String? serviceTier,
+    PermissionMode permissionMode = PermissionMode.inherit,
     List<RemoteAttachment> attachments = const [],
   }) async {
     final api = _api;
@@ -1984,6 +1993,7 @@ final class AppController extends ChangeNotifier {
       model: model,
       effort: effort,
       serviceTier: serviceTier,
+      permissionMode: permissionMode,
       imagePaths: List.unmodifiable(
           attachments.where((file) => file.isImage).map((file) => file.path)),
     );
@@ -2213,6 +2223,7 @@ final class AppController extends ChangeNotifier {
         effort: pending.effort,
         serviceTier: pending.serviceTier,
         imagePaths: pending.imagePaths,
+        permissionMode: pending.permissionMode,
       );
       await _settlePrompt(profileId, task.id, pending, 'sent');
       if (!_isCurrentSession(api, attempt, epoch, profileId)) return;
@@ -2538,6 +2549,12 @@ final class AppController extends ChangeNotifier {
       _unmarkQueuedMessageInFlight(taskId, messageId);
       _messageOperations.release(taskId, operation);
     }
+  }
+
+  Future<List<RemoteMcpServer>> listMcpForSelectedTask() async {
+    final id = _selectedTaskId;
+    if (id == null) throw StateError('Select a task first.');
+    return _requireApi().listMcpServers(id);
   }
 
   Future<List<RemoteSkill>> listSkillsForSelectedTask() async {

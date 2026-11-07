@@ -39,6 +39,16 @@ const _commands = [
   ),
   ComposerCompletion(
     kind: ComposerCompletionKind.command,
+    value: '/mcp',
+    description: 'View configured MCP servers and tools',
+  ),
+  ComposerCompletion(
+    kind: ComposerCompletionKind.command,
+    value: '/permissions',
+    description: 'Choose permissions for the next new turn',
+  ),
+  ComposerCompletion(
+    kind: ComposerCompletionKind.command,
     value: '/interrupt',
     description: 'Stop the active turn',
   ),

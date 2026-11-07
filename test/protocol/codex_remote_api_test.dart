@@ -5,6 +5,7 @@ import 'package:android_ssh_codex/src/protocol/codex_remote_api.dart';
 import 'package:android_ssh_codex/src/protocol/json_rpc_client.dart';
 import 'package:android_ssh_codex/src/protocol/rpc_transport.dart';
 import 'package:android_ssh_codex/src/tasks/task_reducer.dart';
+import 'package:android_ssh_codex/src/tasks/permission_mode.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 final class _RecordingTransport implements RpcTransport {
@@ -24,6 +25,48 @@ final class _RecordingTransport implements RpcTransport {
 }
 
 void main() {
+  test('standalone start omits empty cwd and project instead of sending invalid cwd', () async {
+    final transport = _RecordingTransport();
+    final rpc = JsonRpcClient(transport)..start();
+    try {
+      final started = CodexRemoteApi(rpc).startThread(cwd: '  ');
+      final request = jsonDecode(transport.sent.single) as Map;
+      expect(request['params'], isEmpty);
+      transport.incoming.add(jsonEncode({'id': request['id'], 'result': {'thread': {'id': 'loose'}}}));
+      expect((await started).id, 'loose');
+    } finally { await rpc.close(); }
+  });
+
+  test('permission choice is sent as native turn fields', () async {
+    final transport = _RecordingTransport();
+    final rpc = JsonRpcClient(transport)..start();
+    try {
+      final sent = CodexRemoteApi(rpc).startTurn('task', 'hello', permissionMode: PermissionMode.workspace);
+      final request = jsonDecode(transport.sent.single) as Map;
+      expect(request['params']['approvalPolicy'], 'on-request');
+      expect(request['params']['sandboxPolicy']['type'], 'workspaceWrite');
+      transport.incoming.add(jsonEncode({'id': request['id'], 'result': {}}));
+      await sent;
+    } finally { await rpc.close(); }
+  });
+
+  test('MCP inventory uses task connection and paginates tools without executing them', () async {
+    final transport = _RecordingTransport();
+    final rpc = JsonRpcClient(transport)..start();
+    try {
+      final pending = CodexRemoteApi(rpc).listMcpServers('task');
+      final first = jsonDecode(transport.sent.single) as Map;
+      expect(first['method'], 'mcpServerStatus/list');
+      expect(first['params']['threadId'], 'task');
+      transport.incoming.add(jsonEncode({'id': first['id'], 'result': {'data': [{'name': 'ssh', 'authStatus': 'unsupported', 'tools': {'remote_run': {}}}], 'nextCursor': 'next'}}));
+      await Future<void>.delayed(Duration.zero);
+      final second = jsonDecode(transport.sent.last) as Map;
+      expect(second['params']['cursor'], 'next');
+      transport.incoming.add(jsonEncode({'id': second['id'], 'result': {'data': []}}));
+      expect((await pending).single.tools, ['remote_run']);
+      expect(transport.sent, hasLength(2));
+    } finally { await rpc.close(); }
+  });
   for (final type in ['mcpToolCall', 'dynamicToolCall', 'agentMessage']) {
     test('$type retains native output images without base64 in tool details',
         () {

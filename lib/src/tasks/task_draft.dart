@@ -7,6 +7,7 @@ import '../protocol/codex_remote_api.dart';
 import '../transport/attachment_upload.dart';
 import 'task_message_queue.dart';
 import 'turn_settings.dart';
+import 'permission_mode.dart';
 
 typedef DraftUploader = Future<RemoteAttachment> Function(
   LocalAttachment attachment,
@@ -54,6 +55,7 @@ final class TaskDraft extends ChangeNotifier {
   final composer = TextEditingController();
   List<AttachmentTransfer> attachments = [];
   RemoteSkill? skill;
+  PermissionMode permissionMode = PermissionMode.inherit;
   TurnSettings settings = const TurnSettings();
   TaskSendMode sendMode = TaskSendMode.auto;
   bool sending = false;
@@ -63,6 +65,7 @@ final class TaskDraft extends ChangeNotifier {
 
   Map<String, dynamic> toJson() => {
         'text': composer.text,
+        'permissionMode': permissionMode.name,
         'model': settings.model,
         'effort': settings.effort,
         'serviceTier': settings.serviceTier,
@@ -89,6 +92,7 @@ final class TaskDraft extends ChangeNotifier {
       };
 
   void restore(Map<String, dynamic> value) {
+    permissionMode = PermissionMode.restore(value['permissionMode']);
     composer.text = value['text'] as String? ?? '';
     settings = TurnSettings(
         model: value['model'] as String?,

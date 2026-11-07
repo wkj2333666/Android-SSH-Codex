@@ -23,6 +23,7 @@ import 'widgets/task_question_panel.dart';
 import 'task_manager.dart';
 import 'preview_browser.dart';
 import 'widgets/inline_attachment_image.dart';
+import 'permission_picker.dart';
 
 bool isTaskComposerInputEnabled({
   required TaskRecord task,
@@ -305,6 +306,8 @@ class _TaskViewState extends State<TaskView> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 10),
           child: Row(children: [
+            PermissionPicker(value: draft.permissionMode, compact: true, enabled: !_sending,
+              onChanged: (value) { draft.permissionMode = value; draft.changed(); }),
             Expanded(
                 child: TurnSettingsPicker(
               accountUsage: widget.controller.accountUsage,
@@ -391,6 +394,19 @@ class _TaskViewState extends State<TaskView> {
     final controller = widget.controller;
     final submittedText = _composer.text;
     final text = submittedText.trim();
+    final localCommand = switch (text.toLowerCase()) {
+      '/mcp' => TaskCommand.mcp,
+      '/permissions' => TaskCommand.permissions,
+      '/skills' => TaskCommand.skills,
+      '/goal' => TaskCommand.goal,
+      '/compact' => TaskCommand.compact,
+      '/interrupt' => TaskCommand.interrupt,
+      _ => null,
+    };
+    if (localCommand != null) {
+      await _handleCommand(localCommand);
+      return;
+    }
     if (text.isEmpty && _attachments.isEmpty) return;
     if (_attachments.any((attachment) => !attachment.ready)) {
       _showError(_attachments
@@ -421,6 +437,7 @@ class _TaskViewState extends State<TaskView> {
         model: settings.model,
         effort: settings.effort,
         serviceTier: settings.serviceTier,
+        permissionMode: draft.permissionMode,
         attachments: submittedAttachments.map((file) => file.remote!).toList(),
       );
       await Attachments.releaseAll(
@@ -719,6 +736,14 @@ class _TaskViewState extends State<TaskView> {
 
   Future<void> _handleCommand(TaskCommand command) async {
     switch (command) {
+      case TaskCommand.mcp:
+        await _showMcp();
+      case TaskCommand.permissions:
+        final value = await choosePermissionMode(context, _draft.permissionMode);
+        if (mounted && value != null) {
+          _draft.permissionMode = value;
+          _draft.changed();
+        }
       case TaskCommand.skills:
         await _chooseSkill();
       case TaskCommand.goal:
@@ -786,6 +811,31 @@ class _TaskViewState extends State<TaskView> {
     if (mounted && selected != null) {
       setState(() => _selectedSkill = selected);
     }
+  }
+
+  Future<void> _showMcp() async {
+    final servers = await _runCommand(widget.controller.listMcpForSelectedTask);
+    if (!mounted || servers == null) return;
+    await showDialog<void>(context: context, builder: (context) => AlertDialog(
+      title: const Text('MCP servers and tools'),
+      content: SizedBox(width: 480, child: servers.isEmpty
+        ? const Text('No configured MCP servers were returned for this task.')
+        : ListView(shrinkWrap: true, children: [for (final server in servers) ExpansionTile(
+          title: Text(server.name), subtitle: Text('${server.authStatus} · ${server.tools.length} tools${server.error == null ? '' : '\n${server.error}'}'),
+          children: [for (final tool in server.tools) ListTile(
+            title: Text(tool), trailing: const Icon(Icons.add_comment_outlined),
+            onTap: () {
+              final editor = _composer;
+              final current = editor.text.trim();
+              final prefix = current.toLowerCase() == '/mcp' ? '' : editor.text;
+              editor.text = '${prefix.isEmpty ? '' : '$prefix\n'}Use the configured MCP server "${server.name}", tool "$tool". ';
+              editor.selection = TextSelection.collapsed(offset: editor.text.length);
+              Navigator.pop(context);
+            },
+          )],
+        )])),
+      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))],
+    ));
   }
 
   void _updateCompletions() {
@@ -858,6 +908,8 @@ class _TaskViewState extends State<TaskView> {
       '/goal' => TaskCommand.goal,
       '/compact' => TaskCommand.compact,
       '/skills' => TaskCommand.skills,
+      '/mcp' => TaskCommand.mcp,
+      '/permissions' => TaskCommand.permissions,
       '/interrupt' => TaskCommand.interrupt,
       _ => null,
     };
@@ -1006,6 +1058,8 @@ class _TaskViewState extends State<TaskView> {
 enum _GoalAction { save, clear }
 
 enum TaskCommand {
+  mcp,
+  permissions,
   skills,
   goal,
   compact,
@@ -1149,6 +1203,8 @@ class TaskCommandMenu extends StatelessWidget {
         tooltip: 'Task commands',
         onSelected: onSelected,
         itemBuilder: (context) => const [
+          PopupMenuItem(value: TaskCommand.mcp, child: Text('MCP servers and tools')),
+          PopupMenuItem(value: TaskCommand.permissions, child: Text('Permissions · next new turn')),
           PopupMenuItem(value: TaskCommand.rename, child: Text('Rename')),
           PopupMenuItem(value: TaskCommand.pin, child: Text('Pin / unpin')),
           PopupMenuItem(value: TaskCommand.archive, child: Text('Archive')),

@@ -7,6 +7,8 @@ import 'task_view.dart';
 import 'task_manager.dart';
 import 'turn_settings_picker.dart';
 import 'widgets/connection_badge.dart';
+import 'permission_picker.dart';
+import '../tasks/permission_mode.dart';
 
 class TasksWorkspace extends StatefulWidget {
   const TasksWorkspace({required this.controller, super.key});
@@ -113,8 +115,10 @@ class _TaskList extends StatelessWidget {
   Future<void> _newTask(BuildContext context, TaskListMode mode) async {
     final project =
         mode == TaskListMode.projects ? controller.selectedProject : null;
-    final cwd = TextEditingController(text: project?.cwd);
-    final prompt = TextEditingController();
+    var cwd = project?.cwd ?? '';
+    var prompt = '';
+    final form = GlobalKey<FormState>();
+    var permissionMode = PermissionMode.inherit;
     var turnSettings =
         resolveTurnSettings(controller.models, const TurnSettings());
     final accepted = await showDialog<bool>(
@@ -123,14 +127,18 @@ class _TaskList extends StatelessWidget {
         title: const Text('New task'),
         content: SizedBox(
           width: 480,
-          child: Column(
+          child: Form(key: form, child: SingleChildScrollView(child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               if (project == null)
-                TextField(
-                  controller: cwd,
+                TextFormField(
+                  initialValue: cwd,
+                  onChanged: (value) => cwd = value,
+                  key: const Key('new-task-cwd'),
                   decoration: const InputDecoration(
-                    labelText: 'Remote working directory',
+                    labelText: 'Remote working directory (optional)',
+                    helperText: 'Leave blank to use the server default. No project is created.',
+                    helperMaxLines: 2,
                     prefixIcon: Icon(Icons.folder_outlined),
                   ),
                 )
@@ -142,8 +150,11 @@ class _TaskList extends StatelessWidget {
                   subtitle: Text(project.cwd),
                 ),
               const SizedBox(height: 12),
-              TextField(
-                controller: prompt,
+              TextFormField(
+                initialValue: prompt,
+                onChanged: (value) => prompt = value,
+                key: const Key('new-task-prompt'),
+                validator: (value) => value == null || value.trim().isEmpty ? 'Enter a task message.' : null,
                 minLines: 3,
                 maxLines: 6,
                 autofocus: true,
@@ -154,16 +165,16 @@ class _TaskList extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               StatefulBuilder(
-                builder: (context, setDialogState) => TurnSettingsPicker(
+                builder: (context, setDialogState) => Column(mainAxisSize: MainAxisSize.min, children: [TurnSettingsPicker(
                   accountUsage: controller.accountUsage,
                   models: controller.models,
                   value: turnSettings,
                   onChanged: (value) =>
                       setDialogState(() => turnSettings = value),
-                ),
+                ), PermissionPicker(value: permissionMode, onChanged: (value) => setDialogState(() => permissionMode = value))]),
               ),
             ],
-          ),
+          ))),
         ),
         actions: [
           TextButton(
@@ -171,7 +182,9 @@ class _TaskList extends StatelessWidget {
             child: const Text('Cancel'),
           ),
           FilledButton.icon(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () {
+              if (form.currentState?.validate() == true) Navigator.pop(context, true);
+            },
             icon: const Icon(Icons.arrow_forward),
             label: const Text('Start'),
           ),
@@ -179,16 +192,16 @@ class _TaskList extends StatelessWidget {
       ),
     );
     if (accepted == true &&
-        cwd.text.trim().isNotEmpty &&
-        prompt.text.trim().isNotEmpty) {
+        prompt.trim().isNotEmpty) {
       try {
         await controller.startNewTask(
-          cwd: cwd.text.trim(),
-          prompt: prompt.text.trim(),
+          cwd: cwd.trim(),
+          prompt: prompt.trim(),
           projectId: project?.id,
           model: turnSettings.model,
           effort: turnSettings.effort,
           serviceTier: turnSettings.serviceTier,
+          permissionMode: permissionMode,
         );
       } catch (error) {
         if (context.mounted) {
@@ -198,8 +211,6 @@ class _TaskList extends StatelessWidget {
         }
       }
     }
-    cwd.dispose();
-    prompt.dispose();
   }
 
   Future<void> _editProject(
