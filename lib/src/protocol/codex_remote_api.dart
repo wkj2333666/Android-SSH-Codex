@@ -5,6 +5,19 @@ import '../tasks/task_reducer.dart';
 import '../tasks/message_attachments.dart';
 import '../projects/remote_project.dart';
 import 'json_rpc_client.dart';
+import '../tasks/permission_mode.dart';
+
+final class RemoteMcpServer {
+  const RemoteMcpServer(
+      {required this.name,
+      required this.authStatus,
+      required this.tools,
+      this.error});
+  final String name;
+  final String authStatus;
+  final List<String> tools;
+  final String? error;
+}
 
 final class RemoteTaskBatch {
   const RemoteTaskBatch({required this.tasks, required this.loadedThreadIds});
@@ -344,9 +357,9 @@ final class CodexRemoteApi {
   }
 
   Future<({String id, String? serviceTier})> startThread(
-      {required String cwd, String? projectId}) async {
+      {String? cwd, String? projectId}) async {
     final result = _map(await _rpc.request('thread/start', {
-      'cwd': cwd,
+      if (cwd != null && cwd.trim().isNotEmpty) 'cwd': cwd.trim(),
       if (projectId != null) 'projectId': projectId,
     }));
     return (
@@ -376,9 +389,11 @@ final class CodexRemoteApi {
     String? effort,
     String? serviceTier,
     List<String> imagePaths = const [],
+    PermissionMode permissionMode = PermissionMode.inherit,
   }) async {
     await _rpc.request('turn/start', {
       'threadId': threadId,
+      ...permissionMode.turnParams,
       'input': [
         {'type': 'text', 'text': text},
         for (final path in imagePaths) {'type': 'localImage', 'path': path},
@@ -413,6 +428,43 @@ final class CodexRemoteApi {
       cursor = nextCursor == cursor ? null : nextCursor;
     } while (cursor != null);
     return List.unmodifiable(models);
+  }
+
+  Future<List<RemoteMcpServer>> listMcpServers(String threadId) async {
+    final servers = <RemoteMcpServer>[];
+    final seen = <String>{};
+    final cursors = <String>{};
+    String? cursor;
+    do {
+      final result = _map(await _rpc.request('mcpServerStatus/list', {
+        'threadId': threadId,
+        'limit': 50,
+        'detail': 'toolsAndAuthOnly',
+        if (cursor != null) 'cursor': cursor,
+      }));
+      for (final raw in result['data'] as List? ?? const []) {
+        final server = _map(raw);
+        final name = server['name'] as String?;
+        if (name == null || !seen.add(name)) continue;
+        final tools = (server['tools'] as Map? ?? const {})
+            .keys
+            .cast<String>()
+            .toList()
+          ..sort();
+        servers.add(RemoteMcpServer(
+            name: name,
+            authStatus: server['authStatus'] as String? ?? 'unknown',
+            tools: tools,
+            error: server['toolsError'] as String?));
+      }
+      final next = result['nextCursor'] as String?;
+      if (next == null) break;
+      if (!cursors.add(next)) {
+        throw StateError('MCP pagination did not advance');
+      }
+      cursor = next;
+    } while (true);
+    return servers;
   }
 
   Future<List<RemoteSkill>> listSkills(String cwd) async {
