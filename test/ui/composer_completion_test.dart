@@ -22,8 +22,13 @@ void main() {
     expect(results.map((item) => item.value), ['/goal']);
     expect(
       composerCompletions('/', 1, skills).map((item) => item.value),
-      ['/goal', '/compact', '/skills', '/interrupt'],
+      ['/goal', '/compact', '/skills', '/mcp', '/permissions', '/interrupt'],
     );
+  });
+
+  test('MCP and permission commands are recognized before sending', () {
+    expect(composerCompletions('/mc', 3, skills).single.value, '/mcp');
+    expect(composerCompletions('/perm', 5, skills).single.value, '/permissions');
   });
 
   test('dollar completion filters enabled remote skills', () {
