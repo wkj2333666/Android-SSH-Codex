@@ -152,8 +152,8 @@ not imply Play approval.
 - Ultra Fast appears in the model picker when advertised by the remote model
   catalog. It is mutually exclusive with Fast and applies to the next new turn,
   not a running turn being steered. Actual availability is server-owned.
-- Subagent activity shows up in the parent task's work events. Open a child to
-  browse its paginated, read-only timeline, then go back to the parent task.
+- Tap a subagent's name in the parent conversation to open its paginated,
+  read-only timeline. Work events can stay collapsed.
 - The shield beside the model selector chooses permissions for the next new
   turn: current thread policy, read-only, workspace-write, or full access.
   Full access requires confirmation; managed server restrictions still apply.

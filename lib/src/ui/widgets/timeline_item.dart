@@ -83,7 +83,6 @@ class TimelineActivityGroup extends StatelessWidget {
         );
       }
     }
-    final directTarget = targets.length == 1 ? targets.values.single : null;
     return ImagePreviewScope(
         loadImage: loadImage,
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -98,34 +97,13 @@ class TimelineActivityGroup extends StatelessWidget {
                 visualDensity: const VisualDensity(vertical: -3),
                 leading: const Icon(Icons.build_circle_outlined, size: 19),
                 title: Text('$count work ${count == 1 ? 'event' : 'events'}'),
-                subtitle: targets.isEmpty
-                    ? Text(
-                        items
-                            .map((item) => item.title ?? _activityLabel(item))
-                            .join(' · '),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      )
-                    : Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              directTarget == null
-                                  ? '${targets.length} subagents'
-                                  : _subagentLabel(directTarget),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          if (directTarget != null && onOpenSubagent != null)
-                            IconButton(
-                              tooltip: 'Open subagent history',
-                              visualDensity: VisualDensity.compact,
-                              icon: const Icon(Icons.open_in_new, size: 18),
-                              onPressed: () => onOpenSubagent!(directTarget),
-                            ),
-                        ],
-                      ),
+                subtitle: Text(
+                  items
+                      .map((item) => item.title ?? _activityLabel(item))
+                      .join(' · '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 childrenPadding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
                 children: [
                   _ActivityViewport(
@@ -133,13 +111,17 @@ class TimelineActivityGroup extends StatelessWidget {
                     itemBuilder: (context, index) => _CompactActivityRow(
                       key: PageStorageKey('activity-${items[index].id}'),
                       item: items[index],
-                      onOpenSubagent: onOpenSubagent,
                     ),
                   ),
                 ],
               ),
             ),
           ),
+          if (targets.isNotEmpty)
+            _SubagentLinks(
+              agents: targets.values.toList(growable: false),
+              onOpen: onOpenSubagent,
+            ),
           for (final item in items)
             for (final attachment in item.attachments)
               _AttachmentCard(
@@ -150,13 +132,56 @@ class TimelineActivityGroup extends StatelessWidget {
   }
 }
 
+class _SubagentLinks extends StatelessWidget {
+  const _SubagentLinks({required this.agents, this.onOpen});
+
+  final List<SubagentReference> agents;
+  final ValueChanged<SubagentReference>? onOpen;
+
+  Widget _tile(SubagentReference agent) => ListTile(
+        dense: true,
+        visualDensity: VisualDensity.compact,
+        leading: const Icon(Icons.account_tree_outlined, size: 20),
+        title: Text(
+          _subagentLabel(agent),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        trailing: onOpen == null ? null : const Icon(Icons.chevron_right),
+        onTap: onOpen == null ? null : () => onOpen!(agent),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 3),
+      clipBehavior: Clip.antiAlias,
+      child: agents.length <= 3
+          ? Column(children: [for (final agent in agents) _tile(agent)])
+          : _ActivityViewport(
+              viewportKey: const Key('subagent-viewport'),
+              maxHeight: 176,
+              itemCount: agents.length,
+              itemBuilder: (_, index) => _tile(agents[index]),
+            ),
+    );
+  }
+}
+
 /// Keep the collapse header outside the scrollable details, including when a
 /// single tool output is much taller than the screen.
 class _ActivityViewport extends StatefulWidget {
-  const _ActivityViewport({required this.itemCount, required this.itemBuilder});
+  const _ActivityViewport({
+    required this.itemCount,
+    required this.itemBuilder,
+    this.viewportKey = const Key('activity-viewport'),
+    this.maxHeight = 360,
+  });
 
   final int itemCount;
   final IndexedWidgetBuilder itemBuilder;
+  final Key viewportKey;
+  final double maxHeight;
 
   @override
   State<_ActivityViewport> createState() => _ActivityViewportState();
@@ -176,9 +201,10 @@ class _ActivityViewportState extends State<_ActivityViewport> {
     final media = MediaQuery.of(context);
     final available =
         media.size.height - media.viewInsets.bottom - media.padding.vertical;
+    final height = (available * 0.4).clamp(80, widget.maxHeight).toDouble();
     return ConstrainedBox(
-      key: const Key('activity-viewport'),
-      constraints: BoxConstraints(maxHeight: (available * 0.4).clamp(80, 360)),
+      key: widget.viewportKey,
+      constraints: BoxConstraints(maxHeight: height),
       child: NotificationListener<ScrollNotification>(
         // Internal scrolling must not change the chat's follow-latest state.
         onNotification: (_) => true,
@@ -200,11 +226,9 @@ class _ActivityViewportState extends State<_ActivityViewport> {
 }
 
 class _CompactActivityRow extends StatelessWidget {
-  const _CompactActivityRow(
-      {required this.item, this.onOpenSubagent, super.key});
+  const _CompactActivityRow({required this.item, super.key});
 
   final TaskItem item;
-  final ValueChanged<SubagentReference>? onOpenSubagent;
 
   @override
   Widget build(BuildContext context) {
@@ -229,18 +253,8 @@ class _CompactActivityRow extends StatelessWidget {
           ? null
           : Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis),
       trailing: item.status == null ? null : _StatusBadge(status: item.status!),
-      showTrailingIcon: detail?.isNotEmpty == true || item.subagents.isNotEmpty,
+      showTrailingIcon: detail?.isNotEmpty == true,
       children: [
-        for (final agent in item.subagents)
-          ListTile(
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            title: Text(_subagentLabel(agent)),
-            trailing: onOpenSubagent == null
-                ? null
-                : const Icon(Icons.chevron_right, size: 18),
-            onTap: onOpenSubagent == null ? null : () => onOpenSubagent!(agent),
-          ),
         if (detail?.isNotEmpty == true)
           Align(
             // SelectableText/Markdown have internal scrollables. Their

@@ -7,6 +7,7 @@ import 'package:android_ssh_codex/src/protocol/rpc_transport.dart';
 import 'package:android_ssh_codex/src/tasks/task_reducer.dart';
 import 'package:android_ssh_codex/src/ui/task_view.dart';
 import 'package:android_ssh_codex/src/ui/widgets/markdown_content.dart';
+import 'package:android_ssh_codex/src/ui/widgets/timeline_item.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -47,6 +48,42 @@ class _Transport implements RpcTransport {
 }
 
 void main() {
+  testWidgets('each subagent is directly tappable with work events collapsed',
+      (tester) async {
+    final opened = <String>[];
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: TimelineActivityGroup(
+          items: const [
+            TaskItem(
+              id: 'spawn',
+              kind: TaskItemKind.tool,
+              text: '',
+              subagents: [
+                SubagentReference('a', path: '/root/reviewer'),
+                SubagentReference('b', path: '/root/worker', status: 'running'),
+              ],
+            ),
+            TaskItem(
+              id: 'wait',
+              kind: TaskItemKind.tool,
+              text: '',
+              subagents: [SubagentReference('a', status: 'completed')],
+            ),
+          ],
+          onOpenSubagent: (agent) => opened.add(agent.threadId),
+        ),
+      ),
+    ));
+
+    expect(find.byKey(const Key('activity-viewport')), findsNothing);
+    expect(find.text('reviewer · Completed'), findsOneWidget);
+    await tester.tap(find.text('worker · Running'));
+    await tester.tap(find.text('reviewer · Completed'));
+    expect(opened, ['b', 'a']);
+    expect(find.byKey(const Key('activity-viewport')), findsNothing);
+  });
+
   testWidgets('opening a subagent reads history and preserves the parent draft',
       (tester) async {
     final transport = _Transport();
@@ -70,7 +107,7 @@ void main() {
     ));
     controller.draftForTask('parent').composer.text = 'Unsent parent message';
     await tester.pump();
-    await tester.tap(find.byTooltip('Open subagent history'));
+    await tester.tap(find.text('reviewer'));
     await tester.pump();
     await tester.runAsync(
         () async => Future<void>.delayed(const Duration(milliseconds: 50)));
