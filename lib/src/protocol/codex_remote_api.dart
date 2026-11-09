@@ -43,6 +43,8 @@ final class RemoteTurnPage {
   final String? nextCursor;
 }
 
+typedef RemoteSubagentDetails = ({String? nickname, String? role});
+
 final class RemoteSkill {
   const RemoteSkill({
     required this.name,
@@ -319,6 +321,20 @@ final class CodexRemoteApi {
       'includeTurns': true,
     }));
     return parseThread(_map(result['thread']));
+  }
+
+  Future<RemoteSubagentDetails> readSubagentDetails(String threadId) async {
+    final result = _map(await _rpc.request('thread/read', {
+      'threadId': threadId,
+      'includeTurns': false,
+    }));
+    final thread = _map(result['thread']);
+    final source = _map(_map(thread['source'])['subAgent']);
+    final spawn = _map(source['thread_spawn']);
+    return (
+      nickname: _firstText(thread['agentNickname'], spawn['agent_nickname']),
+      role: _firstText(thread['agentRole'], spawn['agent_role']),
+    );
   }
 
   Future<RemoteTurnPage> readThreadTurnsPage(
@@ -789,7 +805,8 @@ TaskItem? _parseItem(Map<String, dynamic> item) {
     'agentMessage' => TaskItemKind.agent,
     'commandExecution' => TaskItemKind.command,
     'fileChange' => TaskItemKind.file,
-    'mcpToolCall' || 'dynamicToolCall' => TaskItemKind.tool,
+    'mcpToolCall' || 'dynamicToolCall' || 'collabAgentToolCall' ||
+    'subAgentActivity' => TaskItemKind.tool,
     'reasoning' => TaskItemKind.reasoning,
     _ => TaskItemKind.notice,
   };
@@ -824,9 +841,43 @@ TaskItem? _parseItem(Map<String, dynamic> item) {
     text: kind == TaskItemKind.user ? text : presentation.text,
     attachments: attachments,
     questions: List.unmodifiable(questions),
+    subagents: _parseSubagents(type, item),
     detail: presentation.detail,
     status: item['status']?.toString(),
   );
+}
+
+List<SubagentReference> _parseSubagents(
+  String type,
+  Map<String, dynamic> item,
+) {
+  if (type == 'subAgentActivity') {
+    final id = _firstText(item['agentThreadId']);
+    if (id == null) return const [];
+    return [
+      SubagentReference(
+        id,
+        path: _firstText(item['agentPath']),
+        status: switch (item['kind']) {
+          'started' => 'running',
+          'completed' => 'completed',
+          'interrupted' => 'interrupted',
+          _ => null,
+        },
+      ),
+    ];
+  }
+  if (type != 'collabAgentToolCall') return const [];
+  final states = _map(item['agentsStates']);
+  final receivers = item['receiverThreadIds'];
+  return List.unmodifiable([
+    for (final id in {
+      if (receivers is List) ...receivers.whereType<String>(),
+      ...states.keys,
+    })
+      if (id.isNotEmpty && id != item['senderThreadId'])
+        SubagentReference(id, status: _firstText(_map(states[id])['status'])),
+  ]);
 }
 
 _ItemPresentation _itemPresentation(
@@ -897,6 +948,31 @@ _ItemPresentation _itemPresentation(
           const ['arguments', 'contentItems', 'success'],
         ),
       );
+    case 'collabAgentToolCall':
+      final action = switch (item['tool']) {
+        'spawnAgent' => 'Spawned subagent',
+        'sendInput' || 'sendMessage' || 'followupTask' => 'Messaged subagent',
+        'resumeAgent' => 'Resumed subagent',
+        'wait' => 'Waited for subagents',
+        'closeAgent' => 'Closed subagent',
+        'interruptAgent' => 'Interrupted subagent',
+        'listAgents' => 'Listed subagents',
+        _ => 'Subagent tool',
+      };
+      return _ItemPresentation(
+        title: action,
+        text: '',
+        detail: _firstText(item['prompt']),
+      );
+    case 'subAgentActivity':
+      final action = switch (item['kind']) {
+        'started' => 'Subagent started',
+        'completed' => 'Subagent completed',
+        'interrupted' => 'Subagent interrupted',
+        'interacted' => 'Subagent interaction',
+        _ => 'Subagent activity',
+      };
+      return _ItemPresentation(title: action, text: '');
     default:
       return _ItemPresentation(
         text: extractedText.isEmpty ? type : extractedText,

@@ -58,14 +58,23 @@ class TimelineItemView extends StatelessWidget {
 }
 
 class TimelineActivityGroup extends StatelessWidget {
-  const TimelineActivityGroup({required this.items, this.loadImage, super.key});
+  const TimelineActivityGroup({
+    required this.items,
+    this.loadImage,
+    this.onOpenSubagent,
+    super.key,
+  });
 
   final List<TaskItem> items;
   final Future<Uint8List> Function(String)? loadImage;
+  final ValueChanged<SubagentReference>? onOpenSubagent;
 
   @override
   Widget build(BuildContext context) {
     final count = items.length;
+    final subagents = items.expand((item) => item.subagents).toList();
+    final targets = {for (final agent in subagents) agent.threadId};
+    final directTarget = targets.length == 1 ? subagents.last : null;
     return ImagePreviewScope(
         loadImage: loadImage,
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -80,13 +89,28 @@ class TimelineActivityGroup extends StatelessWidget {
                 visualDensity: const VisualDensity(vertical: -3),
                 leading: const Icon(Icons.build_circle_outlined, size: 19),
                 title: Text('$count work ${count == 1 ? 'event' : 'events'}'),
-                subtitle: Text(
-                  items
-                      .map((item) => item.title ?? _activityLabel(item))
-                      .join(' · '),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                subtitle: targets.isEmpty
+                    ? Text(
+                        items
+                            .map((item) => item.title ?? _activityLabel(item))
+                            .join(' · '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      )
+                    : Row(
+                        children: [
+                          Expanded(child: Text(targets.length == 1
+                              ? _subagentLabel(directTarget!)
+                              : '${targets.length} subagents')),
+                          if (directTarget != null && onOpenSubagent != null)
+                            IconButton(
+                              tooltip: 'Open subagent history',
+                              visualDensity: VisualDensity.compact,
+                              icon: const Icon(Icons.open_in_new, size: 18),
+                              onPressed: () => onOpenSubagent!(directTarget),
+                            ),
+                        ],
+                      ),
                 childrenPadding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
                 children: [
                   _ActivityViewport(
@@ -94,6 +118,7 @@ class TimelineActivityGroup extends StatelessWidget {
                     itemBuilder: (context, index) => _CompactActivityRow(
                       key: PageStorageKey('activity-${items[index].id}'),
                       item: items[index],
+                      onOpenSubagent: onOpenSubagent,
                     ),
                   ),
                 ],
@@ -160,9 +185,10 @@ class _ActivityViewportState extends State<_ActivityViewport> {
 }
 
 class _CompactActivityRow extends StatelessWidget {
-  const _CompactActivityRow({required this.item, super.key});
+  const _CompactActivityRow({required this.item, this.onOpenSubagent, super.key});
 
   final TaskItem item;
+  final ValueChanged<SubagentReference>? onOpenSubagent;
 
   @override
   Widget build(BuildContext context) {
@@ -187,10 +213,20 @@ class _CompactActivityRow extends StatelessWidget {
           ? null
           : Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis),
       trailing: item.status == null ? null : _StatusBadge(status: item.status!),
-      showTrailingIcon: detail?.isNotEmpty == true,
-      children: detail?.isNotEmpty == true
-          ? [
-              Align(
+      showTrailingIcon: detail?.isNotEmpty == true || item.subagents.isNotEmpty,
+      children: [
+        for (final agent in item.subagents)
+          ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            title: Text(_subagentLabel(agent)),
+            trailing: onOpenSubagent == null
+                ? null
+                : const Icon(Icons.chevron_right, size: 18),
+            onTap: onOpenSubagent == null ? null : () => onOpenSubagent!(agent),
+          ),
+        if (detail?.isNotEmpty == true)
+          Align(
                 // SelectableText/Markdown have internal scrollables. Their
                 // saved offsets must not overwrite ExpansionTile's bool state.
                 key: PageStorageKey('activity-detail-${item.id}'),
@@ -201,11 +237,24 @@ class _CompactActivityRow extends StatelessWidget {
                         detail!,
                         style: const TextStyle(fontFamily: 'monospace'),
                       ),
-              ),
-            ]
-          : const [],
+          ),
+      ],
     );
   }
+}
+
+String _subagentLabel(SubagentReference agent) {
+  final status = switch (agent.status) {
+    'pendingInit' => 'Starting',
+    'running' => 'Running',
+    'completed' => 'Completed',
+    'interrupted' => 'Interrupted',
+    'errored' => 'Failed',
+    'shutdown' => 'Closed',
+    'notFound' => 'Unavailable',
+    final status => status,
+  };
+  return status == null ? agent.label : '${agent.label} · $status';
 }
 
 class _Message extends StatelessWidget {

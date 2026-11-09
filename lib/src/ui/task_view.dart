@@ -201,6 +201,12 @@ class _TaskViewState extends State<TaskView> {
         answeredQuestionItemIds: _answeredQuestionItemIds,
         onAnswerQuestions: _answerTaskQuestions,
         onTurnAction: _turnAction,
+        onOpenSubagent: (agent) {
+          final hostId = widget.controller.selectedHostId;
+          if (hostId != null) {
+            _openSubagent(context, widget.controller, hostId, agent);
+          }
+        },
       ),
     );
     final content = Column(
@@ -1299,6 +1305,151 @@ class TaskCommandMenu extends StatelessWidget {
       );
 }
 
+void _openSubagent(
+  BuildContext context,
+  AppController controller,
+  String hostId,
+  SubagentReference agent,
+) {
+  Navigator.of(context).push<void>(MaterialPageRoute(
+    builder: (context) => _SubagentHistory(
+      agent: agent,
+      hostId: hostId,
+      controller: controller,
+    ),
+  ));
+}
+
+class _SubagentHistory extends StatefulWidget {
+  const _SubagentHistory({
+    required this.agent,
+    required this.hostId,
+    required this.controller,
+  });
+
+  final SubagentReference agent;
+  final String hostId;
+  final AppController controller;
+
+  @override
+  State<_SubagentHistory> createState() => _SubagentHistoryState();
+}
+
+class _SubagentHistoryState extends State<_SubagentHistory> {
+  List<TaskItem> _items = const [];
+  String? _cursor;
+  String? _title;
+  String? _role;
+  String? _error;
+  String? _olderError;
+  bool _loading = true;
+  bool _loadingOlder = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load({bool older = false}) async {
+    final cursor = older ? _cursor : null;
+    if (_loadingOlder || (older && (_loading || cursor == null))) return;
+    setState(() {
+      if (older) {
+        _loadingOlder = true;
+        _olderError = null;
+      } else {
+        _loading = true;
+        _error = null;
+      }
+    });
+    try {
+      final result = await widget.controller.readSubagentHistory(
+        widget.agent.threadId,
+        widget.hostId,
+        cursor: cursor,
+      );
+      if (!mounted) return;
+      setState(() {
+        final page = result.page;
+        if (older) {
+          final existing = _items.map((item) => item.id).toSet();
+          _items = [
+            ...page.items.where((item) => existing.add(item.id)),
+            ..._items,
+          ];
+        } else {
+          _items = page.items;
+          _title = result.details?.nickname ?? _title;
+          _role = result.details?.role ?? _role;
+          _olderError = null;
+        }
+        _cursor = page.nextCursor == cursor ? null : page.nextCursor;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        final message = 'Could not load subagent history: $error';
+        if (older) {
+          _olderError = message;
+        } else {
+          _error = message;
+        }
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _loadingOlder = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = widget.controller;
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(_title ?? widget.agent.label),
+        actions: [
+          IconButton(
+            tooltip: 'Refresh subagent history',
+            onPressed: _loading || _loadingOlder ? null : () => _load(),
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Text(_role == null ? 'Read-only subagent' : 'Read-only · $_role'),
+          Expanded(
+            child: RemoteFileActions(
+              download: controller.downloadFile,
+              downloadWithProgress: controller.downloadFile,
+              previewVideo: Attachments.supported ? controller.previewVideo : null,
+              cancelDownload: controller.cancelDownload,
+              child: TaskTimeline(
+                items: _items,
+                loading: _loading,
+                error: _error,
+                onRetry: () => _load(),
+                hasOlder: _cursor != null && !_loading,
+                loadingOlder: _loadingOlder,
+                olderError: _olderError,
+                onLoadOlder: () => _load(older: true),
+                loadImage: controller.loadAttachmentImage,
+                onOpenSubagent: (agent) =>
+                    _openSubagent(context, controller, widget.hostId, agent),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class TaskTimeline extends StatefulWidget {
   const TaskTimeline({
     required this.items,
@@ -1313,11 +1464,13 @@ class TaskTimeline extends StatefulWidget {
     this.answeredQuestionItemIds = const {},
     this.onAnswerQuestions,
     this.onTurnAction,
+    this.onOpenSubagent,
     super.key,
   });
 
   final List<TaskItem> items;
   final Future<void> Function(TaskItem)? onTurnAction;
+  final ValueChanged<SubagentReference>? onOpenSubagent;
   final bool loading;
   final String? error;
   final VoidCallback? onRetry;
@@ -1612,7 +1765,10 @@ class _TaskTimelineState extends State<TaskTimeline>
                         )),
                     TimelineActivityEntry(:final items) =>
                       TimelineActivityGroup(
-                          items: items, loadImage: widget.loadImage),
+                        items: items,
+                        loadImage: widget.loadImage,
+                        onOpenSubagent: widget.onOpenSubagent,
+                      ),
                   };
                 },
               ),

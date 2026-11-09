@@ -6,6 +6,20 @@ enum TaskOwnership { available, local, external }
 
 enum TaskItemKind { user, agent, command, file, tool, reasoning, notice }
 
+final class SubagentReference {
+  const SubagentReference(this.threadId, {this.path, this.status});
+
+  final String threadId;
+  final String? path;
+  final String? status;
+
+  String get label {
+    final name = path?.split('/').where((part) => part.isNotEmpty).lastOrNull;
+    if (name != null) return name;
+    return 'Subagent ${threadId.length > 8 ? threadId.substring(0, 8) : threadId}';
+  }
+}
+
 final class TaskQuestion {
   const TaskQuestion({required this.title, this.options = const []});
 
@@ -23,6 +37,7 @@ final class TaskItem {
     this.status,
     this.attachments = const [],
     this.questions = const [],
+    this.subagents = const [],
     this.turnId,
   });
 
@@ -34,6 +49,7 @@ final class TaskItem {
   final String? status;
   final List<MessageAttachment> attachments;
   final List<TaskQuestion> questions;
+  final List<SubagentReference> subagents;
   final String? turnId;
 
   TaskItem copyWith({
@@ -53,6 +69,7 @@ final class TaskItem {
         status: status ?? this.status,
         attachments: attachments,
         questions: questions ?? this.questions,
+        subagents: subagents,
         turnId: turnId ?? this.turnId,
       );
 }

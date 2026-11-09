@@ -1,6 +1,6 @@
-final _code = RegExp(r'```[\s\S]*?(?:```|$)|`[^`\n]*`');
+final _code = RegExp(r'(`{3,}|~{3,})[\s\S]*?(?:\1|$)|(`+)[^\n]*?\2(?!`)');
 final _token = RegExp(
-    r'(^|[\s(\[，。；：！？])\$([A-Za-z_][A-Za-z0-9_-]*)(?=$|[\s.,;:!?)\]，。；：！？])');
+    r'(^|[^A-Za-z0-9_$\\/.])\$([A-Za-z_][A-Za-z0-9_-]*(?:\.[A-Za-z0-9_-]+)*)(?![A-Za-z0-9_/-]|\.[A-Za-z0-9_-])');
 
 /// Only named dollar tokens are candidates. Resolve against the selected
 /// thread's MCP catalog before making them structured inputs.
