@@ -1,5 +1,6 @@
 final _code = RegExp(r'```[\s\S]*?(?:```|$)|`[^`\n]*`');
-final _token = RegExp(r'(^|[\s(\[，。；：！？])\$([A-Za-z_][A-Za-z0-9_-]*)(?=$|[\s.,;:!?)\]，。；：！？])');
+final _token = RegExp(
+    r'(^|[\s(\[，。；：！？])\$([A-Za-z_][A-Za-z0-9_-]*)(?=$|[\s.,;:!?)\]，。；：！？])');
 
 /// Only named dollar tokens are candidates. Resolve against the selected
 /// thread's MCP catalog before making them structured inputs.
@@ -20,7 +21,10 @@ final class McpMention {
   final String? pluginId;
 
   Map<String, String> toInput() => {
-    'type': 'mention', 'name': name,
-    'path': pluginId == null ? 'mcp://${Uri.encodeComponent(name)}' : 'plugin://$pluginId',
-  };
+        'type': 'mention',
+        'name': name,
+        'path': pluginId == null
+            ? 'mcp://${Uri.encodeComponent(name)}'
+            : 'plugin://$pluginId',
+      };
 }

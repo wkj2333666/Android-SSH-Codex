@@ -2072,7 +2072,8 @@ final class AppController extends ChangeNotifier {
           profileId: profileId,
         );
       }
-      final mentions = await api.resolveMcpMentions(task.id, pending.text, skillName: pending.skill?.name);
+      final mentions = await api.resolveMcpMentions(task.id, pending.text,
+          skillName: pending.skill?.name);
       _ensureCurrentSession(api, attempt, epoch, profileId);
       try {
         await _journalPrompt(profileId, task.id, pending);
@@ -2217,7 +2218,8 @@ final class AppController extends ChangeNotifier {
           profileId: profileId,
         );
       }
-      final mentions = await api.resolveMcpMentions(task.id, pending.text, skillName: pending.skill?.name);
+      final mentions = await api.resolveMcpMentions(task.id, pending.text,
+          skillName: pending.skill?.name);
       _ensureCurrentSession(api, attempt, epoch, profileId);
       await _journalPrompt(profileId, task.id, pending);
       _ensureCurrentSession(api, attempt, epoch, profileId);
@@ -2509,7 +2511,8 @@ final class AppController extends ChangeNotifier {
             profileId: profileId,
           );
         }
-        final mentions = await api.resolveMcpMentions(taskId, pending.text, skillName: pending.skill?.name);
+        final mentions = await api.resolveMcpMentions(taskId, pending.text,
+            skillName: pending.skill?.name);
         _ensureCurrentSession(api, attempt, epoch, profileId);
         try {
           await _journalPrompt(profileId, taskId, pending);

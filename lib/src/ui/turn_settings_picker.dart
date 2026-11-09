@@ -41,7 +41,9 @@ class TurnSettingsPicker extends StatelessWidget {
         (useCatalogDefault ? model?.defaultServiceTier : null);
     final speed = isUltraFastTier(tier)
         ? ' · Ultra Fast'
-        : tier == 'fast' || tier == 'priority' ? ' · Fast' : '';
+        : tier == 'fast' || tier == 'priority'
+            ? ' · Fast'
+            : '';
     final label = settings.model == null
         ? 'Model unavailable'
         : '${model?.displayName ?? settings.model} · '
@@ -108,11 +110,12 @@ class _TurnSettingsSheet extends StatefulWidget {
 class _TurnSettingsSheetState extends State<_TurnSettingsSheet> {
   late TurnSettings _draft = widget.value;
 
-  String? get _effectiveTier => _draft.serviceTier ??
-        widget.inheritedServiceTier ??
-        (widget.useCatalogDefault
-            ? _selectedModel(widget.models, _draft)?.defaultServiceTier
-            : null);
+  String? get _effectiveTier =>
+      _draft.serviceTier ??
+      widget.inheritedServiceTier ??
+      (widget.useCatalogDefault
+          ? _selectedModel(widget.models, _draft)?.defaultServiceTier
+          : null);
   bool get _fast => _effectiveTier == 'fast' || _effectiveTier == 'priority';
   bool get _ultraFast => isUltraFastTier(_effectiveTier);
 
@@ -218,17 +221,21 @@ class _TurnSettingsSheetState extends State<_TurnSettingsSheet> {
                           contentPadding: EdgeInsets.zero,
                           dense: true,
                           title: const Text('Ultra Fast · next new turn'),
-                          subtitle: const Text('Higher usage · replaces Fast for this turn'),
+                          subtitle: const Text(
+                              'Higher usage · replaces Fast for this turn'),
                           value: _ultraFast,
-                          onChanged: model.ultraFastServiceTier != null || _ultraFast
-                              ? (enabled) => setState(() {
-                                    _draft = TurnSettings(
-                                      model: _draft.model,
-                                      effort: _draft.effort,
-                                      serviceTier: enabled ? model.ultraFastServiceTier : 'default',
-                                    );
-                                  })
-                              : null,
+                          onChanged:
+                              model.ultraFastServiceTier != null || _ultraFast
+                                  ? (enabled) => setState(() {
+                                        _draft = TurnSettings(
+                                          model: _draft.model,
+                                          effort: _draft.effort,
+                                          serviceTier: enabled
+                                              ? model.ultraFastServiceTier
+                                              : 'default',
+                                        );
+                                      })
+                                  : null,
                         ),
                       if (_draft.serviceTier != null)
                         TextButton(

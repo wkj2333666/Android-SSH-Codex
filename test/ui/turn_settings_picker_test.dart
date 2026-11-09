@@ -40,10 +40,14 @@ void main() {
     ),
   ];
 
-  testWidgets('Ultra Fast uses the advertised id and excludes Fast', (tester) async {
+  testWidgets('Ultra Fast uses the advertised id and excludes Fast',
+      (tester) async {
     TurnSettings? selected;
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: TurnSettingsPicker(
-      models: models, value: const TurnSettings(serviceTier: 'priority'),
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: TurnSettingsPicker(
+      models: models,
+      value: const TurnSettings(serviceTier: 'priority'),
       onChanged: (value) => selected = value,
     ))));
     await tester.tap(find.byKey(const Key('turn-settings-selector')));
@@ -51,7 +55,11 @@ void main() {
     await tester.ensureVisible(find.byKey(const Key('turn-ultrafast-toggle')));
     await tester.tap(find.byKey(const Key('turn-ultrafast-toggle')));
     await tester.pumpAndSettle();
-    expect(tester.widget<SwitchListTile>(find.byKey(const Key('turn-fast-toggle'))).value, isFalse);
+    expect(
+        tester
+            .widget<SwitchListTile>(find.byKey(const Key('turn-fast-toggle')))
+            .value,
+        isFalse);
     await tester.tap(find.byKey(const Key('turn-settings-apply')));
     await tester.pumpAndSettle();
     expect(selected?.serviceTier, 'ultrafast');

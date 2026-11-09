@@ -94,7 +94,8 @@ final class RemoteModel {
           : null;
   bool get supportsFast =>
       serviceTiers.contains('fast') || serviceTiers.contains('priority');
-  String? get ultraFastServiceTier => serviceTiers.where(isUltraFastTier).firstOrNull;
+  String? get ultraFastServiceTier =>
+      serviceTiers.where(isUltraFastTier).firstOrNull;
 }
 
 bool isUltraFastTier(String? tier) =>
@@ -135,7 +136,8 @@ final class PendingApproval {
 }
 
 final class CodexRemoteApi {
-  final _mcpCatalog = <String, ({DateTime expires, Future<List<RemoteMcpServer>> load})>{};
+  final _mcpCatalog =
+      <String, ({DateTime expires, Future<List<RemoteMcpServer>> load})>{};
   CodexRemoteApi(this._rpc);
 
   final JsonRpcClient _rpc;
@@ -440,7 +442,8 @@ final class CodexRemoteApi {
     return List.unmodifiable(models);
   }
 
-  Future<List<McpMention>> resolveMcpMentions(String threadId, String text, {String? skillName}) async {
+  Future<List<McpMention>> resolveMcpMentions(String threadId, String text,
+      {String? skillName}) async {
     final names = mcpMentionNames(text, skillName: skillName);
     if (names.isEmpty) return const [];
     try {
@@ -456,9 +459,12 @@ final class CodexRemoteApi {
         available[server.name] = id;
         plugins.putIfAbsent(id.split('@').first, () => {}).add(id);
       }
-      return [for (final name in names)
-        if (available.containsKey(name)) McpMention(name, pluginId: available[name])
-        else if (plugins[name]?.length == 1) McpMention(name, pluginId: plugins[name]!.single),
+      return [
+        for (final name in names)
+          if (available.containsKey(name))
+            McpMention(name, pluginId: available[name])
+          else if (plugins[name]?.length == 1)
+            McpMention(name, pluginId: plugins[name]!.single),
       ];
     } on RpcRemoteException catch (error) {
       // Older app servers can still accept plain messages.
@@ -467,7 +473,8 @@ final class CodexRemoteApi {
     }
   }
 
-  Future<List<RemoteMcpServer>> listMcpServers(String threadId, {bool refresh = false}) async {
+  Future<List<RemoteMcpServer>> listMcpServers(String threadId,
+      {bool refresh = false}) async {
     final now = DateTime.now();
     final cached = _mcpCatalog.remove(threadId);
     if (!refresh && cached != null && cached.expires.isAfter(now)) {
@@ -475,7 +482,8 @@ final class CodexRemoteApi {
       return cached.load;
     }
     final load = _readMcpServers(threadId);
-    _mcpCatalog[threadId] = (expires: now.add(const Duration(seconds: 30)), load: load);
+    _mcpCatalog[threadId] =
+        (expires: now.add(const Duration(seconds: 30)), load: load);
     if (_mcpCatalog.length > 16) _mcpCatalog.remove(_mcpCatalog.keys.first);
     try {
       return await load;
