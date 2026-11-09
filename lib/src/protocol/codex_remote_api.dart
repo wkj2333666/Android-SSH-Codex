@@ -805,8 +805,11 @@ TaskItem? _parseItem(Map<String, dynamic> item) {
     'agentMessage' => TaskItemKind.agent,
     'commandExecution' => TaskItemKind.command,
     'fileChange' => TaskItemKind.file,
-    'mcpToolCall' || 'dynamicToolCall' || 'collabAgentToolCall' ||
-    'subAgentActivity' => TaskItemKind.tool,
+    'mcpToolCall' ||
+    'dynamicToolCall' ||
+    'collabAgentToolCall' ||
+    'subAgentActivity' =>
+      TaskItemKind.tool,
     'reasoning' => TaskItemKind.reasoning,
     _ => TaskItemKind.notice,
   };

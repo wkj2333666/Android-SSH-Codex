@@ -46,7 +46,10 @@ void main() {
     final snapshot = CodexRemoteApi.parseThread({
       'id': 'parent',
       'turns': [
-        {'id': 'turn', 'items': [spawn, completion]},
+        {
+          'id': 'turn',
+          'items': [spawn, completion]
+        },
       ],
     });
     expect(snapshot.items.first.subagents.single.status, 'running');
@@ -73,7 +76,11 @@ void main() {
       transport.incoming.add(jsonEncode({
         'id': request['id'],
         'result': {
-          'thread': {'id': 'child', 'agentNickname': 'Sage', 'agentRole': 'reviewer'},
+          'thread': {
+            'id': 'child',
+            'agentNickname': 'Sage',
+            'agentRole': 'reviewer'
+          },
         },
       }));
       final details = await reading;

@@ -1427,7 +1427,8 @@ class _SubagentHistoryState extends State<_SubagentHistory> {
             child: RemoteFileActions(
               download: controller.downloadFile,
               downloadWithProgress: controller.downloadFile,
-              previewVideo: Attachments.supported ? controller.previewVideo : null,
+              previewVideo:
+                  Attachments.supported ? controller.previewVideo : null,
               cancelDownload: controller.cancelDownload,
               child: TaskTimeline(
                 items: _items,

@@ -72,8 +72,8 @@ void main() {
     expect(find.text('Sage'), findsOneWidget);
     expect(find.byType(TextField), findsNothing);
     expect(
-      find.byWidgetPredicate(
-          (widget) => widget is MarkdownContent && widget.text == 'Child result'),
+      find.byWidgetPredicate((widget) =>
+          widget is MarkdownContent && widget.text == 'Child result'),
       findsOneWidget,
     );
     expect(transport.requests.map((request) => request['method']), [

@@ -72,9 +72,18 @@ class TimelineActivityGroup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final count = items.length;
-    final subagents = items.expand((item) => item.subagents).toList();
-    final targets = {for (final agent in subagents) agent.threadId};
-    final directTarget = targets.length == 1 ? subagents.last : null;
+    final targets = <String, SubagentReference>{};
+    for (final item in items) {
+      for (final agent in item.subagents) {
+        final previous = targets[agent.threadId];
+        targets[agent.threadId] = SubagentReference(
+          agent.threadId,
+          path: agent.path ?? previous?.path,
+          status: agent.status ?? previous?.status,
+        );
+      }
+    }
+    final directTarget = targets.length == 1 ? targets.values.single : null;
     return ImagePreviewScope(
         loadImage: loadImage,
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -99,9 +108,15 @@ class TimelineActivityGroup extends StatelessWidget {
                       )
                     : Row(
                         children: [
-                          Expanded(child: Text(targets.length == 1
-                              ? _subagentLabel(directTarget!)
-                              : '${targets.length} subagents')),
+                          Expanded(
+                            child: Text(
+                              directTarget == null
+                                  ? '${targets.length} subagents'
+                                  : _subagentLabel(directTarget),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
                           if (directTarget != null && onOpenSubagent != null)
                             IconButton(
                               tooltip: 'Open subagent history',
@@ -185,7 +200,8 @@ class _ActivityViewportState extends State<_ActivityViewport> {
 }
 
 class _CompactActivityRow extends StatelessWidget {
-  const _CompactActivityRow({required this.item, this.onOpenSubagent, super.key});
+  const _CompactActivityRow(
+      {required this.item, this.onOpenSubagent, super.key});
 
   final TaskItem item;
   final ValueChanged<SubagentReference>? onOpenSubagent;
@@ -227,16 +243,16 @@ class _CompactActivityRow extends StatelessWidget {
           ),
         if (detail?.isNotEmpty == true)
           Align(
-                // SelectableText/Markdown have internal scrollables. Their
-                // saved offsets must not overwrite ExpansionTile's bool state.
-                key: PageStorageKey('activity-detail-${item.id}'),
-                alignment: Alignment.centerLeft,
-                child: item.kind == TaskItemKind.reasoning
-                    ? MarkdownContent(text: detail!)
-                    : SelectableText(
-                        detail!,
-                        style: const TextStyle(fontFamily: 'monospace'),
-                      ),
+            // SelectableText/Markdown have internal scrollables. Their
+            // saved offsets must not overwrite ExpansionTile's bool state.
+            key: PageStorageKey('activity-detail-${item.id}'),
+            alignment: Alignment.centerLeft,
+            child: item.kind == TaskItemKind.reasoning
+                ? MarkdownContent(text: detail!)
+                : SelectableText(
+                    detail!,
+                    style: const TextStyle(fontFamily: 'monospace'),
+                  ),
           ),
       ],
     );

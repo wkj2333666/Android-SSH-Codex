@@ -14,8 +14,9 @@ final class SubagentReference {
   final String? status;
 
   String get label {
-    final name = path?.split('/').where((part) => part.isNotEmpty).lastOrNull;
-    if (name != null) return name;
+    final parts = path?.split('/') ?? const <String>[];
+    final name = parts.lastWhere((part) => part.isNotEmpty, orElse: () => '');
+    if (name.isNotEmpty) return name;
     return 'Subagent ${threadId.length > 8 ? threadId.substring(0, 8) : threadId}';
   }
 }

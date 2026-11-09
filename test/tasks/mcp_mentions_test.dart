@@ -11,11 +11,12 @@ void main() {
         ['ssh-bridge', 'camera']);
     expect(mcpMentionNames('```${r'$example'}```'), isEmpty);
   });
-  test('recognizes mentions next to CJK text, but not inside code or paths', () {
-    expect(
-        mcpMentionNames(r'用$ssh-bridge帮我；试试$my.server。/$file $name/path'),
+  test('recognizes mentions next to CJK text, but not inside code or paths',
+      () {
+    expect(mcpMentionNames(r'用$ssh-bridge帮我；试试$my.server。/$file $name/path'),
         ['ssh-bridge', 'my.server']);
-    expect(mcpMentionNames('~~~sh\n${r'$example'}\n~~~\n${r'$real'}'), ['real']);
+    expect(
+        mcpMentionNames('~~~sh\n${r'$example'}\n~~~\n${r'$real'}'), ['real']);
   });
   test('MCP input carries the native mention namespace and original name', () {
     expect(const McpMention('ssh-bridge').toInput(), {

@@ -1233,7 +1233,8 @@ final class AppController extends ChangeNotifier {
   }
 
   Future<({RemoteTurnPage page, RemoteSubagentDetails? details})>
-      readSubagentHistory(String threadId, String hostId, {String? cursor}) async {
+      readSubagentHistory(String threadId, String hostId,
+          {String? cursor}) async {
     final api = _api;
     final epoch = _epoch;
     if (api == null || !isConnected || hostId != _selectedHostId) {
@@ -1246,7 +1247,7 @@ final class AppController extends ChangeNotifier {
             )
         : null;
     final page = await api.readThreadTurnsPage(threadId, cursor: cursor);
-    final details = await metadata;
+    final details = metadata == null ? null : await metadata;
     if (api != _api || epoch != _epoch || hostId != _selectedHostId) {
       throw StateError('Connection changed. Reload subagent history.');
     }
