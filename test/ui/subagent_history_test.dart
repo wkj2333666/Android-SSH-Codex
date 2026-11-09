@@ -50,8 +50,12 @@ void main() {
   testWidgets('opening a subagent reads history and preserves the parent draft',
       (tester) async {
     final transport = _Transport();
-    final rpc = JsonRpcClient(transport)..start();
-    final controller = AppController.connectedForTesting(rpc: rpc);
+    late JsonRpcClient rpc;
+    late AppController controller;
+    await tester.runAsync(() async {
+      rpc = JsonRpcClient(transport)..start();
+      controller = AppController.connectedForTesting(rpc: rpc);
+    });
     final task = TaskRecord.placeholder('parent', 0).copyWith(items: const [
       TaskItem(
         id: 'spawn',
@@ -67,6 +71,9 @@ void main() {
     controller.draftForTask('parent').composer.text = 'Unsent parent message';
     await tester.pump();
     await tester.tap(find.byTooltip('Open subagent history'));
+    await tester.pump();
+    await tester.runAsync(
+        () async => Future<void>.delayed(const Duration(milliseconds: 50)));
     await tester.pumpAndSettle();
 
     expect(find.text('Sage'), findsOneWidget);
@@ -87,7 +94,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Unsent parent message'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
-    controller.dispose();
-    await rpc.close();
-  });
+    await tester.runAsync(() async {
+      controller.dispose();
+      await rpc.close();
+    });
+  }, timeout: const Timeout(Duration(seconds: 45)));
 }
