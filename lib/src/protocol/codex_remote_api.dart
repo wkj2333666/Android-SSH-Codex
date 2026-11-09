@@ -6,16 +6,19 @@ import '../tasks/message_attachments.dart';
 import '../projects/remote_project.dart';
 import 'json_rpc_client.dart';
 import '../tasks/permission_mode.dart';
+import '../tasks/mcp_mentions.dart';
 
 final class RemoteMcpServer {
   const RemoteMcpServer(
       {required this.name,
       required this.authStatus,
       required this.tools,
+      this.pluginId,
       this.error});
   final String name;
   final String authStatus;
   final List<String> tools;
+  final String? pluginId;
   final String? error;
 }
 
@@ -39,6 +42,8 @@ final class RemoteTurnPage {
   final List<TaskItem> items;
   final String? nextCursor;
 }
+
+typedef RemoteSubagentDetails = ({String? nickname, String? role});
 
 final class RemoteSkill {
   const RemoteSkill({
@@ -91,7 +96,12 @@ final class RemoteModel {
           : null;
   bool get supportsFast =>
       serviceTiers.contains('fast') || serviceTiers.contains('priority');
+  String? get ultraFastServiceTier =>
+      serviceTiers.where(isUltraFastTier).firstOrNull;
 }
+
+bool isUltraFastTier(String? tier) =>
+    tier?.toLowerCase().replaceAll(RegExp('[-_]'), '') == 'ultrafast';
 
 final class RemoteThreadGoal {
   const RemoteThreadGoal({
@@ -128,6 +138,8 @@ final class PendingApproval {
 }
 
 final class CodexRemoteApi {
+  final _mcpCatalog =
+      <String, ({DateTime expires, Future<List<RemoteMcpServer>> load})>{};
   CodexRemoteApi(this._rpc);
 
   final JsonRpcClient _rpc;
@@ -311,6 +323,20 @@ final class CodexRemoteApi {
     return parseThread(_map(result['thread']));
   }
 
+  Future<RemoteSubagentDetails> readSubagentDetails(String threadId) async {
+    final result = _map(await _rpc.request('thread/read', {
+      'threadId': threadId,
+      'includeTurns': false,
+    }));
+    final thread = _map(result['thread']);
+    final source = _map(_map(thread['source'])['subAgent']);
+    final spawn = _map(source['thread_spawn']);
+    return (
+      nickname: _firstText(thread['agentNickname'], spawn['agent_nickname']),
+      role: _firstText(thread['agentRole'], spawn['agent_role']),
+    );
+  }
+
   Future<RemoteTurnPage> readThreadTurnsPage(
     String threadId, {
     String? cursor,
@@ -390,6 +416,7 @@ final class CodexRemoteApi {
     String? serviceTier,
     List<String> imagePaths = const [],
     PermissionMode permissionMode = PermissionMode.inherit,
+    List<McpMention> mcpMentions = const [],
   }) async {
     await _rpc.request('turn/start', {
       'threadId': threadId,
@@ -397,6 +424,7 @@ final class CodexRemoteApi {
       'input': [
         {'type': 'text', 'text': text},
         for (final path in imagePaths) {'type': 'localImage', 'path': path},
+        for (final mention in mcpMentions) mention.toInput(),
         if (skill != null)
           {
             'type': 'skill',
@@ -430,7 +458,60 @@ final class CodexRemoteApi {
     return List.unmodifiable(models);
   }
 
-  Future<List<RemoteMcpServer>> listMcpServers(String threadId) async {
+  Future<List<McpMention>> resolveMcpMentions(String threadId, String text,
+      {String? skillName}) async {
+    final names = mcpMentionNames(text, skillName: skillName);
+    if (names.isEmpty) return const [];
+    try {
+      final catalog = await listMcpServers(threadId);
+      final available = <String, String?>{};
+      final plugins = <String, Set<String>>{};
+      for (final server in catalog) {
+        final id = server.pluginId;
+        if (id == null || !_pluginId.hasMatch(id)) {
+          available[server.name] = null;
+          continue;
+        }
+        available[server.name] = id;
+        plugins.putIfAbsent(id.split('@').first, () => {}).add(id);
+      }
+      return [
+        for (final name in names)
+          if (available.containsKey(name))
+            McpMention(name, pluginId: available[name])
+          else if (plugins[name]?.length == 1)
+            McpMention(name, pluginId: plugins[name]!.single),
+      ];
+    } on RpcRemoteException catch (error) {
+      // Older app servers can still accept plain messages.
+      if (error.code == -32601) return const [];
+      rethrow;
+    }
+  }
+
+  Future<List<RemoteMcpServer>> listMcpServers(String threadId,
+      {bool refresh = false}) async {
+    final now = DateTime.now();
+    final cached = _mcpCatalog.remove(threadId);
+    if (!refresh && cached != null && cached.expires.isAfter(now)) {
+      _mcpCatalog[threadId] = cached;
+      return cached.load;
+    }
+    final load = _readMcpServers(threadId);
+    _mcpCatalog[threadId] =
+        (expires: now.add(const Duration(seconds: 30)), load: load);
+    if (_mcpCatalog.length > 16) _mcpCatalog.remove(_mcpCatalog.keys.first);
+    try {
+      return await load;
+    } catch (_) {
+      if (identical(_mcpCatalog[threadId]?.load, load)) {
+        _mcpCatalog.remove(threadId);
+      }
+      rethrow;
+    }
+  }
+
+  Future<List<RemoteMcpServer>> _readMcpServers(String threadId) async {
     final servers = <RemoteMcpServer>[];
     final seen = <String>{};
     final cursors = <String>{};
@@ -455,6 +536,7 @@ final class CodexRemoteApi {
             name: name,
             authStatus: server['authStatus'] as String? ?? 'unknown',
             tools: tools,
+            pluginId: server['pluginId'] as String?,
             error: server['toolsError'] as String?));
       }
       final next = result['nextCursor'] as String?;
@@ -574,6 +656,7 @@ final class CodexRemoteApi {
     String expectedTurnId,
     String text, {
     List<String> imagePaths = const [],
+    List<McpMention> mcpMentions = const [],
   }) async {
     await _rpc.request('turn/steer', {
       'threadId': threadId,
@@ -581,6 +664,7 @@ final class CodexRemoteApi {
       'input': [
         {'type': 'text', 'text': text},
         for (final path in imagePaths) {'type': 'localImage', 'path': path},
+        for (final mention in mcpMentions) mention.toInput(),
       ],
     });
   }
@@ -721,7 +805,11 @@ TaskItem? _parseItem(Map<String, dynamic> item) {
     'agentMessage' => TaskItemKind.agent,
     'commandExecution' => TaskItemKind.command,
     'fileChange' => TaskItemKind.file,
-    'mcpToolCall' || 'dynamicToolCall' => TaskItemKind.tool,
+    'mcpToolCall' ||
+    'dynamicToolCall' ||
+    'collabAgentToolCall' ||
+    'subAgentActivity' =>
+      TaskItemKind.tool,
     'reasoning' => TaskItemKind.reasoning,
     _ => TaskItemKind.notice,
   };
@@ -756,9 +844,43 @@ TaskItem? _parseItem(Map<String, dynamic> item) {
     text: kind == TaskItemKind.user ? text : presentation.text,
     attachments: attachments,
     questions: List.unmodifiable(questions),
+    subagents: _parseSubagents(type, item),
     detail: presentation.detail,
     status: item['status']?.toString(),
   );
+}
+
+List<SubagentReference> _parseSubagents(
+  String type,
+  Map<String, dynamic> item,
+) {
+  if (type == 'subAgentActivity') {
+    final id = _firstText(item['agentThreadId']);
+    if (id == null) return const [];
+    return [
+      SubagentReference(
+        id,
+        path: _firstText(item['agentPath']),
+        status: switch (item['kind']) {
+          'started' => 'running',
+          'completed' => 'completed',
+          'interrupted' => 'interrupted',
+          _ => null,
+        },
+      ),
+    ];
+  }
+  if (type != 'collabAgentToolCall') return const [];
+  final states = _map(item['agentsStates']);
+  final receivers = item['receiverThreadIds'];
+  return List.unmodifiable([
+    for (final id in {
+      if (receivers is List) ...receivers.whereType<String>(),
+      ...states.keys,
+    })
+      if (id.isNotEmpty && id != item['senderThreadId'])
+        SubagentReference(id, status: _firstText(_map(states[id])['status'])),
+  ]);
 }
 
 _ItemPresentation _itemPresentation(
@@ -829,6 +951,31 @@ _ItemPresentation _itemPresentation(
           const ['arguments', 'contentItems', 'success'],
         ),
       );
+    case 'collabAgentToolCall':
+      final action = switch (item['tool']) {
+        'spawnAgent' => 'Spawned subagent',
+        'sendInput' || 'sendMessage' || 'followupTask' => 'Messaged subagent',
+        'resumeAgent' => 'Resumed subagent',
+        'wait' => 'Waited for subagents',
+        'closeAgent' => 'Closed subagent',
+        'interruptAgent' => 'Interrupted subagent',
+        'listAgents' => 'Listed subagents',
+        _ => 'Subagent tool',
+      };
+      return _ItemPresentation(
+        title: action,
+        text: '',
+        detail: _firstText(item['prompt']),
+      );
+    case 'subAgentActivity':
+      final action = switch (item['kind']) {
+        'started' => 'Subagent started',
+        'completed' => 'Subagent completed',
+        'interrupted' => 'Subagent interrupted',
+        'interacted' => 'Subagent interaction',
+        _ => 'Subagent activity',
+      };
+      return _ItemPresentation(title: action, text: '');
     default:
       return _ItemPresentation(
         text: extractedText.isEmpty ? type : extractedText,
@@ -998,6 +1145,8 @@ Map<String, dynamic> _map(Object? value) {
   if (value is Map) return value.cast<String, dynamic>();
   return const {};
 }
+
+final _pluginId = RegExp(r'^[A-Za-z0-9_.-]+@[A-Za-z0-9_.-]+$');
 
 extension<T> on Iterable<T> {
   T? get firstOrNull {

@@ -58,14 +58,31 @@ class TimelineItemView extends StatelessWidget {
 }
 
 class TimelineActivityGroup extends StatelessWidget {
-  const TimelineActivityGroup({required this.items, this.loadImage, super.key});
+  const TimelineActivityGroup({
+    required this.items,
+    this.loadImage,
+    this.onOpenSubagent,
+    super.key,
+  });
 
   final List<TaskItem> items;
   final Future<Uint8List> Function(String)? loadImage;
+  final ValueChanged<SubagentReference>? onOpenSubagent;
 
   @override
   Widget build(BuildContext context) {
     final count = items.length;
+    final targets = <String, SubagentReference>{};
+    for (final item in items) {
+      for (final agent in item.subagents) {
+        final previous = targets[agent.threadId];
+        targets[agent.threadId] = SubagentReference(
+          agent.threadId,
+          path: agent.path ?? previous?.path,
+          status: agent.status ?? previous?.status,
+        );
+      }
+    }
     return ImagePreviewScope(
         loadImage: loadImage,
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -100,6 +117,11 @@ class TimelineActivityGroup extends StatelessWidget {
               ),
             ),
           ),
+          if (targets.isNotEmpty)
+            _SubagentLinks(
+              agents: targets.values.toList(growable: false),
+              onOpen: onOpenSubagent,
+            ),
           for (final item in items)
             for (final attachment in item.attachments)
               _AttachmentCard(
@@ -110,13 +132,56 @@ class TimelineActivityGroup extends StatelessWidget {
   }
 }
 
+class _SubagentLinks extends StatelessWidget {
+  const _SubagentLinks({required this.agents, this.onOpen});
+
+  final List<SubagentReference> agents;
+  final ValueChanged<SubagentReference>? onOpen;
+
+  Widget _tile(SubagentReference agent) => ListTile(
+        dense: true,
+        visualDensity: VisualDensity.compact,
+        leading: const Icon(Icons.account_tree_outlined, size: 20),
+        title: Text(
+          _subagentLabel(agent),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        trailing: onOpen == null ? null : const Icon(Icons.chevron_right),
+        onTap: onOpen == null ? null : () => onOpen!(agent),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 3),
+      clipBehavior: Clip.antiAlias,
+      child: agents.length <= 3
+          ? Column(children: [for (final agent in agents) _tile(agent)])
+          : _ActivityViewport(
+              viewportKey: const Key('subagent-viewport'),
+              maxHeight: 176,
+              itemCount: agents.length,
+              itemBuilder: (_, index) => _tile(agents[index]),
+            ),
+    );
+  }
+}
+
 /// Keep the collapse header outside the scrollable details, including when a
 /// single tool output is much taller than the screen.
 class _ActivityViewport extends StatefulWidget {
-  const _ActivityViewport({required this.itemCount, required this.itemBuilder});
+  const _ActivityViewport({
+    required this.itemCount,
+    required this.itemBuilder,
+    this.viewportKey = const Key('activity-viewport'),
+    this.maxHeight = 360,
+  });
 
   final int itemCount;
   final IndexedWidgetBuilder itemBuilder;
+  final Key viewportKey;
+  final double maxHeight;
 
   @override
   State<_ActivityViewport> createState() => _ActivityViewportState();
@@ -136,9 +201,10 @@ class _ActivityViewportState extends State<_ActivityViewport> {
     final media = MediaQuery.of(context);
     final available =
         media.size.height - media.viewInsets.bottom - media.padding.vertical;
+    final height = (available * 0.4).clamp(80, widget.maxHeight).toDouble();
     return ConstrainedBox(
-      key: const Key('activity-viewport'),
-      constraints: BoxConstraints(maxHeight: (available * 0.4).clamp(80, 360)),
+      key: widget.viewportKey,
+      constraints: BoxConstraints(maxHeight: height),
       child: NotificationListener<ScrollNotification>(
         // Internal scrolling must not change the chat's follow-latest state.
         onNotification: (_) => true,
@@ -188,24 +254,37 @@ class _CompactActivityRow extends StatelessWidget {
           : Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis),
       trailing: item.status == null ? null : _StatusBadge(status: item.status!),
       showTrailingIcon: detail?.isNotEmpty == true,
-      children: detail?.isNotEmpty == true
-          ? [
-              Align(
-                // SelectableText/Markdown have internal scrollables. Their
-                // saved offsets must not overwrite ExpansionTile's bool state.
-                key: PageStorageKey('activity-detail-${item.id}'),
-                alignment: Alignment.centerLeft,
-                child: item.kind == TaskItemKind.reasoning
-                    ? MarkdownContent(text: detail!)
-                    : SelectableText(
-                        detail!,
-                        style: const TextStyle(fontFamily: 'monospace'),
-                      ),
-              ),
-            ]
-          : const [],
+      children: [
+        if (detail?.isNotEmpty == true)
+          Align(
+            // SelectableText/Markdown have internal scrollables. Their
+            // saved offsets must not overwrite ExpansionTile's bool state.
+            key: PageStorageKey('activity-detail-${item.id}'),
+            alignment: Alignment.centerLeft,
+            child: item.kind == TaskItemKind.reasoning
+                ? MarkdownContent(text: detail!)
+                : SelectableText(
+                    detail!,
+                    style: const TextStyle(fontFamily: 'monospace'),
+                  ),
+          ),
+      ],
     );
   }
+}
+
+String _subagentLabel(SubagentReference agent) {
+  final status = switch (agent.status) {
+    'pendingInit' => 'Starting',
+    'running' => 'Running',
+    'completed' => 'Completed',
+    'interrupted' => 'Interrupted',
+    'errored' => 'Failed',
+    'shutdown' => 'Closed',
+    'notFound' => 'Unavailable',
+    final status => status,
+  };
+  return status == null ? agent.label : '${agent.label} · $status';
 }
 
 class _Message extends StatelessWidget {

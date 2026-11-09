@@ -1232,6 +1232,28 @@ final class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<({RemoteTurnPage page, RemoteSubagentDetails? details})>
+      readSubagentHistory(String threadId, String hostId,
+          {String? cursor}) async {
+    final api = _api;
+    final epoch = _epoch;
+    if (api == null || !isConnected || hostId != _selectedHostId) {
+      throw StateError('Connect to this host to load subagent history.');
+    }
+    final metadata = cursor == null
+        ? api.readSubagentDetails(threadId).then<RemoteSubagentDetails?>(
+              (details) => details,
+              onError: (Object _) => null,
+            )
+        : null;
+    final page = await api.readThreadTurnsPage(threadId, cursor: cursor);
+    final details = metadata == null ? null : await metadata;
+    if (api != _api || epoch != _epoch || hostId != _selectedHostId) {
+      throw StateError('Connection changed. Reload subagent history.');
+    }
+    return (page: page, details: details);
+  }
+
   Future<void> retrySelectedTaskDetails() async {
     final taskId = _selectedTaskId;
     if (taskId != null) await _loadInitialTaskContext(taskId);
@@ -1779,9 +1801,12 @@ final class AppController extends ChangeNotifier {
     );
     _taskReducer.setServiceTier(epoch, threadId, created.serviceTier);
     notifyListeners();
+    final mentions = await api.resolveMcpMentions(threadId, prompt);
+    _ensureCurrentSession(api, attempt, epoch, profileId);
     await api.startTurn(
       threadId,
       prompt,
+      mcpMentions: mentions,
       permissionMode: permissionMode,
       model: model,
       effort: effort,
@@ -2069,12 +2094,15 @@ final class AppController extends ChangeNotifier {
           profileId: profileId,
         );
       }
+      final mentions = await api.resolveMcpMentions(task.id, pending.text,
+          skillName: pending.skill?.name);
+      _ensureCurrentSession(api, attempt, epoch, profileId);
       try {
         await _journalPrompt(profileId, task.id, pending);
         _ensureCurrentSession(api, attempt, epoch, profileId);
         steerRequested = true;
         await api.steerTurn(task.id, turnId, pending.text,
-            imagePaths: pending.imagePaths);
+            imagePaths: pending.imagePaths, mcpMentions: mentions);
         await _settlePrompt(profileId, task.id, pending, 'sent');
       } on RpcRemoteException {
         steerRequested = false;
@@ -2099,7 +2127,7 @@ final class AppController extends ChangeNotifier {
         _activeTurnIds[task.id] = refreshedTurnId;
         steerRequested = true;
         await api.steerTurn(task.id, refreshedTurnId, pending.text,
-            imagePaths: pending.imagePaths);
+            imagePaths: pending.imagePaths, mcpMentions: mentions);
         await _settlePrompt(profileId, task.id, pending, 'sent');
       }
       _recordSubmittedPrompt(
@@ -2212,6 +2240,9 @@ final class AppController extends ChangeNotifier {
           profileId: profileId,
         );
       }
+      final mentions = await api.resolveMcpMentions(task.id, pending.text,
+          skillName: pending.skill?.name);
+      _ensureCurrentSession(api, attempt, epoch, profileId);
       await _journalPrompt(profileId, task.id, pending);
       _ensureCurrentSession(api, attempt, epoch, profileId);
       turnRequested = true;
@@ -2224,6 +2255,7 @@ final class AppController extends ChangeNotifier {
         serviceTier: pending.serviceTier,
         imagePaths: pending.imagePaths,
         permissionMode: pending.permissionMode,
+        mcpMentions: mentions,
       );
       await _settlePrompt(profileId, task.id, pending, 'sent');
       if (!_isCurrentSession(api, attempt, epoch, profileId)) return;
@@ -2501,12 +2533,15 @@ final class AppController extends ChangeNotifier {
             profileId: profileId,
           );
         }
+        final mentions = await api.resolveMcpMentions(taskId, pending.text,
+            skillName: pending.skill?.name);
+        _ensureCurrentSession(api, attempt, epoch, profileId);
         try {
           await _journalPrompt(profileId, taskId, pending);
           _ensureCurrentSession(api, attempt, epoch, profileId);
           steerRequested = true;
           await api.steerTurn(taskId, turnId, pending.text,
-              imagePaths: pending.imagePaths);
+              imagePaths: pending.imagePaths, mcpMentions: mentions);
           await _settlePrompt(profileId, taskId, pending, 'sent');
         } on RpcRemoteException {
           steerRequested = false;
@@ -2522,7 +2557,7 @@ final class AppController extends ChangeNotifier {
           _activeTurnIds[taskId] = refreshedTurnId;
           steerRequested = true;
           await api.steerTurn(taskId, refreshedTurnId, pending.text,
-              imagePaths: pending.imagePaths);
+              imagePaths: pending.imagePaths, mcpMentions: mentions);
           await _settlePrompt(profileId, taskId, pending, 'sent');
         }
         _recordSubmittedPrompt(
@@ -2560,7 +2595,7 @@ final class AppController extends ChangeNotifier {
     final profileId = _selectedHostId!;
     await _ensureThreadSubscribed(id,
         api: api, attempt: attempt, epoch: epoch, profileId: profileId);
-    final result = await api.listMcpServers(id);
+    final result = await api.listMcpServers(id, refresh: true);
     _ensureCurrentSession(api, attempt, epoch, profileId);
     return result;
   }

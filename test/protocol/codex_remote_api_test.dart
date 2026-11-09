@@ -25,6 +25,128 @@ final class _RecordingTransport implements RpcTransport {
 }
 
 void main() {
+  test('native subagent activities survive live and historical parsing', () {
+    final spawn = {
+      'type': 'collabAgentToolCall',
+      'id': 'spawn',
+      'tool': 'spawnAgent',
+      'status': 'completed',
+      'receiverThreadIds': ['child'],
+      'agentsStates': {
+        'child': {'status': 'running'},
+      },
+    };
+    final completion = {
+      'type': 'subAgentActivity',
+      'id': 'done',
+      'kind': 'completed',
+      'agentThreadId': 'child',
+      'agentPath': '/root/reviewer',
+    };
+    final snapshot = CodexRemoteApi.parseThread({
+      'id': 'parent',
+      'turns': [
+        {
+          'id': 'turn',
+          'items': [spawn, completion]
+        },
+      ],
+    });
+    expect(snapshot.items.first.subagents.single.status, 'running');
+    expect(snapshot.items.last.subagents.single.label, 'reviewer');
+    final event = CodexRemoteApi.parseNotification('item/completed', {
+      'threadId': 'parent',
+      'turnId': 'turn',
+      'item': completion,
+    });
+    final child = event!.item!.subagents.single;
+    expect(child.threadId, 'child');
+    expect(child.status, 'completed');
+  });
+
+  test('subagent metadata is read without resuming or loading all turns',
+      () async {
+    final transport = _RecordingTransport();
+    final rpc = JsonRpcClient(transport)..start();
+    try {
+      final reading = CodexRemoteApi(rpc).readSubagentDetails('child');
+      final request = jsonDecode(transport.sent.single) as Map;
+      expect(request['method'], 'thread/read');
+      expect(request['params'], {'threadId': 'child', 'includeTurns': false});
+      transport.incoming.add(jsonEncode({
+        'id': request['id'],
+        'result': {
+          'thread': {
+            'id': 'child',
+            'agentNickname': 'Sage',
+            'agentRole': 'reviewer'
+          },
+        },
+      }));
+      final details = await reading;
+      expect(details.nickname, 'Sage');
+      expect(details.role, 'reviewer');
+    } finally {
+      await rpc.close();
+    }
+  });
+
+  test(
+      'typed MCP mentions resolve against the task catalog and survive start and steer',
+      () async {
+    final transport = _RecordingTransport();
+    final rpc = JsonRpcClient(transport)..start();
+    final api = CodexRemoteApi(rpc);
+    try {
+      expect(await api.resolveMcpMentions('task', 'ordinary message'), isEmpty);
+      expect(transport.sent, isEmpty);
+      const text = r'Use $ssh-bridge and $camera-plugin, not $unknown';
+      final resolving = api.resolveMcpMentions('task', text);
+      final discovery = jsonDecode(transport.sent.single) as Map;
+      expect(discovery['method'], 'mcpServerStatus/list');
+      expect(discovery['params']['threadId'], 'task');
+      transport.incoming.add(jsonEncode({
+        'id': discovery['id'],
+        'result': {
+          'data': [
+            {'name': 'ssh-bridge', 'tools': {}},
+            {
+              'name': 'plugin__camera__mcp',
+              'pluginId': 'camera-plugin@local',
+              'tools': {}
+            },
+          ]
+        }
+      }));
+      final mentions = await resolving;
+      expect(mentions.map((value) => value.toInput()['path']),
+          ['mcp://ssh-bridge', 'plugin://camera-plugin@local']);
+      expect(await api.resolveMcpMentions('task', text), hasLength(2));
+      expect(transport.sent, hasLength(1));
+      for (final steer in [false, true]) {
+        final sending = steer
+            ? api.steerTurn('task', 'active', text, mcpMentions: mentions)
+            : api.startTurn('task', text,
+                mcpMentions: mentions, serviceTier: 'ultrafast');
+        final request = jsonDecode(transport.sent.last) as Map;
+        expect(request['params']['input'], [
+          {'type': 'text', 'text': text},
+          {'type': 'mention', 'name': 'ssh-bridge', 'path': 'mcp://ssh-bridge'},
+          {
+            'type': 'mention',
+            'name': 'camera-plugin',
+            'path': 'plugin://camera-plugin@local'
+          },
+        ]);
+        expect(request['params']['serviceTierForTurn'],
+            steer ? null : 'ultrafast');
+        transport.incoming.add(jsonEncode({'id': request['id'], 'result': {}}));
+        await sending;
+      }
+    } finally {
+      await rpc.close();
+    }
+  });
   test(
       'standalone start omits empty cwd and project instead of sending invalid cwd',
       () async {
