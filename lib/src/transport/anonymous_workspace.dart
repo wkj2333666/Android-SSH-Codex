@@ -12,7 +12,7 @@ bool isAnonymousWorkspacePath(String path) =>
 Future<String> createRemoteAnonymousWorkspace(SSHClient client) async {
   // No prompt, user path, or project data enters the shell command.
   // mktemp atomically allocates a private directory per new session.
-  final script = r'case "${HOME:-}" in /*) ;; *) exit 1 ;; esac; '
+  const script = r'case "${HOME:-}" in /*) ;; *) exit 1 ;; esac; '
       'umask 077; root="\$HOME/$_workspaceRoot"; '
       'mkdir -p "\$root" && mktemp -d "\$root/session.XXXXXXXXXXXX"';
   final result = await client
