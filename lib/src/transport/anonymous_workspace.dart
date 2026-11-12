@@ -19,7 +19,8 @@ Future<String> createRemoteAnonymousWorkspace(SSHClient client) async {
       .runWithResult("/bin/sh -c '$script'")
       .timeout(const Duration(seconds: 15));
   if (result.exitCode != 0 || result.exitSignal != null) {
-    throw StateError('Could not create an anonymous workspace on the SSH host.');
+    throw StateError(
+        'Could not create an anonymous workspace on the SSH host.');
   }
   final path = utf8.decode(result.stdout).trim();
   if (!isAnonymousWorkspacePath(path) ||
