@@ -7,6 +7,9 @@ import 'package:android_ssh_codex/src/ui/tasks_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+const _workspace =
+    '/home/user/.local/share/android-ssh-codex/workspaces/session.Abc123Xyz456';
+
 class _Transport implements RpcTransport {
   final input = StreamController<String>();
   final requests = <Map>[];
@@ -21,7 +24,7 @@ class _Transport implements RpcTransport {
       'id': request['id'],
       'result': request['method'] == 'thread/start'
           ? {
-              'thread': {'id': 'standalone', 'cwd': '/server/default'}
+              'thread': {'id': 'standalone', 'cwd': _workspace}
             }
           : {'data': []}
     }));
@@ -33,14 +36,22 @@ class _Transport implements RpcTransport {
 
 void main() {
   testWidgets(
-      'standalone dialog validates prompt and starts with blank directory',
+      'blank directory starts in a new anonymous workspace without a project',
       (tester) async {
     final transport = _Transport();
     late JsonRpcClient rpc;
     late AppController controller;
+    var allocations = 0;
     await tester.runAsync(() async {
       rpc = JsonRpcClient(transport)..start();
-      controller = AppController.connectedForTesting(rpc: rpc);
+      controller = AppController.connectedForTesting(
+        rpc: rpc,
+        createAnonymousWorkspace: () async {
+          expect(transport.requests, isEmpty);
+          allocations++;
+          return _workspace;
+        },
+      );
     });
     await tester.pumpWidget(MaterialApp(
         home: Scaffold(body: TasksWorkspace(controller: controller))));
@@ -50,6 +61,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Enter a task message.'), findsOneWidget);
     expect(transport.requests, isEmpty);
+    expect(allocations, 0);
     await tester.enterText(find.byKey(const Key('new-task-prompt')), 'Hello');
     await tester.tap(find.text('Start'));
     await tester.pumpAndSettle();
@@ -58,7 +70,8 @@ void main() {
     await tester.pumpAndSettle();
     final start =
         transport.requests.singleWhere((r) => r['method'] == 'thread/start');
-    expect(start['params'], isEmpty);
+    expect(allocations, 1);
+    expect(start['params'], {'cwd': _workspace});
     expect(transport.requests.where((r) => r['method'] == 'turn/start'),
         hasLength(1));
     expect(tester.takeException(), isNull);

@@ -159,9 +159,10 @@ not imply Play approval.
   Full access requires confirmation; managed server restrictions still apply.
   Changes do not alter a running turn when steering. Drafts and queued messages
   retain their permission selection.
-- A task outside a project may leave the working directory blank to use the
-  remote server's default directory, or supply a working directory without
-  adding a project. This is not a temporary or anonymous filesystem sandbox.
+- For a task outside a project, leave the working directory blank to create a
+  private directory under `~/.local/share/android-ssh-codex/workspaces/` on the
+  SSH host, or enter an existing directory. The new directory persists so the
+  conversation can be resumed. This does not change the task's sandbox policy.
   An existing goal has a compact progress row above the composer. Tap to edit,
   or pause/resume using its button; status changes preserve accumulated usage.
 - Open very long conversations without loading the entire history at once.

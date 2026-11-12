@@ -29,6 +29,7 @@ import 'tasks/task_message_queue.dart';
 import 'tasks/task_operation_lock.dart';
 import 'tasks/task_reducer.dart';
 import 'tasks/task_refresh_lock.dart';
+import 'transport/anonymous_workspace.dart';
 import 'transport/codex_daemon.dart';
 import 'transport/connection_setup.dart';
 import 'transport/attachment_upload.dart';
@@ -188,10 +189,12 @@ final class AppController extends ChangeNotifier {
     List<TaskSnapshot> cachedTasks = const [],
     ProfileStore? store,
     String hostId = 'test',
+    Future<String> Function()? createAnonymousWorkspace,
   }) {
     final controller =
         AppController.memory(cachedTasks: cachedTasks, store: store);
     controller._rpc = rpc;
+    controller._testCreateAnonymousWorkspace = createAnonymousWorkspace;
     controller._api = CodexRemoteApi(rpc);
     controller.accountUsage.bind(controller._api);
     controller._selectedHostId = hostId;
@@ -204,6 +207,7 @@ final class AppController extends ChangeNotifier {
     return controller;
   }
   final SshConnector _connector;
+  Future<String> Function()? _testCreateAnonymousWorkspace;
   final ConnectionKeepAlive _keepAlive = ConnectionKeepAlive();
   late final ConnectionNetwork _network = ConnectionNetwork(_networkChanged);
   bool _networkAvailable = true;
@@ -1694,7 +1698,7 @@ final class AppController extends ChangeNotifier {
   void _discoverProjects(Iterable<TaskSnapshot> tasks) {
     for (final task in tasks) {
       final cwd = normalizeRemoteCwd(task.cwd);
-      if (cwd.isEmpty) continue;
+      if (cwd.isEmpty || isAnonymousWorkspacePath(cwd)) continue;
       final current = _projectActivityByCwd[cwd];
       if (current == null || task.updatedAt.isAfter(current)) {
         _projectActivityByCwd[cwd] = task.updatedAt;
@@ -1751,6 +1755,7 @@ final class AppController extends ChangeNotifier {
       if (!_isCurrentSession(api, attempt, epoch, profileId)) return;
       for (final entry in activity.entries) {
         final cwd = normalizeRemoteCwd(entry.key);
+        if (isAnonymousWorkspacePath(cwd)) continue;
         final current = _projectActivityByCwd[cwd];
         if (current == null || entry.value.isAfter(current)) {
           _projectActivityByCwd[cwd] = entry.value;
@@ -1783,8 +1788,13 @@ final class AppController extends ChangeNotifier {
     if (projectId != null && project == null) {
       throw StateError('The project was removed. Refresh the project list.');
     }
-    final created =
-        await api.startThread(cwd: cwd, projectId: project?.remoteId);
+    final requestedCwd = cwd?.trim();
+    final workingDirectory = project == null && (requestedCwd?.isEmpty ?? true)
+        ? await _allocateAnonymousWorkspace()
+        : requestedCwd;
+    _ensureCurrentSession(api, attempt, epoch, profileId);
+    final created = await api.startThread(
+        cwd: workingDirectory, projectId: project?.remoteId);
     if (!_isCurrentSession(api, attempt, epoch, profileId)) return;
     final threadId = created.id;
     draftForTask(threadId).permissionMode = permissionMode;
@@ -1815,6 +1825,14 @@ final class AppController extends ChangeNotifier {
     if (!_isCurrentSession(api, attempt, epoch, profileId)) return;
     _taskReducer.setTurnSettings(epoch, threadId, model, effort);
     await refreshTasks();
+  }
+
+  Future<String> _allocateAnonymousWorkspace() {
+    final override = _testCreateAnonymousWorkspace;
+    if (override != null) return override();
+    final ssh = _ssh;
+    if (ssh == null) throw StateError('SSH is disconnected');
+    return createRemoteAnonymousWorkspace(ssh.client);
   }
 
   Future<Uint8List> loadAttachmentImage(String path) async {

@@ -159,6 +159,25 @@ void main() {
     await rpc.close();
   });
 
+  test('anonymous workspace creation failure never starts in the home folder',
+      () async {
+    final transport = Transport();
+    final rpc = JsonRpcClient(transport)..start();
+    final controller = AppController.connectedForTesting(
+      rpc: rpc,
+      createAnonymousWorkspace: () async => throw StateError('No workspace'),
+    );
+    try {
+      await expectLater(controller.startNewTask(cwd: '  ', prompt: 'Hello'),
+          throwsStateError);
+      expect(transport.calls, isEmpty);
+      expect(controller.selectedTask, isNull);
+    } finally {
+      controller.dispose();
+      await rpc.close();
+    }
+  });
+
   test('queued videos retain media metadata but never create image inputs',
       () async {
     final transport = Transport();
