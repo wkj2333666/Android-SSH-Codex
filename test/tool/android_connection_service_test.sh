@@ -30,6 +30,14 @@ test -s "$fixture/app/src/main/res/xml/preview_network_security.xml"
 grep -Fq '<domain includeSubdomains="false">127.0.0.1</domain>' "$fixture/app/src/main/res/xml/preview_network_security.xml"
 grep -Fq 'android:networkSecurityConfig="@xml/preview_network_security"' "$fixture/first.xml"
 grep -Fq 'allowFileAccess = false' "$repo_root/tool/android/BrowserPreviewActivity.kt"
+preview_source="$repo_root/tool/android/BrowserPreviewActivity.kt"
+# Only image previews set a custom background; pages keep the WebView default.
+if grep -E 'setBackgroundColor\(' "$preview_source" |
+    grep -Fv 'if (showingImage)'; then
+  echo 'Web previews must not override the default background' >&2
+  exit 1
+fi
+grep -Fq 'if (showingImage) view.setBackgroundColor(Color.BLACK)' "$preview_source"
 if grep -q 'addJavascriptInterface\|handler.proceed()' "$repo_root/tool/android/BrowserPreviewActivity.kt"; then
   echo 'Untrusted preview pages must not have an app bridge or bypass TLS' >&2
   exit 1

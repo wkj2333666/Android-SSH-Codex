@@ -63,9 +63,10 @@ class BrowserPreviewActivity : Activity() {
     }
 
     private fun createPreview() {
+        val showingImage = image != null
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.BLACK)
+            if (showingImage) setBackgroundColor(Color.BLACK)
         }
         root.setOnApplyWindowInsetsListener { view, insets ->
             @Suppress("DEPRECATION")
@@ -98,7 +99,7 @@ class BrowserPreviewActivity : Activity() {
         }
         root.addView(toolbar)
         status = TextView(this).apply {
-            setTextColor(Color.WHITE)
+            if (showingImage) setTextColor(Color.WHITE)
             text = if (image != null) (intent.getStringExtra("name") ?: "Image").take(200)
                 else "${origin!!.authority}${origin!!.path.orEmpty()}"
             maxLines = 2
@@ -108,7 +109,8 @@ class BrowserPreviewActivity : Activity() {
         root.addView(progress, LinearLayout.LayoutParams(-1, 4))
         val view = WebView(this)
         web = view
-        view.setBackgroundColor(Color.BLACK)
+        // Keep the system's default canvas for pages without a CSS background.
+        if (showingImage) view.setBackgroundColor(Color.BLACK)
         view.settings.apply {
             javaScriptEnabled = image == null
             domStorageEnabled = image == null
