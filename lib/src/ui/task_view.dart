@@ -231,6 +231,9 @@ class _TaskViewState extends State<TaskView> {
                 previewVideo: Attachments.supported
                     ? widget.controller.previewVideo
                     : null,
+                previewVisualization: Attachments.supported
+                    ? widget.controller.previewVisualization
+                    : null,
                 cancelDownload: widget.controller.cancelDownload,
                 child: timeline)),
         if (widget.controller.userInputRequests
@@ -1429,6 +1432,8 @@ class _SubagentHistoryState extends State<_SubagentHistory> {
               downloadWithProgress: controller.downloadFile,
               previewVideo:
                   Attachments.supported ? controller.previewVideo : null,
+              previewVisualization:
+                  Attachments.supported ? controller.previewVisualization : null,
               cancelDownload: controller.cancelDownload,
               child: TaskTimeline(
                 items: _items,

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 import 'connection_keep_alive.dart';
 import 'connection_network.dart';
@@ -1929,9 +1930,26 @@ final class AppController extends ChangeNotifier {
             false;
       });
 
+  Future<bool> previewVisualization(String path,
+          {void Function(downloads.DownloadProgress)? onProgress,
+          VoidCallback? onReady}) =>
+      _receiveRemoteFile(Uri(path: path).toString(),
+          onProgress: onProgress,
+          purpose: 'html-preview',
+          maxBytes: 8 * 1024 * 1024, openFile: (file, name) async {
+        onReady?.call();
+        const channel = MethodChannel('android_ssh_codex/previews');
+        return await channel.invokeMethod<bool>('openVisualization', {
+              'path': file.path,
+              'name': name,
+            }) ??
+            false;
+      });
+
   Future<bool> _receiveRemoteFile(String link,
       {required Future<bool> Function(File file, String name) openFile,
       String purpose = 'download',
+      int maxBytes = downloads.maxDownloadBytes,
       void Function(downloads.DownloadProgress)? onProgress}) async {
     if (_downloadingFile) throw StateError('A download is already active');
     if (!Attachments.supported) throw UnsupportedError('Android download only');
@@ -1965,7 +1983,7 @@ final class AppController extends ChangeNotifier {
             await connection.close(reason: 'download_cancelled');
             throw DownloadCancelled();
           }
-          return SftpDownloadSource.open(connection, path);
+          return SftpDownloadSource.open(connection, path, maxBytes: maxBytes);
         },
         onProgress: onProgress,
         onRetry: (retry, received, error) =>
@@ -1977,7 +1995,7 @@ final class AppController extends ChangeNotifier {
         }),
       );
       cancellation.check();
-      stage = purpose == 'video-preview' ? 'phone_preview' : 'phone_save';
+      stage = purpose == 'download' ? 'phone_save' : 'phone_preview';
       // The player owns the file until it closes. Do not delete the temporary
       // payload while the native decoder might still seek within it.
       return await openFile(file, path.split('/').last);

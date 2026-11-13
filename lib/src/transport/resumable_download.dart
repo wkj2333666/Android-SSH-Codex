@@ -66,15 +66,18 @@ Future<T> _untilClosed<T>(SSHClient client, Future<T> operation) => Future.any([
 /// Owns its entire SSH connection. dartssh2 2.x SftpClient.close alone does not
 /// release its SSH channel, so a download must never borrow the chat client.
 class SftpDownloadSource implements DownloadSource {
-  SftpDownloadSource._(this.connection, this.sftp, this.file, this.path);
+  SftpDownloadSource._(
+      this.connection, this.sftp, this.file, this.path, this.maxBytes);
   final SshConnection connection;
   final SftpClient sftp;
   final SftpFile file;
   final String path;
+  final int maxBytes;
   bool _closed = false;
 
   static Future<SftpDownloadSource> open(
-      SshConnection connection, String path) async {
+      SshConnection connection, String path,
+      {int maxBytes = maxDownloadBytes}) async {
     SftpClient? sftp;
     try {
       fileDownloadCommand(path); // Reject malformed paths before any remote IO.
@@ -82,7 +85,7 @@ class SftpDownloadSource implements DownloadSource {
           await connection.client.sftp().timeout(const Duration(seconds: 15));
       final file = await _untilClosed(connection.client, sftp.open(path))
           .timeout(const Duration(seconds: 15));
-      return SftpDownloadSource._(connection, sftp, file, path);
+      return SftpDownloadSource._(connection, sftp, file, path, maxBytes);
     } catch (_) {
       sftp?.close();
       await connection.close(reason: 'download_open_failed');
@@ -97,9 +100,10 @@ class SftpDownloadSource implements DownloadSource {
     }
     final attrs = await _untilClosed(connection.client, file.stat());
     final size = attrs.size;
-    if (!attrs.isFile || size == null || size < 0 || size > maxDownloadBytes) {
-      throw const FileDownloadException(
-          'Download requires a regular file of at most 1 GiB.');
+    if (!attrs.isFile || size == null || size < 0 || size > maxBytes) {
+      throw FileDownloadException(
+          'Download requires a regular file of at most '
+          '${maxBytes == maxDownloadBytes ? '1 GiB' : '${maxBytes ~/ 1048576} MiB'}.');
     }
     final result = await _untilClosed(connection.client,
         connection.client.runWithResult(fileDownloadDigestCommand(path)));

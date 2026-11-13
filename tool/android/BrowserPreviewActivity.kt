@@ -18,6 +18,8 @@ import android.webkit.*
 import android.widget.*
 import java.io.ByteArrayInputStream
 import java.io.File
+import java.io.SequenceInputStream
+import java.util.UUID
 
 /** Unprivileged system WebView. Remote pages never receive a native bridge. */
 class BrowserPreviewActivity : Activity() {
@@ -25,6 +27,7 @@ class BrowserPreviewActivity : Activity() {
         const val IMAGE_REQUEST = 4106
         const val PAGE_REQUEST = 4107
         private const val IMAGE_ORIGIN = "https://image-preview.invalid"
+        private const val VISUALIZATION_POLICY = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; base-uri 'none'; form-action 'none'"
         fun validPage(uri: Uri): Boolean = uri.scheme in listOf("http", "https") &&
             uri.host == "127.0.0.1" && uri.userInfo == null &&
             (uri.port == -1 || uri.port in 1..65535)
@@ -36,11 +39,22 @@ class BrowserPreviewActivity : Activity() {
                 file.isFile && file.length() in 1L..(10L * 1024L * 1024L)) { "Invalid image cache" }
             return file
         }
+
+        fun visualizationFile(context: android.content.Context, path: String): File {
+            val file = File(path).canonicalFile
+            require(file.name == "payload.bin" &&
+                file.parentFile?.name?.startsWith("codex-download-") == true &&
+                file.parentFile?.parentFile == context.cacheDir.canonicalFile &&
+                file.isFile && file.length() in 1L..(8L * 1024L * 1024L)) { "Invalid visualization cache" }
+            return file
+        }
     }
 
     private var web: WebView? = null
     private var origin: Uri? = null
     private var image: File? = null
+    private var visualization: File? = null
+    private val visualizationUrl by lazy { "https://${UUID.randomUUID()}.visualization.invalid/" }
     private var fitScale = 1f
     private lateinit var status: TextView
     private lateinit var progress: ProgressBar
@@ -56,7 +70,9 @@ class BrowserPreviewActivity : Activity() {
         super.onCreate(savedInstanceState)
         try {
             val path = intent.getStringExtra("path")
-            if (path != null) image = imageFile(this, path)
+            val html = intent.getStringExtra("visualization")
+            if (html != null) visualization = visualizationFile(this, html)
+            else if (path != null) image = imageFile(this, path)
             else {
                 origin = Uri.parse(intent.getStringExtra("url") ?: "")
                 require(validPage(origin!!))
@@ -104,7 +120,11 @@ class BrowserPreviewActivity : Activity() {
         content.addView(progress, FrameLayout.LayoutParams(-1, dp(3), Gravity.TOP))
         root.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
-        view.loadUrl(if (showingImage) "$IMAGE_ORIGIN/" else origin.toString())
+        view.loadUrl(when {
+            showingImage -> "$IMAGE_ORIGIN/"
+            visualization != null -> visualizationUrl
+            else -> requireNotNull(origin).toString()
+        })
     }
 
     private fun createImageToolbar(): View {
@@ -156,12 +176,13 @@ class BrowserPreviewActivity : Activity() {
         }
         address = location
         toolbar.addView(location, LinearLayout.LayoutParams(0, dp(34), 1f))
-        updateBrowserChrome(null)
+        if (visualization == null) updateBrowserChrome(null)
+        else location.text = (intent.getStringExtra("name") ?: "Visualization").take(200)
         addIcon(BrowserIcon.RELOAD, "Reload page") {
             status.visibility = View.GONE
             web?.reload()
         }
-        addIcon(BrowserIcon.MENU, "Page actions") { anchor ->
+        if (visualization == null) addIcon(BrowserIcon.MENU, "Page actions") { anchor ->
             PopupMenu(this, anchor).apply {
                 menu.add("Open in browser").setOnMenuItemClickListener {
                     openExternal(currentPage())
@@ -181,6 +202,7 @@ class BrowserPreviewActivity : Activity() {
     private fun currentPage(): Uri = web?.url?.let(Uri::parse)?.takeIf(::sameOrigin) ?: requireNotNull(origin)
 
     private fun updateBrowserChrome(url: String?) {
+        if (visualization != null) return
         val location = address ?: return
         val uri = url?.let(Uri::parse)?.takeIf(::sameOrigin) ?: currentPage()
         location.text = "${uri.authority}${uri.encodedPath.orEmpty().takeUnless { it == "/" }.orEmpty()}"
@@ -249,7 +271,7 @@ class BrowserPreviewActivity : Activity() {
     private fun configureWebView(view: WebView) {
         view.settings.apply {
             javaScriptEnabled = image == null
-            domStorageEnabled = image == null
+            domStorageEnabled = image == null && visualization == null
             allowFileAccess = false
             allowContentAccess = false
             @Suppress("DEPRECATION")
@@ -288,6 +310,7 @@ class BrowserPreviewActivity : Activity() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val uri = request.url
                 if (image != null) return uri.toString() != "$IMAGE_ORIGIN/"
+                if (visualization != null) return uri.toString() != visualizationUrl
                 if (sameOrigin(uri)) return false
                 // Redirects cannot silently launch another app.
                 if (request.isForMainFrame && request.hasGesture()) openExternal(uri)
@@ -295,6 +318,18 @@ class BrowserPreviewActivity : Activity() {
                 return true
             }
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                visualization?.let { file ->
+                    if (request.method != "GET" || request.url.toString() != visualizationUrl) return blocked()
+                    return try {
+                        WebResourceResponse("text/html", "UTF-8", 200, "OK",
+                            mapOf("Content-Security-Policy" to VISUALIZATION_POLICY,
+                                "Cache-Control" to "no-store",
+                                "X-Content-Type-Options" to "nosniff"),
+                            visualizationDocument(file))
+                    } catch (_: Exception) {
+                        blocked()
+                    }
+                }
                 if (image == null) return null
                 val url = request.url.toString()
                 if (request.method == "GET" && url == "$IMAGE_ORIGIN/") {
@@ -325,7 +360,35 @@ class BrowserPreviewActivity : Activity() {
             }
         }
         view.setDownloadListener { _, _, _, _, _ ->
-            Toast.makeText(this, "Use Open in browser in the page menu to download files", Toast.LENGTH_LONG).show()
+            val hint = if (visualization == null) "Use Open in browser in the page menu to download files"
+                else "Use Download HTML from the conversation"
+            Toast.makeText(this, hint, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun visualizationDocument(file: File): java.io.InputStream {
+        val stream = file.inputStream().buffered()
+        try {
+            val start = ByteArray(1024)
+            stream.mark(start.size)
+            val length = stream.read(start).coerceAtLeast(0)
+            stream.reset()
+            val prefix = String(start, 0, length, Charsets.UTF_8).trimStart('\uFEFF', ' ', '\t', '\n', '\r')
+            if (prefix.startsWith("<!doctype", ignoreCase = true) ||
+                prefix.startsWith("<html", ignoreCase = true) ||
+                prefix.startsWith("<head", ignoreCase = true)) return stream
+            // Codex also emits HTML fragments, normally wrapped by its desktop host.
+            val shell = """<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+                <style>
+                :root{color-scheme:light dark;--foreground:#202124;--muted-foreground:#616874;--muted:#eef1f5;--blue:#235cac;--orange:#bb521e}
+                @media(prefers-color-scheme:dark){:root{--foreground:#eef1f5;--muted-foreground:#abb3c0;--muted:#292e38;--blue:#83b8ff;--orange:#ffa771}}
+                body{margin:0;padding:16px;font:16px system-ui,sans-serif;color:var(--foreground);background:Canvas}
+                select,button{font:inherit}
+                </style><body>""".trimIndent()
+            return SequenceInputStream(ByteArrayInputStream(shell.toByteArray(Charsets.UTF_8)), stream)
+        } catch (error: Exception) {
+            stream.close()
+            throw error
         }
     }
 

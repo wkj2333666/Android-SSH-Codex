@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
 import 'markdown_content.dart';
+import 'remote_file_actions.dart';
 
 const _gitDirectiveNames = {
   'git-stage',
@@ -34,14 +36,17 @@ final class ParsedCodexDirectiveContent {
   const ParsedCodexDirectiveContent({
     required this.markdown,
     required this.directives,
+    this.visualizations = const [],
   });
 
   final String markdown;
   final List<CodexGitDirective> directives;
+  final List<({String path})> visualizations;
 }
 
 ParsedCodexDirectiveContent parseCodexDirectiveContent(String input) {
   final directives = <CodexGitDirective>[];
+  final visualizations = <({String path})>[];
   final remaining = StringBuffer();
   String? fenceMarker;
   var fenceLength = 0;
@@ -66,6 +71,11 @@ ParsedCodexDirectiveContent parseCodexDirectiveContent(String input) {
       remaining.write(rawLine);
       continue;
     }
+    final visualization = _visualizationPath(line);
+    if (visualization != null) {
+      visualizations.add((path: visualization));
+      continue;
+    }
     final lineDirectives = _parseDirectiveLine(line);
     if (lineDirectives == null) {
       remaining.write(rawLine);
@@ -76,7 +86,37 @@ ParsedCodexDirectiveContent parseCodexDirectiveContent(String input) {
   return ParsedCodexDirectiveContent(
     markdown: remaining.toString(),
     directives: List.unmodifiable(directives),
+    visualizations: List.unmodifiable(visualizations),
   );
+}
+
+const _visualizeStart = '\uE200visualize\uE202';
+const _visualizeEnd = '\uE201';
+
+String? _visualizationPath(String line) {
+  if (line.startsWith('    ') || line.startsWith('\t')) return null;
+  final value = line.trim();
+  if (!value.startsWith(_visualizeStart) ||
+      !value.endsWith(_visualizeEnd) ||
+      value.length > 8192) {
+    return null;
+  }
+  try {
+    final payload = jsonDecode(
+        value.substring(_visualizeStart.length, value.length - 1));
+    if (payload is! Map || payload['path'] is! String) return null;
+    final path = payload['path'] as String;
+    if (!path.startsWith('/') ||
+        path.startsWith('//') ||
+        path.split('/').contains('..') ||
+        path.contains(RegExp(r'[\x00-\x1f\x7f]')) ||
+        !RegExp(r'\.html?$', caseSensitive: false).hasMatch(path)) {
+      return null;
+    }
+    return path;
+  } on FormatException {
+    return null;
+  }
 }
 
 final _linePattern = RegExp(r'[^\r\n]*(?:\r\n|\r|\n|$)');
@@ -161,7 +201,49 @@ class CodexDirectiveContent extends StatelessWidget {
             directives: parsed.directives,
             openExternalLink: openExternalLink,
           ),
+        for (final artifact in parsed.visualizations)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: _VisualizationCard(path: artifact.path),
+          ),
       ],
+    );
+  }
+}
+
+class _VisualizationCard extends StatelessWidget {
+  const _VisualizationCard({required this.path});
+
+  final String path;
+
+  @override
+  Widget build(BuildContext context) {
+    final actions = RemoteFileActions.maybeOf(context);
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ListTile(
+            dense: true,
+            leading: const Icon(Icons.insights_outlined),
+            title: const Text('Open visualization'),
+            subtitle: Text(path.split('/').last,
+                maxLines: 1, overflow: TextOverflow.ellipsis),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: actions?.previewVisualization == null
+                ? null
+                : () => unawaited(showRemoteVisualization(context, path)),
+          ),
+          if (actions != null)
+            TextButton.icon(
+              onPressed: () => unawaited(
+                  showRemoteFileDownload(context, Uri(path: path).toString())),
+              icon: const Icon(Icons.download_outlined),
+              label: const Text('Download HTML'),
+            ),
+        ],
+      ),
     );
   }
 }

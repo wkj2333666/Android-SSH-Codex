@@ -43,6 +43,13 @@ grep -Fq 'createBrowserToolbar()' "$preview_source"
 grep -Fq 'override fun doUpdateVisitedHistory' "$preview_source"
 grep -Fq 'menu.add("Open in browser")' "$preview_source"
 grep -Fq 'status.visibility = if (showingImage) View.VISIBLE else View.GONE' "$preview_source"
+# Executable visualization HTML must be served from its own intercepted
+# origin, not opened as a device file or loaded with the forwarded page's origin.
+grep -Fq '"openVisualization"' "$repo_root/tool/android/MainActivity.kt"
+grep -Fq 'UUID.randomUUID()}.visualization.invalid/' "$preview_source"
+grep -Fq 'request.url.toString() != visualizationUrl) return blocked()' "$preview_source"
+grep -Fq '"Content-Security-Policy" to VISUALIZATION_POLICY' "$preview_source"
+grep -Fq "default-src 'none'" "$preview_source"
 if grep -q 'addJavascriptInterface\|handler.proceed()' "$repo_root/tool/android/BrowserPreviewActivity.kt"; then
   echo 'Untrusted preview pages must not have an app bridge or bypass TLS' >&2
   exit 1

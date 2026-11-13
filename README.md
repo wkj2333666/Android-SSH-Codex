@@ -454,6 +454,11 @@ or address change, or an interception attempt.
 
 ### Download files and answer questions
 
+Tap **Open visualization** on a Codex visualization card to view a
+self-contained HTML artifact from the connected SSH host on Android. Preview
+supports files up to 8 MiB and does not load external or sibling resources.
+Use **Download HTML** to save the original file.
+
 Downloads show received bytes and a percentage when the remote file size is
 available. Errors distinguish missing files, directories, read permissions,
 transfer timeouts and phone save failures. Diagnostic logs record the failing
