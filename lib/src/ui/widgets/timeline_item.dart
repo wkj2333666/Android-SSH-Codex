@@ -520,7 +520,9 @@ class _AttachmentCard extends StatelessWidget {
 String _copyableMessageText(TaskItem item) {
   if (item.kind != TaskItemKind.agent) return item.text;
   final parsed = parseCodexDirectiveContent(item.text);
-  return parsed.directives.isEmpty ? item.text : parsed.markdown.trimRight();
+  return parsed.directives.isEmpty && parsed.visualizations.isEmpty
+      ? item.text
+      : parsed.markdown.trimRight();
 }
 
 Future<void> _copyMessage(

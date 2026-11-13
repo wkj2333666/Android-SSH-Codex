@@ -64,6 +64,17 @@ class MainActivity : FlutterActivity() {
                             startActivityForResult(Intent(this, BrowserPreviewActivity::class.java).putExtra("url", uri.toString()), BrowserPreviewActivity.PAGE_REQUEST)
                         }
                     }
+                    "openVisualization" -> {
+                        if (pageResult != null) result.error("BUSY", "A web preview is already open", null)
+                        else {
+                            val file = BrowserPreviewActivity.visualizationFile(this, call.argument<String>("path") ?: "")
+                            pageResult = result
+                            startActivityForResult(Intent(this, BrowserPreviewActivity::class.java)
+                                .putExtra("visualization", file.absolutePath)
+                                .putExtra("name", call.argument<String>("name") ?: "Visualization"),
+                                BrowserPreviewActivity.PAGE_REQUEST)
+                        }
+                    }
                     "openImage" -> {
                         if (imageResult != null) result.error("BUSY", "An image preview is already open", null)
                         else {

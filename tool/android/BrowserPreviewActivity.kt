@@ -1,17 +1,25 @@
 package io.github.wkj2333666.android_ssh_codex
 
 import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
 import android.net.Uri
 import android.net.http.SslError
 import android.os.Bundle
+import android.text.TextUtils
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.webkit.*
 import android.widget.*
 import java.io.ByteArrayInputStream
 import java.io.File
+import java.io.SequenceInputStream
+import java.util.UUID
 
 /** Unprivileged system WebView. Remote pages never receive a native bridge. */
 class BrowserPreviewActivity : Activity() {
@@ -19,6 +27,7 @@ class BrowserPreviewActivity : Activity() {
         const val IMAGE_REQUEST = 4106
         const val PAGE_REQUEST = 4107
         private const val IMAGE_ORIGIN = "https://image-preview.invalid"
+        private const val VISUALIZATION_POLICY = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; base-uri 'none'; form-action 'none'"
         fun validPage(uri: Uri): Boolean = uri.scheme in listOf("http", "https") &&
             uri.host == "127.0.0.1" && uri.userInfo == null &&
             (uri.port == -1 || uri.port in 1..65535)
@@ -30,14 +39,27 @@ class BrowserPreviewActivity : Activity() {
                 file.isFile && file.length() in 1L..(10L * 1024L * 1024L)) { "Invalid image cache" }
             return file
         }
+
+        fun visualizationFile(context: android.content.Context, path: String): File {
+            val file = File(path).canonicalFile
+            require(file.name == "payload.bin" &&
+                file.parentFile?.name?.startsWith("codex-download-") == true &&
+                file.parentFile?.parentFile == context.cacheDir.canonicalFile &&
+                file.isFile && file.length() in 1L..(8L * 1024L * 1024L)) { "Invalid visualization cache" }
+            return file
+        }
     }
 
     private var web: WebView? = null
     private var origin: Uri? = null
     private var image: File? = null
+    private var visualization: File? = null
+    private val visualizationUrl by lazy { "https://${UUID.randomUUID()}.visualization.invalid/" }
     private var fitScale = 1f
     private lateinit var status: TextView
     private lateinit var progress: ProgressBar
+    private var address: TextView? = null
+    private var historyBack: View? = null
 
     private fun sameOrigin(uri: Uri): Boolean {
         val start = origin ?: return false
@@ -48,7 +70,9 @@ class BrowserPreviewActivity : Activity() {
         super.onCreate(savedInstanceState)
         try {
             val path = intent.getStringExtra("path")
-            if (path != null) image = imageFile(this, path)
+            val html = intent.getStringExtra("visualization")
+            if (html != null) visualization = visualizationFile(this, html)
+            else if (path != null) image = imageFile(this, path)
             else {
                 origin = Uri.parse(intent.getStringExtra("url") ?: "")
                 require(validPage(origin!!))
@@ -63,9 +87,10 @@ class BrowserPreviewActivity : Activity() {
     }
 
     private fun createPreview() {
+        val showingImage = image != null
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.BLACK)
+            if (showingImage) setBackgroundColor(Color.BLACK)
         }
         root.setOnApplyWindowInsetsListener { view, insets ->
             @Suppress("DEPRECATION")
@@ -73,6 +98,36 @@ class BrowserPreviewActivity : Activity() {
                 insets.systemWindowInsetRight, insets.systemWindowInsetBottom)
             insets
         }
+        root.addView(if (showingImage) createImageToolbar() else createBrowserToolbar())
+        status = TextView(this).apply {
+            if (showingImage) setTextColor(Color.WHITE)
+            setPadding(dp(16), dp(6), dp(16), dp(6))
+            text = if (showingImage) (intent.getStringExtra("name") ?: "Image").take(200) else ""
+            maxLines = 3
+        }
+        status.visibility = if (showingImage) View.VISIBLE else View.GONE
+        root.addView(status)
+        val content = FrameLayout(this)
+        progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+            visibility = View.GONE
+        }
+        val view = WebView(this)
+        web = view
+        // Keep the system's default canvas for pages without a CSS background.
+        if (showingImage) view.setBackgroundColor(Color.BLACK)
+        configureWebView(view)
+        content.addView(view, FrameLayout.LayoutParams(-1, -1))
+        content.addView(progress, FrameLayout.LayoutParams(-1, dp(3), Gravity.TOP))
+        root.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
+        setContentView(root)
+        view.loadUrl(when {
+            showingImage -> "$IMAGE_ORIGIN/"
+            visualization != null -> visualizationUrl
+            else -> requireNotNull(origin).toString()
+        })
+    }
+
+    private fun createImageToolbar(): View {
         val toolbar = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
         fun button(label: String, action: () -> Unit) {
             toolbar.addView(Button(this).apply {
@@ -84,34 +139,139 @@ class BrowserPreviewActivity : Activity() {
             }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         }
         button("Close") { finish() }
-        if (image != null) {
-            button("−") { web?.zoomOut() }
-            button("+") { web?.zoomIn() }
-            button("Fit") {
-                @Suppress("DEPRECATION")
-                web?.let { if (it.scale > 0f) it.zoomBy(fitScale / it.scale) }
+        button("−") { web?.zoomOut() }
+        button("+") { web?.zoomIn() }
+        button("Fit") {
+            @Suppress("DEPRECATION")
+            web?.let { if (it.scale > 0f) it.zoomBy(fitScale / it.scale) }
+        }
+        return toolbar
+    }
+
+    private fun createBrowserToolbar(): View {
+        val toolbar = LinearLayout(this).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(4), dp(2), dp(4), dp(2))
+        }
+        fun addIcon(icon: BrowserIcon, label: String, action: (View) -> Unit): View {
+            val button = BrowserButton(icon, label).apply { setOnClickListener(action) }
+            toolbar.addView(button, LinearLayout.LayoutParams(dp(48), dp(48)))
+            return button
+        }
+        addIcon(BrowserIcon.CLOSE, "Close preview") { finish() }
+        historyBack = addIcon(BrowserIcon.BACK, "Previous page") { web?.goBack() }.apply {
+            isEnabled = false
+            alpha = 0.38f
+        }
+        val location = TextView(this).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.END
+            textSize = 14f
+            setPadding(dp(10), 0, dp(10), 0)
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = dp(18).toFloat()
+                setColor(Color.argb(24, Color.red(currentTextColor), Color.green(currentTextColor), Color.blue(currentTextColor)))
             }
-        } else {
-            button("Back") { goBack() }
-            button("Reload") { web?.reload() }
-            button("External") { openExternal(web?.url?.let(Uri::parse) ?: origin!!) }
         }
-        root.addView(toolbar)
-        status = TextView(this).apply {
-            setTextColor(Color.WHITE)
-            text = if (image != null) (intent.getStringExtra("name") ?: "Image").take(200)
-                else "${origin!!.authority}${origin!!.path.orEmpty()}"
-            maxLines = 2
+        address = location
+        toolbar.addView(location, LinearLayout.LayoutParams(0, dp(34), 1f))
+        if (visualization == null) updateBrowserChrome(null)
+        else location.text = (intent.getStringExtra("name") ?: "Visualization").take(200)
+        addIcon(BrowserIcon.RELOAD, "Reload page") {
+            status.visibility = View.GONE
+            web?.reload()
         }
-        root.addView(status)
-        progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal)
-        root.addView(progress, LinearLayout.LayoutParams(-1, 4))
-        val view = WebView(this)
-        web = view
-        view.setBackgroundColor(Color.BLACK)
+        if (visualization == null) addIcon(BrowserIcon.MENU, "Page actions") { anchor ->
+            PopupMenu(this, anchor).apply {
+                menu.add("Open in browser").setOnMenuItemClickListener {
+                    openExternal(currentPage())
+                    true
+                }
+                menu.add("Copy address").setOnMenuItemClickListener {
+                    val clipboard = getSystemService(ClipboardManager::class.java)
+                    clipboard?.setPrimaryClip(ClipData.newPlainText("Page address", currentPage().toString()))
+                    true
+                }
+                show()
+            }
+        }
+        return toolbar
+    }
+
+    private fun currentPage(): Uri = web?.url?.let(Uri::parse)?.takeIf(::sameOrigin) ?: requireNotNull(origin)
+
+    private fun updateBrowserChrome(url: String?) {
+        if (visualization != null) return
+        val location = address ?: return
+        val uri = url?.let(Uri::parse)?.takeIf(::sameOrigin) ?: currentPage()
+        location.text = "${uri.authority}${uri.encodedPath.orEmpty().takeUnless { it == "/" }.orEmpty()}"
+        historyBack?.apply {
+            isEnabled = web?.canGoBack() == true
+            alpha = if (isEnabled) 1f else 0.38f
+        }
+    }
+
+    private fun showStatus(message: String) {
+        status.text = message
+        status.visibility = View.VISIBLE
+    }
+
+    private fun dp(value: Int): Int = (resources.displayMetrics.density * value + 0.5f).toInt()
+
+    private enum class BrowserIcon { CLOSE, BACK, RELOAD, MENU }
+
+    private inner class BrowserButton(private val icon: BrowserIcon, label: String) : ImageButton(this@BrowserPreviewActivity) {
+        private val ink = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = TextView(this@BrowserPreviewActivity).currentTextColor
+            strokeWidth = 1.8f
+            strokeCap = Paint.Cap.ROUND
+        }
+
+        init {
+            contentDescription = label
+            tooltipText = label
+            val ripple = TypedValue()
+            if (theme.resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, ripple, true)) {
+                setBackgroundResource(ripple.resourceId)
+            }
+        }
+
+        override fun onDraw(canvas: Canvas) {
+            super.onDraw(canvas)
+            val size = dp(22).toFloat()
+            canvas.save()
+            canvas.translate((width - size) / 2f, (height - size) / 2f)
+            canvas.scale(size / 24f, size / 24f)
+            ink.style = Paint.Style.STROKE
+            when (icon) {
+                BrowserIcon.CLOSE -> {
+                    canvas.drawLine(6f, 6f, 18f, 18f, ink)
+                    canvas.drawLine(6f, 18f, 18f, 6f, ink)
+                }
+                BrowserIcon.BACK -> {
+                    canvas.drawLine(5f, 12f, 19f, 12f, ink)
+                    canvas.drawLine(5f, 12f, 11f, 6f, ink)
+                    canvas.drawLine(5f, 12f, 11f, 18f, ink)
+                }
+                BrowserIcon.RELOAD -> {
+                    canvas.drawArc(5f, 5f, 19f, 19f, 25f, 302f, false, ink)
+                    canvas.drawLine(18f, 8f, 18f, 3f, ink)
+                    canvas.drawLine(18f, 8f, 13f, 8f, ink)
+                }
+                BrowserIcon.MENU -> {
+                    ink.style = Paint.Style.FILL
+                    for (x in 5..19 step 7) canvas.drawCircle(x.toFloat(), 12f, 1.5f, ink)
+                }
+            }
+            canvas.restore()
+        }
+    }
+
+    private fun configureWebView(view: WebView) {
         view.settings.apply {
             javaScriptEnabled = image == null
-            domStorageEnabled = image == null
+            domStorageEnabled = image == null && visualization == null
             allowFileAccess = false
             allowContentAccess = false
             @Suppress("DEPRECATION")
@@ -136,20 +296,40 @@ class BrowserPreviewActivity : Activity() {
             override fun onPermissionRequest(request: PermissionRequest) { request.deny() }
         }
         view.webViewClient = object : WebViewClient() {
+            override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
+                if (image == null) status.visibility = View.GONE
+            }
+            override fun doUpdateVisitedHistory(view: WebView, url: String, isReload: Boolean) {
+                updateBrowserChrome(url)
+            }
             @Suppress("DEPRECATION")
             override fun onPageFinished(view: WebView, url: String) {
                 if (image != null) fitScale = view.scale
+                else updateBrowserChrome(url)
             }
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val uri = request.url
                 if (image != null) return uri.toString() != "$IMAGE_ORIGIN/"
+                if (visualization != null) return uri.toString() != visualizationUrl
                 if (sameOrigin(uri)) return false
                 // Redirects cannot silently launch another app.
                 if (request.isForMainFrame && request.hasGesture()) openExternal(uri)
-                else if (request.isForMainFrame) status.text = "Navigation blocked. Use External to open in a browser."
+                else if (request.isForMainFrame) showStatus("Navigation blocked. Use Open in browser in the page menu.")
                 return true
             }
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                visualization?.let { file ->
+                    if (request.method != "GET" || request.url.toString() != visualizationUrl) return blocked()
+                    return try {
+                        WebResourceResponse("text/html", "UTF-8", 200, "OK",
+                            mapOf("Content-Security-Policy" to VISUALIZATION_POLICY,
+                                "Cache-Control" to "no-store",
+                                "X-Content-Type-Options" to "nosniff"),
+                            visualizationDocument(file))
+                    } catch (_: Exception) {
+                        blocked()
+                    }
+                }
                 if (image == null) return null
                 val url = request.url.toString()
                 if (request.method == "GET" && url == "$IMAGE_ORIGIN/") {
@@ -168,10 +348,10 @@ class BrowserPreviewActivity : Activity() {
             }
             override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) {
                 handler.cancel()
-                status.text = "TLS certificate rejected. Check the service certificate or use External."
+                showStatus("TLS certificate rejected. Check the service certificate.")
             }
             override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
-                if (request.isForMainFrame) status.text = "Page could not load (${error.errorCode}). Check SSH forwarding and reload."
+                if (request.isForMainFrame) showStatus("Could not load page (${error.errorCode}). Check SSH forwarding, then reload.")
             }
             override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
                 setResult(RESULT_CANCELED)
@@ -180,11 +360,36 @@ class BrowserPreviewActivity : Activity() {
             }
         }
         view.setDownloadListener { _, _, _, _, _ ->
-            Toast.makeText(this, "Use External to download this web page’s files", Toast.LENGTH_LONG).show()
+            val hint = if (visualization == null) "Use Open in browser in the page menu to download files"
+                else "Use Download HTML from the conversation"
+            Toast.makeText(this, hint, Toast.LENGTH_LONG).show()
         }
-        root.addView(view, LinearLayout.LayoutParams(-1, 0, 1f))
-        setContentView(root)
-        view.loadUrl(if (image != null) "$IMAGE_ORIGIN/" else origin.toString())
+    }
+
+    private fun visualizationDocument(file: File): java.io.InputStream {
+        val stream = file.inputStream().buffered()
+        try {
+            val start = ByteArray(1024)
+            stream.mark(start.size)
+            val length = stream.read(start).coerceAtLeast(0)
+            stream.reset()
+            val prefix = String(start, 0, length, Charsets.UTF_8).trimStart('\uFEFF', ' ', '\t', '\n', '\r')
+            if (prefix.startsWith("<!doctype", ignoreCase = true) ||
+                prefix.startsWith("<html", ignoreCase = true) ||
+                prefix.startsWith("<head", ignoreCase = true)) return stream
+            // Codex also emits HTML fragments, normally wrapped by its desktop host.
+            val shell = """<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+                <style>
+                :root{color-scheme:light dark;--foreground:#202124;--muted-foreground:#616874;--muted:#eef1f5;--blue:#235cac;--orange:#bb521e}
+                @media(prefers-color-scheme:dark){:root{--foreground:#eef1f5;--muted-foreground:#abb3c0;--muted:#292e38;--blue:#83b8ff;--orange:#ffa771}}
+                body{margin:0;padding:16px;font:16px system-ui,sans-serif;color:var(--foreground);background:Canvas}
+                select,button{font:inherit}
+                </style><body>""".trimIndent()
+            return SequenceInputStream(ByteArrayInputStream(shell.toByteArray(Charsets.UTF_8)), stream)
+        } catch (error: Exception) {
+            stream.close()
+            throw error
+        }
     }
 
     private fun blocked() = WebResourceResponse("text/plain", "UTF-8", 403, "Blocked", emptyMap(), ByteArrayInputStream(byteArrayOf()))

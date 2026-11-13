@@ -12,6 +12,7 @@ class RemoteFileActions extends InheritedWidget {
       {required this.download,
       this.downloadWithProgress,
       this.previewVideo,
+      this.previewVisualization,
       this.cancelDownload,
       required super.child,
       super.key});
@@ -19,9 +20,8 @@ class RemoteFileActions extends InheritedWidget {
   final VoidCallback? cancelDownload;
   final Future<bool> Function(String,
       {void Function(DownloadProgress)? onProgress})? downloadWithProgress;
-  final Future<bool> Function(String,
-      {void Function(DownloadProgress)? onProgress,
-      VoidCallback? onReady})? previewVideo;
+  final RemoteFilePreview? previewVideo;
+  final RemoteFilePreview? previewVisualization;
 
   static RemoteFileActions? maybeOf(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<RemoteFileActions>();
@@ -31,15 +31,29 @@ class RemoteFileActions extends InheritedWidget {
       download != oldWidget.download ||
       downloadWithProgress != oldWidget.downloadWithProgress ||
       previewVideo != oldWidget.previewVideo ||
+      previewVisualization != oldWidget.previewVisualization ||
       cancelDownload != oldWidget.cancelDownload;
 }
 
+typedef RemoteFilePreview = Future<bool> Function(String path,
+    {void Function(DownloadProgress)? onProgress, VoidCallback? onReady});
+
 /// Only a tap starts an SSH transfer. Videos are streamed to bounded temporary
 /// disk storage, then opened in the phone's player without a save-location step.
-Future<void> showRemoteVideoPreview(BuildContext context, String path) async {
+Future<void> showRemoteVideoPreview(BuildContext context, String path) =>
+    _showRemotePreview(context, path, visualization: false);
+
+Future<void> showRemoteVisualization(BuildContext context, String path) =>
+    _showRemotePreview(context, path, visualization: true);
+
+Future<void> _showRemotePreview(BuildContext context, String path,
+    {required bool visualization}) async {
   final actions = RemoteFileActions.maybeOf(context);
-  final preview = actions?.previewVideo;
+  final preview =
+      visualization ? actions?.previewVisualization : actions?.previewVideo;
   if (preview == null) return;
+  final failure =
+      visualization ? 'Could not open visualization' : 'Video playback failed';
   final cancel = actions?.cancelDownload;
   final messenger = ScaffoldMessenger.of(context);
   final progress = ValueNotifier(const DownloadProgress(0, null));
@@ -58,7 +72,7 @@ Future<void> showRemoteVideoPreview(BuildContext context, String path) async {
     builder: (context) => PopScope(
       canPop: false,
       child: AlertDialog(
-        title: const Text('Loading video'),
+        title: Text(visualization ? 'Loading visualization' : 'Loading video'),
         content: ValueListenableBuilder<DownloadProgress>(
           valueListenable: progress,
           builder: (context, value, _) {
@@ -94,16 +108,19 @@ Future<void> showRemoteVideoPreview(BuildContext context, String path) async {
   );
   unawaited(navigator.push(route));
   try {
-    await preview(path, onProgress: (value) {
+    final opened = await preview(path, onProgress: (value) {
       if (!finished && !ready) progress.value = value;
     }, onReady: hideLoading);
+    if (visualization && !opened) throw StateError(failure);
   } catch (error) {
     if (!context.mounted) return;
     messenger.hideCurrentSnackBar();
     messenger.showSnackBar(SnackBar(
         content: Text(error is PlatformException
-            ? error.message ?? 'Video playback failed (${error.code}).'
-            : downloadErrorMessage(error))));
+            ? error.message ?? '$failure (${error.code}).'
+            : visualization && error is StateError
+                ? error.message
+                : downloadErrorMessage(error))));
   } finally {
     finished = true;
     hideLoading();

@@ -30,6 +30,26 @@ test -s "$fixture/app/src/main/res/xml/preview_network_security.xml"
 grep -Fq '<domain includeSubdomains="false">127.0.0.1</domain>' "$fixture/app/src/main/res/xml/preview_network_security.xml"
 grep -Fq 'android:networkSecurityConfig="@xml/preview_network_security"' "$fixture/first.xml"
 grep -Fq 'allowFileAccess = false' "$repo_root/tool/android/BrowserPreviewActivity.kt"
+preview_source="$repo_root/tool/android/BrowserPreviewActivity.kt"
+# Only image previews set a custom background; pages keep the WebView default.
+if grep -E 'setBackgroundColor\(' "$preview_source" |
+    grep -Fv 'if (showingImage)'; then
+  echo 'Web previews must not override the default background' >&2
+  exit 1
+fi
+grep -Fq 'if (showingImage) view.setBackgroundColor(Color.BLACK)' "$preview_source"
+# The browser chrome should have its own compact controls and current address.
+grep -Fq 'createBrowserToolbar()' "$preview_source"
+grep -Fq 'override fun doUpdateVisitedHistory' "$preview_source"
+grep -Fq 'menu.add("Open in browser")' "$preview_source"
+grep -Fq 'status.visibility = if (showingImage) View.VISIBLE else View.GONE' "$preview_source"
+# Executable visualization HTML must be served from its own intercepted
+# origin, not opened as a device file or loaded with the forwarded page's origin.
+grep -Fq '"openVisualization"' "$repo_root/tool/android/MainActivity.kt"
+grep -Fq 'UUID.randomUUID()}.visualization.invalid/' "$preview_source"
+grep -Fq 'request.url.toString() != visualizationUrl) return blocked()' "$preview_source"
+grep -Fq '"Content-Security-Policy" to VISUALIZATION_POLICY' "$preview_source"
+grep -Fq "default-src 'none'" "$preview_source"
 if grep -q 'addJavascriptInterface\|handler.proceed()' "$repo_root/tool/android/BrowserPreviewActivity.kt"; then
   echo 'Untrusted preview pages must not have an app bridge or bypass TLS' >&2
   exit 1
