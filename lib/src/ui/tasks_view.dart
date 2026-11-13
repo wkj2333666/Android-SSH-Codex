@@ -141,7 +141,7 @@ class _TaskList extends StatelessWidget {
                       decoration: const InputDecoration(
                         labelText: 'Remote working directory (optional)',
                         helperText:
-                            'Leave blank to use the server default. No project is created.',
+                            'Leave blank for a private session directory on the SSH host.',
                         helperMaxLines: 2,
                         prefixIcon: Icon(Icons.folder_outlined),
                       ),

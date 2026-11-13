@@ -75,6 +75,17 @@ void main() {
     expect(projects.single.cwd, '/home/wkj/projects/cscg');
   });
 
+  test('anonymous workspace directories do not become discovered projects', () {
+    const workspace =
+        '/home/user/.local/share/android-ssh-codex/workspaces/session.Abc123Xyz456';
+    final projects = mergeRemoteProjects(
+      hostId: 'pi',
+      existing: const [],
+      discoveredCwds: const [workspace, '$workspace/nested', '/srv/mobile'],
+    );
+    expect(projects.map((project) => project.cwd), ['/srv/mobile']);
+  });
+
   test('projects follow latest task activity instead of alphabetic order', () {
     final projects = mergeRemoteProjects(
       hostId: 'pi',

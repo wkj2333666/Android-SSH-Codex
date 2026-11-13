@@ -1,3 +1,5 @@
+import '../transport/anonymous_workspace.dart';
+
 final class RemoteProject {
   const RemoteProject({
     required this.id,
@@ -104,6 +106,7 @@ List<RemoteProject> mergeRemoteProjects({
   for (final rawCwd in discoveredCwds) {
     final cwd = normalizeRemoteCwd(rawCwd);
     if (cwd.isEmpty ||
+        isAnonymousWorkspacePath(cwd) ||
         projectsByCwd.values.any((project) => project.containsCwd(cwd))) {
       continue;
     }
