@@ -102,8 +102,8 @@ String? _visualizationPath(String line) {
     return null;
   }
   try {
-    final payload = jsonDecode(
-        value.substring(_visualizeStart.length, value.length - 1));
+    final payload =
+        jsonDecode(value.substring(_visualizeStart.length, value.length - 1));
     if (payload is! Map || payload['path'] is! String) return null;
     final path = payload['path'] as String;
     if (!path.startsWith('/') ||

@@ -4,8 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const _path = '/remote/.codex/visualizations/grasp audit.html';
-const _directive =
-    '\uE200visualize\uE202{"path":"$_path","mode":"wide"}\uE201';
+const _directive = '\uE200visualize\uE202{"path":"$_path","mode":"wide"}\uE201';
 
 void main() {
   test('only standalone native HTML directives become visualization cards', () {

@@ -75,8 +75,7 @@ class SftpDownloadSource implements DownloadSource {
   final int maxBytes;
   bool _closed = false;
 
-  static Future<SftpDownloadSource> open(
-      SshConnection connection, String path,
+  static Future<SftpDownloadSource> open(SshConnection connection, String path,
       {int maxBytes = maxDownloadBytes}) async {
     SftpClient? sftp;
     try {
@@ -101,8 +100,7 @@ class SftpDownloadSource implements DownloadSource {
     final attrs = await _untilClosed(connection.client, file.stat());
     final size = attrs.size;
     if (!attrs.isFile || size == null || size < 0 || size > maxBytes) {
-      throw FileDownloadException(
-          'Download requires a regular file of at most '
+      throw FileDownloadException('Download requires a regular file of at most '
           '${maxBytes == maxDownloadBytes ? '1 GiB' : '${maxBytes ~/ 1048576} MiB'}.');
     }
     final result = await _untilClosed(connection.client,
