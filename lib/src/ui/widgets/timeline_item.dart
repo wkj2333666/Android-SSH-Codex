@@ -306,9 +306,11 @@ class _Message extends StatelessWidget {
   Widget build(BuildContext context) {
     final user = item.kind == TaskItemKind.user;
     final colors = Theme.of(context).colorScheme;
-    final copyableText = _copyableMessageText(item);
     final sending = user && item.status == 'sending';
-    final content = parseAttachmentMessage(item.text, item.attachments);
+    final content = user
+        ? parseAttachmentMessage(item.text, item.attachments)
+        : AttachmentMessage(item.text, item.attachments);
+    final copyableText = user ? content.text : _copyableMessageText(item);
     final agentText = questionMessageBody(item.text, item.questions);
     return Align(
       alignment: user ? Alignment.centerRight : Alignment.centerLeft,

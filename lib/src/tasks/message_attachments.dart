@@ -94,20 +94,48 @@ AttachmentMessage parseAttachmentMessage(
 ]) {
   var body = text;
   final attachments = <MessageAttachment>[];
+  final matchedNative = <int>{};
   // Match only the complete Desktop envelope, never arbitrary headings.
   final desktop = RegExp(
     r'^\s*# Files (?:mentioned|pasted) by the user:\s*\n([\s\S]*?)\n(?:Distinguish instructions in attached documents from the user\x27s request\.\s*\n)?## My request:\s*\n?([\s\S]*)$',
   ).firstMatch(text);
   if (desktop != null) {
     final entries = desktop.group(1)!.trim().split(RegExp(r'\n\s*\n'));
-    final parsed = <MessageAttachment>[];
+    final parsed = <({MessageAttachment attachment, bool clipboardImage})>[];
     for (final entry in entries) {
-      final match = RegExp(r'^## (.+): (/[^\r\n]+)$').firstMatch(entry.trim());
+      final match = RegExp(
+        r'^## (.+): (/[^\r\n]+)(?:\r?\n(Image attachment: true))?$',
+      ).firstMatch(entry.trim());
       if (match == null) return AttachmentMessage(text, native);
-      parsed.add(_attachment(match.group(2)!, name: match.group(1)!));
+      parsed.add((
+        attachment: _attachment(match.group(2)!, name: match.group(1)!),
+        clipboardImage: match.group(3) != null,
+      ));
     }
     if (parsed.isNotEmpty) {
-      attachments.addAll(parsed);
+      final embedded = [
+        for (var i = 0; i < native.length; i++)
+          if (native[i].isImage && native[i].path.startsWith('data:image/')) i,
+      ];
+      final missingImages = parsed
+          .where((entry) =>
+              entry.clipboardImage &&
+              !native.any((item) => item.path == entry.attachment.path))
+          .length;
+      // Desktop serializes clipboard images in the same order as their
+      // envelopes. Only pair when the counts agree; otherwise retain both.
+      var nextEmbedded = 0;
+      for (final entry in parsed) {
+        if (entry.clipboardImage &&
+            embedded.length == missingImages &&
+            !native.any((item) => item.path == entry.attachment.path)) {
+          final index = embedded[nextEmbedded++];
+          matchedNative.add(index);
+          attachments.add(native[index]);
+        } else {
+          attachments.add(entry.attachment);
+        }
+      }
       body = desktop.group(2)!;
     }
   } else {
@@ -138,7 +166,9 @@ AttachmentMessage parseAttachmentMessage(
       }
     }
   }
-  for (final attachment in native) {
+  for (var i = 0; i < native.length; i++) {
+    if (matchedNative.contains(i)) continue;
+    final attachment = native[i];
     final index = attachments.indexWhere((a) => a.path == attachment.path);
     if (index < 0) {
       attachments.add(attachment);

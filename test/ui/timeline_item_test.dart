@@ -12,6 +12,34 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('Desktop image messages display and copy only the user request',
+      (tester) async {
+    String? copied;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: TimelineItemView(
+          item: const TaskItem(
+            id: 'desktop-image',
+            kind: TaskItemKind.user,
+            text: '# Files mentioned by the user:\n\n'
+                '## photo.png: /tmp/photo.png\nImage attachment: true\n\n'
+                '## My request:\n怎么启动',
+            attachments: [
+              MessageAttachment(path: '/tmp/photo.png', isImage: true),
+            ],
+          ),
+          copyText: (text) async => copied = text,
+        ),
+      ),
+    ));
+    expect(find.text('photo.png'), findsOneWidget);
+    expect(find.text('怎么启动'), findsOneWidget);
+    expect(find.textContaining('Image attachment: true'), findsNothing);
+    await tester.tap(find.byTooltip('Copy message'));
+    await tester.pump();
+    expect(copied, '怎么启动');
+  });
+
   testWidgets('message turn actions share the compact copy row',
       (tester) async {
     var invoked = false;
