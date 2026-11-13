@@ -38,6 +38,11 @@ if grep -E 'setBackgroundColor\(' "$preview_source" |
   exit 1
 fi
 grep -Fq 'if (showingImage) view.setBackgroundColor(Color.BLACK)' "$preview_source"
+# The browser chrome should have its own compact controls and current address.
+grep -Fq 'createBrowserToolbar()' "$preview_source"
+grep -Fq 'override fun doUpdateVisitedHistory' "$preview_source"
+grep -Fq 'menu.add("Open in browser")' "$preview_source"
+grep -Fq 'status.visibility = if (showingImage) View.VISIBLE else View.GONE' "$preview_source"
 if grep -q 'addJavascriptInterface\|handler.proceed()' "$repo_root/tool/android/BrowserPreviewActivity.kt"; then
   echo 'Untrusted preview pages must not have an app bridge or bypass TLS' >&2
   exit 1

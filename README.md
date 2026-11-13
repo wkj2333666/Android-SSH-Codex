@@ -40,9 +40,10 @@ host/port as seen **from the SSH server** and a phone port; `0` means Auto,
 which tries the remote port first and then chooses a free port. Fixed-port
 conflicts show an error instead of silently changing your selection. Copy the
 actual local address or open its HTTP/HTTPS URL from the rule's menu.
-On Android, **Open in app** uses the system WebView, with Back, Reload and
-External controls. **Open in external browser** remains available in the ports
-menu. Localhost links in chat also prefer this in-app preview, falling back to
+On Android, **Open in app** uses the system WebView with a compact address bar,
+page history and reload. The page menu can copy the address or open it in the
+system browser. **Open in external browser** also remains available in the ports
+menu. Localhost links in chat prefer the in-app preview, falling back to
 the external browser if WebView is unavailable. No browser engine is bundled.
 The preview has no SSH/native JavaScript bridge or local-file access; only the
 forwarded origin stays inside it. Use the external browser for web downloads,
