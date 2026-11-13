@@ -36,8 +36,8 @@ void main() {
       expect(result.text.trim(), '怎么启动');
       expect(result.attachments.single, same(picture));
     }
-    expect(parseAttachmentMessage(text).attachments.single.label,
-        'clipboard.png');
+    expect(
+        parseAttachmentMessage(text).attachments.single.label, 'clipboard.png');
   });
 
   test('Desktop documents and multiple clipboard images remain distinct', () {
