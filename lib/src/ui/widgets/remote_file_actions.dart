@@ -20,8 +20,8 @@ class RemoteFileActions extends InheritedWidget {
   final VoidCallback? cancelDownload;
   final Future<bool> Function(String,
       {void Function(DownloadProgress)? onProgress})? downloadWithProgress;
-  final _PreviewFile? previewVideo;
-  final _PreviewFile? previewVisualization;
+  final RemoteFilePreview? previewVideo;
+  final RemoteFilePreview? previewVisualization;
 
   static RemoteFileActions? maybeOf(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<RemoteFileActions>();
@@ -35,7 +35,7 @@ class RemoteFileActions extends InheritedWidget {
       cancelDownload != oldWidget.cancelDownload;
 }
 
-typedef _PreviewFile = Future<bool> Function(String path,
+typedef RemoteFilePreview = Future<bool> Function(String path,
     {void Function(DownloadProgress)? onProgress, VoidCallback? onReady});
 
 /// Only a tap starts an SSH transfer. Videos are streamed to bounded temporary
