@@ -1,5 +1,5 @@
+import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,8 +10,9 @@ import '../attachments.dart';
 import 'preview_browser.dart';
 import 'widgets/remote_file_actions.dart';
 
-RemoteFilePreview documentPreviewFor(BuildContext context,
-        AppController controller, {String? cwd}) =>
+RemoteFilePreview documentPreviewFor(
+        BuildContext context, AppController controller,
+        {String? cwd}) =>
     (link, {onProgress, onReady}) => controller.previewDocument(
           link,
           cwd: cwd,
@@ -21,8 +22,8 @@ RemoteFilePreview documentPreviewFor(BuildContext context,
             onReady?.call();
             await Navigator.of(context, rootNavigator: true).push<void>(
               MaterialPageRoute(
-                builder: (_) => DocumentPreview(
-                    file: file, name: name, kind: kind),
+                builder: (_) =>
+                    DocumentPreview(file: file, name: name, kind: kind),
               ),
             );
             return true;
@@ -43,7 +44,7 @@ class DocumentPreview extends StatefulWidget {
 
 class _DocumentPreviewState extends State<DocumentPreview> {
   String? _text;
-  Uint8List? _image;
+  MemoryImage? _image;
   int _page = 0;
   int _count = 0;
   bool _loading = false;
@@ -81,10 +82,11 @@ class _DocumentPreviewState extends State<DocumentPreview> {
         }
         final image = await png.readAsBytes();
         if (!mounted) return;
+        _evictPage();
         setState(() {
           _page = page;
           _count = count;
-          _image = image;
+          _image = MemoryImage(image);
         });
       }
     } on Exception catch (error) {
@@ -99,6 +101,17 @@ class _DocumentPreviewState extends State<DocumentPreview> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  void _evictPage() {
+    final image = _image;
+    if (image != null) unawaited(image.evict());
+  }
+
+  @override
+  void dispose() {
+    _evictPage();
+    super.dispose();
   }
 
   Future<void> _save() async {
@@ -160,9 +173,11 @@ class _DocumentPreviewState extends State<DocumentPreview> {
                             key: ValueKey(_page),
                             maxScale: 4,
                             child: SizedBox.expand(
-                              child: Image.memory(_image!,
-                                  fit: BoxFit.contain,
-                                  semanticLabel: 'PDF page ${_page + 1}'),
+                              child: Image(
+                                image: _image!,
+                                fit: BoxFit.contain,
+                                semanticLabel: 'PDF page ${_page + 1}',
+                              ),
                             ),
                           ),
               ),
@@ -172,8 +187,9 @@ class _DocumentPreviewState extends State<DocumentPreview> {
                   children: [
                     IconButton(
                         tooltip: 'Previous page',
-                        onPressed:
-                            _loading || _page == 0 ? null : () => _load(_page - 1),
+                        onPressed: _loading || _page == 0
+                            ? null
+                            : () => _load(_page - 1),
                         icon: const Icon(Icons.chevron_left)),
                     Text('${_page + 1} / $_count'),
                     IconButton(

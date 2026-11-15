@@ -41,9 +41,33 @@ enum DocumentPreviewKind {
     final extension = name.contains('.') ? name.split('.').last : '';
     if (extension == 'pdf') return pdf;
     if (const {
-          'txt', 'md', 'markdown', 'log', 'csv', 'tsv', 'json', 'jsonl',
-          'yaml', 'yml', 'toml', 'ini', 'xml', 'sql', 'py', 'sh', 'dart',
-          'js', 'ts', 'css', 'kt', 'java', 'rs', 'go', 'c', 'h', 'cpp',
+          'txt',
+          'md',
+          'markdown',
+          'log',
+          'csv',
+          'tsv',
+          'json',
+          'jsonl',
+          'yaml',
+          'yml',
+          'toml',
+          'ini',
+          'xml',
+          'sql',
+          'py',
+          'sh',
+          'dart',
+          'js',
+          'ts',
+          'css',
+          'kt',
+          'java',
+          'rs',
+          'go',
+          'c',
+          'h',
+          'cpp',
         }.contains(extension) ||
         const {'readme', 'license', 'makefile', 'dockerfile'}.contains(name)) {
       return text;

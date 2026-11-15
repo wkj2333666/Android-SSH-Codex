@@ -22,7 +22,8 @@ void main() {
             return true;
           },
           child: const MarkdownContent(
-              text: '[Text](notes.txt) · [PDF](sandbox:/mnt/report.PDF)'),
+              text: '[Text](notes.txt) · [PDF](sandbox:/mnt/report.PDF) '
+                  '· [Archive](/tmp/data.zip)'),
         ),
       ),
     ));
@@ -32,6 +33,9 @@ void main() {
     }
     expect(opened, ['notes.txt', 'sandbox:/mnt/report.PDF']);
     expect(find.text('Download remote file?'), findsNothing);
+    await tester.tap(find.text('Archive'));
+    await tester.pumpAndSettle();
+    expect(find.text('Download remote file?'), findsOneWidget);
   });
 
   testWidgets(
