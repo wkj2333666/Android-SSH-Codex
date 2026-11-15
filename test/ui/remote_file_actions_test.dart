@@ -22,8 +22,8 @@ void main() {
             return true;
           },
           child: const MarkdownContent(
-              text: '[Text](notes.txt) · [PDF](sandbox:/mnt/report.PDF) '
-                  '· [Archive](/tmp/data.zip)'),
+              text: '[Text](notes.txt)\n\n[PDF](sandbox:/mnt/report.PDF)\n\n'
+                  '[Archive](/tmp/data.zip)'),
         ),
       ),
     ));
