@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import '../../attachment_media.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 
@@ -426,6 +428,9 @@ class _AttachmentCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final thisContext = context;
+    final document = attachment.path.startsWith('/') &&
+        DocumentPreviewKind.forPath(attachment.path) != null &&
+        RemoteFileActions.maybeOf(context)?.previewDocument != null;
     return Card(
       margin: const EdgeInsets.only(bottom: 6),
       child: Column(
@@ -459,8 +464,12 @@ class _AttachmentCard extends StatelessWidget {
                 : attachment.isVideo
                     ? 'Video attachment'
                     : 'File attachment'),
-            trailing: const Icon(Icons.info_outline, size: 18),
-            onTap: () => showDialog<void>(
+            trailing: Icon(document ? Icons.chevron_right : Icons.info_outline,
+                size: 18),
+            onTap: document
+                ? () => unawaited(showRemoteDocument(
+                    context, Uri(path: attachment.path).toString()))
+                : () => showDialog<void>(
               context: context,
               builder: (context) => AlertDialog(
                 title: Text(attachment.label,

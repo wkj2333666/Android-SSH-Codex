@@ -28,3 +28,26 @@ String? videoAttachmentMimeType(String name, String? mimeType) {
     'm2ts': 'video/mp2t',
   }[extension];
 }
+
+enum DocumentPreviewKind {
+  text(256 * 1024),
+  pdf(64 * 1024 * 1024);
+
+  const DocumentPreviewKind(this.maxBytes);
+  final int maxBytes;
+
+  static DocumentPreviewKind? forPath(String path) {
+    final name = path.split('/').last.toLowerCase();
+    final extension = name.contains('.') ? name.split('.').last : '';
+    if (extension == 'pdf') return pdf;
+    if (const {
+          'txt', 'md', 'markdown', 'log', 'csv', 'tsv', 'json', 'jsonl',
+          'yaml', 'yml', 'toml', 'ini', 'xml', 'sql', 'py', 'sh', 'dart',
+          'js', 'ts', 'css', 'kt', 'java', 'rs', 'go', 'c', 'h', 'cpp',
+        }.contains(extension) ||
+        const {'readme', 'license', 'makefile', 'dockerfile'}.contains(name)) {
+      return text;
+    }
+    return null;
+  }
+}

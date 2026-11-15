@@ -454,6 +454,12 @@ or address change, or an interception attempt.
 
 ### Download files and answer questions
 
+On Android, supported remote text files (such as TXT, logs, Markdown, CSV and
+source files) and PDFs open directly from a conversation link or attachment
+card. Text is selectable and displayed as plain UTF-8 (up to 256 KiB). PDF
+preview (up to 64 MiB) supports page controls and pinch zoom. Use the download
+button to save the original file.
+
 Tap **Open visualization** on a Codex visualization card to view a
 self-contained HTML artifact from the connected SSH host on Android. Preview
 supports files up to 8 MiB and does not load external or sibling resources.

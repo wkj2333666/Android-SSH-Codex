@@ -9,6 +9,31 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('remote text and PDF links open the document preview',
+      (tester) async {
+    final opened = <String>[];
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: RemoteFileActions(
+          download: (_) async => throw StateError('Unexpected download'),
+          previewDocument: (path, {onProgress, onReady}) async {
+            opened.add(path);
+            onReady?.call();
+            return true;
+          },
+          child: const MarkdownContent(
+              text: '[Text](notes.txt) · [PDF](sandbox:/mnt/report.PDF)'),
+        ),
+      ),
+    ));
+    for (final label in ['Text', 'PDF']) {
+      await tester.tap(find.text(label));
+      await tester.pumpAndSettle();
+    }
+    expect(opened, ['notes.txt', 'sandbox:/mnt/report.PDF']);
+    expect(find.text('Download remote file?'), findsNothing);
+  });
+
   testWidgets(
       'ordinary Markdown video links open the shared save-capable player',
       (tester) async {

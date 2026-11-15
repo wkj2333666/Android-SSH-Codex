@@ -21,6 +21,7 @@ class MainActivity : FlutterActivity() {
     private var videoResult: MethodChannel.Result? = null
     private var imageResult: MethodChannel.Result? = null
     private var pageResult: MethodChannel.Result? = null
+    private var pdfPageClient: PdfPageClient? = null
     private var exportSnapshot: String? = null
     private var attachmentPicker: AttachmentPicker? = null
     private var attachmentDownloads: AttachmentDownloads? = null
@@ -49,12 +50,19 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         attachmentPicker = AttachmentPicker(this)
         attachmentDownloads = AttachmentDownloads(this)
+        pdfPageClient = PdfPageClient(applicationContext)
         connectionDiagnostics = ConnectionRuntime.observer()
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger,
             "android_ssh_codex/previews").setMethodCallHandler { call, result ->
             try {
                 when (call.method) {
                     "cacheDirectory" -> result.success(cacheDir.absolutePath)
+                    "renderPdfPage" -> {
+                        val client = pdfPageClient
+                        if (client == null) result.error("ACTIVITY_CLOSED", "PDF preview closed.", null)
+                        else client.render(call.argument<String>("path").orEmpty(),
+                            call.argument<Int>("page") ?: -1, result)
+                    }
                     "openPage" -> {
                         val uri = android.net.Uri.parse(call.argument<String>("url") ?: "")
                         require(BrowserPreviewActivity.validPage(uri))
@@ -277,6 +285,8 @@ class MainActivity : FlutterActivity() {
         DiagnosticLog.record(this, "engine.cleanup")
         connectionDiagnostics = null
         attachmentPicker?.close()
+        pdfPageClient?.close()
+        pdfPageClient = null
         attachmentDownloads?.close()
         attachmentDownloads = null
         attachmentPicker = null
