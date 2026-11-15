@@ -13,6 +13,8 @@ class RemoteFileActions extends InheritedWidget {
       this.downloadWithProgress,
       this.previewVideo,
       this.previewVisualization,
+      this.previewDocument,
+      this.documentWorkingDirectory,
       this.cancelDownload,
       required super.child,
       super.key});
@@ -22,6 +24,8 @@ class RemoteFileActions extends InheritedWidget {
       {void Function(DownloadProgress)? onProgress})? downloadWithProgress;
   final RemoteFilePreview? previewVideo;
   final RemoteFilePreview? previewVisualization;
+  final RemoteFilePreview? previewDocument;
+  final String? documentWorkingDirectory;
 
   static RemoteFileActions? maybeOf(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<RemoteFileActions>();
@@ -32,6 +36,8 @@ class RemoteFileActions extends InheritedWidget {
       downloadWithProgress != oldWidget.downloadWithProgress ||
       previewVideo != oldWidget.previewVideo ||
       previewVisualization != oldWidget.previewVisualization ||
+      previewDocument != oldWidget.previewDocument ||
+      documentWorkingDirectory != oldWidget.documentWorkingDirectory ||
       cancelDownload != oldWidget.cancelDownload;
 }
 
@@ -41,19 +47,34 @@ typedef RemoteFilePreview = Future<bool> Function(String path,
 /// Only a tap starts an SSH transfer. Videos are streamed to bounded temporary
 /// disk storage, then opened in the phone's player without a save-location step.
 Future<void> showRemoteVideoPreview(BuildContext context, String path) =>
-    _showRemotePreview(context, path, visualization: false);
+    _showRemotePreview(context, path, _PreviewKind.video);
 
 Future<void> showRemoteVisualization(BuildContext context, String path) =>
-    _showRemotePreview(context, path, visualization: true);
+    _showRemotePreview(context, path, _PreviewKind.visualization);
 
-Future<void> _showRemotePreview(BuildContext context, String path,
-    {required bool visualization}) async {
+Future<void> showRemoteDocument(BuildContext context, String path) =>
+    _showRemotePreview(context, path, _PreviewKind.document);
+
+enum _PreviewKind { video, visualization, document }
+
+Future<void> _showRemotePreview(
+    BuildContext context, String path, _PreviewKind kind) async {
   final actions = RemoteFileActions.maybeOf(context);
-  final preview =
-      visualization ? actions?.previewVisualization : actions?.previewVideo;
+  final preview = switch (kind) {
+    _PreviewKind.video => actions?.previewVideo,
+    _PreviewKind.visualization => actions?.previewVisualization,
+    _PreviewKind.document => actions?.previewDocument,
+  };
   if (preview == null) return;
-  final failure =
-      visualization ? 'Could not open visualization' : 'Video playback failed';
+  final documentCwd = actions?.documentWorkingDirectory;
+  final downloadPath = kind == _PreviewKind.document && documentCwd != null
+      ? remoteFilePath(path, documentCwd)
+      : null;
+  final failure = switch (kind) {
+    _PreviewKind.video => 'Video playback failed',
+    _PreviewKind.visualization => 'Could not open visualization',
+    _PreviewKind.document => 'Could not open document',
+  };
   final cancel = actions?.cancelDownload;
   final messenger = ScaffoldMessenger.of(context);
   final progress = ValueNotifier(const DownloadProgress(0, null));
@@ -72,7 +93,7 @@ Future<void> _showRemotePreview(BuildContext context, String path,
     builder: (context) => PopScope(
       canPop: false,
       child: AlertDialog(
-        title: Text(visualization ? 'Loading visualization' : 'Loading video'),
+        title: Text('Loading ${kind.name}'),
         content: ValueListenableBuilder<DownloadProgress>(
           valueListenable: progress,
           builder: (context, value, _) {
@@ -111,14 +132,30 @@ Future<void> _showRemotePreview(BuildContext context, String path,
     final opened = await preview(path, onProgress: (value) {
       if (!finished && !ready) progress.value = value;
     }, onReady: hideLoading);
-    if (visualization && !opened) throw StateError(failure);
+    if (kind != _PreviewKind.video && !opened) throw StateError(failure);
   } catch (error) {
     if (!context.mounted) return;
     messenger.hideCurrentSnackBar();
     messenger.showSnackBar(SnackBar(
+        action: kind == _PreviewKind.document &&
+                error is! DownloadCancelled &&
+                (documentCwd == null || downloadPath != null)
+            ? SnackBarAction(
+                label: 'Download',
+                onPressed: () {
+                  if (context.mounted) {
+                    unawaited(showRemoteFileDownload(
+                        context,
+                        downloadPath == null
+                            ? path
+                            : Uri(path: downloadPath).toString()));
+                  }
+                },
+              )
+            : null,
         content: Text(error is PlatformException
             ? error.message ?? '$failure (${error.code}).'
-            : visualization && error is StateError
+            : kind != _PreviewKind.video && error is StateError
                 ? error.message
                 : downloadErrorMessage(error))));
   } finally {

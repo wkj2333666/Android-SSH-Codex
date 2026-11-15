@@ -25,6 +25,8 @@ cmp "$repo_root/tool/android/AttachmentDownloads.kt" "$fixture/app/src/main/kotl
 cmp "$repo_root/tool/android/VideoPreviewActivity.kt" "$fixture/app/src/main/kotlin/io/github/wkj2333666/android_ssh_codex/VideoPreviewActivity.kt"
 grep -Fq 'android:name=".VideoPreviewActivity"' "$fixture/first.xml"
 grep -Fq 'android:name=".BrowserPreviewActivity"' "$fixture/first.xml"
+grep -Fq 'android:name=".PdfPageService" android:exported="false" android:isolatedProcess="true"' "$fixture/first.xml"
+cmp "$repo_root/tool/android/PdfPageService.kt" "$fixture/app/src/main/kotlin/io/github/wkj2333666/android_ssh_codex/PdfPageService.kt"
 cmp "$repo_root/tool/android/BrowserPreviewActivity.kt" "$fixture/app/src/main/kotlin/io/github/wkj2333666/android_ssh_codex/BrowserPreviewActivity.kt"
 test -s "$fixture/app/src/main/res/xml/preview_network_security.xml"
 grep -Fq '<domain includeSubdomains="false">127.0.0.1</domain>' "$fixture/app/src/main/res/xml/preview_network_security.xml"

@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'connection_keep_alive.dart';
 import 'connection_network.dart';
 import 'attachments.dart';
+import 'attachment_media.dart';
 import 'diagnostics.dart';
 import 'profiles/host_profile.dart';
 import 'profiles/profile_store.dart';
@@ -1950,12 +1951,13 @@ final class AppController extends ChangeNotifier {
       {required Future<bool> Function(File file, String name) openFile,
       String purpose = 'download',
       int maxBytes = downloads.maxDownloadBytes,
+      String? cwd,
       void Function(downloads.DownloadProgress)? onProgress}) async {
     if (_downloadingFile) throw StateError('A download is already active');
     if (!Attachments.supported) throw UnsupportedError('Android download only');
     final ssh = _ssh;
     final profile = selectedHost;
-    final path = downloads.remoteFilePath(link, selectedTask?.cwd ?? '');
+    final path = downloads.remoteFilePath(link, cwd ?? selectedTask?.cwd ?? '');
     if (ssh == null || profile == null || path == null) {
       throw StateError('Remote file unavailable');
     }
@@ -2021,6 +2023,27 @@ final class AppController extends ChangeNotifier {
         _downloadCancellation = null;
       }
     }
+  }
+
+  Future<bool> previewDocument(
+    String link, {
+    String? cwd,
+    required Future<bool> Function(
+      File file,
+      String name,
+      DocumentPreviewKind kind,
+    ) open,
+    void Function(downloads.DownloadProgress)? onProgress,
+  }) {
+    final path = downloads.remoteFilePath(link, cwd ?? selectedTask?.cwd ?? '');
+    final kind = path == null ? null : DocumentPreviewKind.forPath(path);
+    if (kind == null) throw StateError('Unsupported document preview');
+    return _receiveRemoteFile(link,
+        cwd: cwd,
+        purpose: 'document-preview',
+        maxBytes: kind.maxBytes,
+        onProgress: onProgress,
+        openFile: (file, name) => open(file, name, kind));
   }
 
   Future<TaskMessageDisposition> sendPrompt(

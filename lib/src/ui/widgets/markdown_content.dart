@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'formula_markdown.dart';
 import 'inline_attachment_image.dart';
 import 'remote_file_actions.dart';
+import '../../attachment_media.dart';
 import '../../tasks/message_attachments.dart';
 import '../../transport/file_download.dart';
 import '../../ports/port_forward.dart';
@@ -102,12 +103,15 @@ class MarkdownContent extends StatelessWidget {
         ),
       },
       onTapLink: (_, href, __) {
-        if (href != null &&
-            RemoteFileActions.maybeOf(context) != null &&
-            remoteFilePath(href, '/') != null) {
-          if (MessageAttachment(path: remoteFilePath(href, '/')!).isVideo &&
-              RemoteFileActions.maybeOf(context)?.previewVideo != null) {
+        final actions = RemoteFileActions.maybeOf(context);
+        final path = href == null ? null : remoteFilePath(href, '/');
+        if (href != null && actions != null && path != null) {
+          if (MessageAttachment(path: path).isVideo &&
+              actions.previewVideo != null) {
             unawaited(showRemoteVideoPreview(context, href));
+          } else if (actions.previewDocument != null &&
+              DocumentPreviewKind.forPath(path) != null) {
+            unawaited(showRemoteDocument(context, href));
           } else {
             unawaited(showRemoteFileDownload(context, href));
           }

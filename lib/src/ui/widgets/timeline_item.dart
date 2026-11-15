@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import '../../attachment_media.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 
@@ -426,6 +428,9 @@ class _AttachmentCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final thisContext = context;
+    final document = attachment.path.startsWith('/') &&
+        DocumentPreviewKind.forPath(attachment.path) != null &&
+        RemoteFileActions.maybeOf(context)?.previewDocument != null;
     return Card(
       margin: const EdgeInsets.only(bottom: 6),
       child: Column(
@@ -459,59 +464,66 @@ class _AttachmentCard extends StatelessWidget {
                 : attachment.isVideo
                     ? 'Video attachment'
                     : 'File attachment'),
-            trailing: const Icon(Icons.info_outline, size: 18),
-            onTap: () => showDialog<void>(
-              context: context,
-              builder: (context) => AlertDialog(
-                title: Text(attachment.label,
-                    maxLines: 2, overflow: TextOverflow.ellipsis),
-                content: SingleChildScrollView(
-                  child: SelectableText(attachment.path.isEmpty
-                      ? 'Image location is not available in this conversation.'
-                      : attachment.path.startsWith('data:')
-                          ? 'Embedded image'
-                          : attachment.path),
-                ),
-                actions: [
-                  if (attachment.path.startsWith('/') &&
-                      RemoteFileActions.maybeOf(thisContext) != null)
-                    TextButton(
-                        onPressed: () => unawaited(showRemoteFileDownload(
-                            thisContext, attachment.path)),
-                        child: const Text('Download')),
-                  if (attachment.isImage &&
-                      ((attachment.path.startsWith('/') && loadImage != null) ||
-                          attachment.path.startsWith('data:image/')))
-                    TextButton(
-                      onPressed: () async {
-                        final bytes =
-                            await loadAttachmentPreview(attachment, loadImage);
-                        if (!context.mounted) return;
-                        if (bytes == null) {
-                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                              content: Text(
-                                  'Could not load image. Reconnect and try again (maximum 10 MiB).')));
-                          return;
-                        }
-                        await showImagePreview(context, bytes,
-                            label: attachment.label);
-                      },
-                      child: const Text('Preview image'),
+            trailing: Icon(document ? Icons.chevron_right : Icons.info_outline,
+                size: 18),
+            onTap: document
+                ? () => unawaited(showRemoteDocument(
+                    context, Uri(path: attachment.path).toString()))
+                : () => showDialog<void>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: Text(attachment.label,
+                            maxLines: 2, overflow: TextOverflow.ellipsis),
+                        content: SingleChildScrollView(
+                          child: SelectableText(attachment.path.isEmpty
+                              ? 'Image location is not available in this conversation.'
+                              : attachment.path.startsWith('data:')
+                                  ? 'Embedded image'
+                                  : attachment.path),
+                        ),
+                        actions: [
+                          if (attachment.path.startsWith('/') &&
+                              RemoteFileActions.maybeOf(thisContext) != null)
+                            TextButton(
+                                onPressed: () => unawaited(
+                                    showRemoteFileDownload(
+                                        thisContext, attachment.path)),
+                                child: const Text('Download')),
+                          if (attachment.isImage &&
+                              ((attachment.path.startsWith('/') &&
+                                      loadImage != null) ||
+                                  attachment.path.startsWith('data:image/')))
+                            TextButton(
+                              onPressed: () async {
+                                final bytes = await loadAttachmentPreview(
+                                    attachment, loadImage);
+                                if (!context.mounted) return;
+                                if (bytes == null) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                          content: Text(
+                                              'Could not load image. Reconnect and try again (maximum 10 MiB).')));
+                                  return;
+                                }
+                                await showImagePreview(context, bytes,
+                                    label: attachment.label);
+                              },
+                              child: const Text('Preview image'),
+                            ),
+                          if (attachment.path.isNotEmpty &&
+                              !attachment.path.startsWith('data:'))
+                            TextButton(
+                              onPressed: () => unawaited(_copyMessage(
+                                  context, attachment.path, copyText)),
+                              child: const Text('Copy path'),
+                            ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('Close'),
+                          ),
+                        ],
+                      ),
                     ),
-                  if (attachment.path.isNotEmpty &&
-                      !attachment.path.startsWith('data:'))
-                    TextButton(
-                      onPressed: () => unawaited(
-                          _copyMessage(context, attachment.path, copyText)),
-                      child: const Text('Copy path'),
-                    ),
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Close'),
-                  ),
-                ],
-              ),
-            ),
           ),
         ],
       ),

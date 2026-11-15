@@ -13,6 +13,7 @@ import '../tasks/task_message_queue.dart';
 import '../tasks/task_reducer.dart';
 import '../tasks/task_draft.dart';
 import 'composer_completion.dart';
+import 'document_preview.dart';
 import 'task_timeline_render_cache.dart';
 import 'timeline_entries.dart';
 import 'turn_settings_picker.dart';
@@ -234,6 +235,11 @@ class _TaskViewState extends State<TaskView> {
                 previewVisualization: Attachments.supported
                     ? widget.controller.previewVisualization
                     : null,
+                previewDocument: Attachments.supported
+                    ? documentPreviewFor(context, widget.controller,
+                        cwd: widget.task.cwd)
+                    : null,
+                documentWorkingDirectory: widget.task.cwd,
                 cancelDownload: widget.controller.cancelDownload,
                 child: timeline)),
         if (widget.controller.userInputRequests
@@ -1435,6 +1441,10 @@ class _SubagentHistoryState extends State<_SubagentHistory> {
               previewVisualization: Attachments.supported
                   ? controller.previewVisualization
                   : null,
+              previewDocument: Attachments.supported
+                  ? documentPreviewFor(context, controller, cwd: '')
+                  : null,
+              documentWorkingDirectory: '',
               cancelDownload: controller.cancelDownload,
               child: TaskTimeline(
                 items: _items,

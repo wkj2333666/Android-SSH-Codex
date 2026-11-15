@@ -21,10 +21,14 @@ fi
 if ! grep -Fq 'android:networkSecurityConfig=' "$manifest"; then
   sed -i '/<application/a\        android:networkSecurityConfig="@xml/preview_network_security"' "$manifest"
 fi
+if ! grep -Fq 'android:name=".PdfPageService"' "$manifest"; then
+  sed -i '/<\/application>/i\        <service android:name=".PdfPageService" android:exported="false" android:isolatedProcess="true" />' "$manifest"
+fi
 mkdir -p "$android_root/app/src/main/res/xml"
 cp "$template_root/preview_network_security.xml" "$android_root/app/src/main/res/xml/"
 mkdir -p "$kotlin_dir"
 cp "$template_root/BrowserPreviewActivity.kt" "$kotlin_dir/"
+cp "$template_root/PdfPageService.kt" "$kotlin_dir/"
 sed -i 's/android:stopWithTask="true"/android:stopWithTask="false"/' "$manifest"
 mkdir -p "$kotlin_dir" "$android_root/app/src/main/res/drawable"
 cp "$template_root/MainActivity.kt" "$template_root/ConnectionService.kt" "$template_root/DiagnosticLog.kt" "$kotlin_dir/"
