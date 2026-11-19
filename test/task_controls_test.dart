@@ -60,7 +60,8 @@ void main() {
                   'id': 'old',
                   'status': 'failed',
                   'error': {
-                    'message': 'This request was blocked by our safety systems.',
+                    'message':
+                        'This request was blocked by our safety systems.',
                     'codexErrorInfo': 'misalignmentPolicyViolation',
                   },
                 }
@@ -81,7 +82,8 @@ void main() {
     expect(controller.hasTurnIssuePopup('task', 'old'), isFalse);
   });
 
-  test('retrying errors stay quiet and terminal notifications pop once per turn',
+  test(
+      'retrying errors stay quiet and terminal notifications pop once per turn',
       () async {
     final transport = Transport();
     final rpc = JsonRpcClient(transport)..start();

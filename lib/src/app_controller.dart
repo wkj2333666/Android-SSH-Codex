@@ -622,6 +622,7 @@ final class AppController extends ChangeNotifier {
       _selectedTaskId = null;
       _taskCatalog.clear();
       _cachedProjectTaskIds.clear();
+      _turnIssues.clear();
     }
     _workspaceHostId = profile.id;
     _goals.clear();

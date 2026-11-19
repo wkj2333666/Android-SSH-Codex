@@ -49,7 +49,9 @@ final class TaskTurnIssues {
     }
     _store(
       threadId,
-      previous?.turnId == issue.turnId ? issue.withDetailsFrom(previous!) : issue,
+      previous?.turnId == issue.turnId
+          ? issue.withDetailsFrom(previous!)
+          : issue,
     );
   }
 

@@ -108,7 +108,8 @@ class _TaskTurnIssueNoticeState extends State<TaskTurnIssueNotice>
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           child: Row(
             children: [
-              Icon(Icons.error_outline, size: 16, color: colors.onErrorContainer),
+              Icon(Icons.error_outline,
+                  size: 16, color: colors.onErrorContainer),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -121,7 +122,8 @@ class _TaskTurnIssueNoticeState extends State<TaskTurnIssueNotice>
                       ?.copyWith(color: colors.onErrorContainer),
                 ),
               ),
-              Icon(Icons.chevron_right, size: 18, color: colors.onErrorContainer),
+              Icon(Icons.chevron_right,
+                  size: 18, color: colors.onErrorContainer),
             ],
           ),
         ),

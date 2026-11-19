@@ -53,7 +53,8 @@ class _CopyFeedbackButtonState extends State<CopyFeedbackButton> {
   @override
   Widget build(BuildContext context) {
     final feedback = switch (_copied) {
-      true => '${widget.label[0].toUpperCase()}${widget.label.substring(1)} copied',
+      true =>
+        '${widget.label[0].toUpperCase()}${widget.label.substring(1)} copied',
       false => 'Could not copy ${widget.label}',
       null => 'Copy ${widget.label}',
     };

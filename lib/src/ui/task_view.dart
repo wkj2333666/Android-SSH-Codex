@@ -227,7 +227,8 @@ class _TaskViewState extends State<TaskView> {
             key: ValueKey((controller.selectedHostId, task.id)),
             issue: issue,
             autoShow: controller.hasTurnIssuePopup(task.id, issue.turnId),
-            takePopup: () => controller.takeTurnIssuePopup(task.id, issue.turnId),
+            takePopup: () =>
+                controller.takeTurnIssuePopup(task.id, issue.turnId),
           ),
         if (!widget.controller.isConnected)
           const Padding(
