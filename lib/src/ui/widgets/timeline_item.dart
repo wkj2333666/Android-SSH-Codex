@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import '../../tasks/task_reducer.dart';
 import '../../tasks/message_attachments.dart';
 import 'codex_directive_content.dart';
+import 'copy_feedback_button.dart';
 import 'markdown_content.dart';
 import 'inline_attachment_image.dart';
 import 'remote_file_actions.dart';
@@ -383,15 +384,9 @@ class _Message extends StatelessWidget {
                     SizedBox(
                       width: 28,
                       height: 24,
-                      child: IconButton(
-                        tooltip: 'Copy message',
-                        padding: EdgeInsets.zero,
-                        visualDensity: VisualDensity.compact,
-                        iconSize: 16,
-                        onPressed: () => unawaited(
-                          _copyMessage(context, copyableText, copyText),
-                        ),
-                        icon: const Icon(Icons.copy_all_outlined),
+                      child: CopyFeedbackButton(
+                        label: 'message',
+                        onCopy: () => copyText(copyableText),
                       ),
                     ),
                   if (onTurnAction != null)
@@ -512,10 +507,10 @@ class _AttachmentCard extends StatelessWidget {
                             ),
                           if (attachment.path.isNotEmpty &&
                               !attachment.path.startsWith('data:'))
-                            TextButton(
-                              onPressed: () => unawaited(_copyMessage(
-                                  context, attachment.path, copyText)),
-                              child: const Text('Copy path'),
+                            CopyFeedbackButton(
+                              label: 'path',
+                              textButton: true,
+                              onCopy: () => copyText(attachment.path),
                             ),
                           TextButton(
                             onPressed: () => Navigator.pop(context),
@@ -537,25 +532,6 @@ String _copyableMessageText(TaskItem item) {
   return parsed.directives.isEmpty && parsed.visualizations.isEmpty
       ? item.text
       : parsed.markdown.trimRight();
-}
-
-Future<void> _copyMessage(
-  BuildContext context,
-  String text,
-  MessageTextCopier copyText,
-) async {
-  try {
-    await copyText(text);
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Message copied')),
-    );
-  } catch (_) {
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Could not copy message.')),
-    );
-  }
 }
 
 class _ActivityCard extends StatelessWidget {

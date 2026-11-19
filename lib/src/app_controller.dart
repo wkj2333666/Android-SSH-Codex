@@ -31,6 +31,7 @@ import 'tasks/task_message_queue.dart';
 import 'tasks/task_operation_lock.dart';
 import 'tasks/task_reducer.dart';
 import 'tasks/task_refresh_lock.dart';
+import 'tasks/task_turn_issue.dart';
 import 'transport/anonymous_workspace.dart';
 import 'transport/codex_daemon.dart';
 import 'transport/connection_setup.dart';
@@ -312,6 +313,7 @@ final class AppController extends ChangeNotifier {
   String? _selectedProjectId;
   String? _selectedTaskId;
   final Map<String, String> _activeTurnIds = {};
+  final _turnIssues = TaskTurnIssues();
   final Map<String, DateTime> _projectActivityByCwd = {};
   String? _error;
   HostKeyChallenge? _hostKeyChallenge;
@@ -503,6 +505,14 @@ final class AppController extends ChangeNotifier {
       ? null
       : _taskReducer.state.tasks[_selectedTaskId];
 
+  TaskTurnIssue? turnIssueForTask(String taskId) => _turnIssues.forTask(taskId);
+
+  bool hasTurnIssuePopup(String taskId, String turnId) =>
+      _turnIssues.hasPopup(taskId, turnId);
+
+  bool takeTurnIssuePopup(String taskId, String turnId) =>
+      _turnIssues.takePopup(taskId, turnId);
+
   bool get isConnected => _connectionPhase == RemoteConnectionPhase.connected;
 
   bool isTaskDetailLoading(String taskId) =>
@@ -567,6 +577,7 @@ final class AppController extends ChangeNotifier {
       _selectedProjectId = null;
       _taskCatalog.clear();
       _cachedProjectTaskIds.clear();
+      _turnIssues.clear();
       _epoch = _taskReducer.beginConnection();
     }
     for (final key in _drafts.keys.where((key) => key.$1 == id).toList()) {
@@ -611,6 +622,7 @@ final class AppController extends ChangeNotifier {
       _selectedTaskId = null;
       _taskCatalog.clear();
       _cachedProjectTaskIds.clear();
+      _turnIssues.clear();
     }
     _workspaceHostId = profile.id;
     _goals.clear();
@@ -1297,6 +1309,7 @@ final class AppController extends ChangeNotifier {
       _agentDeltaBatcher.flush();
       _taskReducer.mergeLatestItems(epoch, taskId, page.items,
           readToken: readToken);
+      unawaited(_restoreLatestTurnIssue(api, epoch, taskId));
       if (subscriptionError != null) {
         _historyLoadState.fail(token, subscriptionError);
       }
@@ -1305,6 +1318,28 @@ final class AppController extends ChangeNotifier {
       _historyLoadState.fail(token, _friendlyError(exception));
     }
     notifyListeners();
+  }
+
+  Future<void> _restoreLatestTurnIssue(
+    CodexRemoteApi api,
+    int epoch,
+    String taskId,
+  ) async {
+    final revision = _turnIssues.revision;
+    try {
+      final issue = await api.readLatestTurnIssue(taskId);
+      if (issue == null ||
+          api != _api ||
+          epoch != _epoch ||
+          taskId != _selectedTaskId ||
+          revision != _turnIssues.revision) {
+        return;
+      }
+      _turnIssues.restore(taskId, issue);
+      notifyListeners();
+    } catch (_) {
+      // Turn metadata is optional; loading the timeline must remain separate.
+    }
   }
 
   Future<void> loadOlderSelectedTaskContext() async {
@@ -2999,6 +3034,7 @@ final class AppController extends ChangeNotifier {
       final id = params['threadId'] as String?;
       if (id != null) {
         _agentDeltaBatcher.clear();
+        _turnIssues.clearTask(id);
         _taskReducer.replaceItems(_epoch, id, const []);
         if (_selectedTaskId == id) unawaited(_loadInitialTaskContext(id));
       }
@@ -3032,11 +3068,17 @@ final class AppController extends ChangeNotifier {
         (notification.params['thread'] is Map
             ? (notification.params['thread'] as Map)['id'] as String?
             : null);
+    final issue = CodexRemoteApi.parseTurnIssue(method, params);
+    if (threadId != null && issue != null) {
+      _turnIssues.record(threadId, issue,
+          popup: _selectedTaskId == threadId && _section == AppSection.tasks);
+    }
     var activeTurnChanged = false;
     if (notification.method == 'turn/started') {
       final turn = notification.params['turn'];
       final turnId = turn is Map ? turn['id'] as String? : null;
       if (threadId != null && turnId != null) {
+        _turnIssues.turnStarted();
         activeTurnChanged = _activeTurnIds[threadId] != turnId;
         _activeTurnIds[threadId] = turnId;
       }
@@ -3046,10 +3088,11 @@ final class AppController extends ChangeNotifier {
       unawaited(refreshTasks());
       unawaited(_flushQueuedPrompt(threadId));
     }
-    if (hasRemoteNotificationVisibleChange(
-      event: event,
-      activeTurnChanged: activeTurnChanged,
-    )) {
+    if ((threadId != null && issue != null) ||
+        hasRemoteNotificationVisibleChange(
+          event: event,
+          activeTurnChanged: activeTurnChanged,
+        )) {
       notifyListeners();
     }
   }

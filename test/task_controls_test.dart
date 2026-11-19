@@ -50,6 +50,92 @@ TaskSnapshot task() => TaskSnapshot(
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test('restores the latest failed turn without opening a historical popup',
+      () async {
+    final transport = Transport()
+      ..handle = (call) => call['method'] == 'thread/turns/list'
+          ? {
+              'data': [
+                {
+                  'id': 'old',
+                  'status': 'failed',
+                  'error': {
+                    'message':
+                        'This request was blocked by our safety systems.',
+                    'codexErrorInfo': 'misalignmentPolicyViolation',
+                  },
+                }
+              ],
+            }
+          : {};
+    final rpc = JsonRpcClient(transport)..start();
+    final controller =
+        AppController.connectedForTesting(rpc: rpc, cachedTasks: [task()]);
+    addTearDown(() async {
+      controller.dispose();
+      await rpc.close();
+    });
+    await controller.selectTask('task');
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.turnIssueForTask('task')?.code,
+        'misalignmentPolicyViolation');
+    expect(controller.hasTurnIssuePopup('task', 'old'), isFalse);
+  });
+
+  test(
+      'retrying errors stay quiet and terminal notifications pop once per turn',
+      () async {
+    final transport = Transport();
+    final rpc = JsonRpcClient(transport)..start();
+    final controller =
+        AppController.connectedForTesting(rpc: rpc, cachedTasks: [task()]);
+    addTearDown(() async {
+      controller.dispose();
+      await rpc.close();
+    });
+    await controller.selectTask('task');
+    final error = {
+      'threadId': 'task',
+      'turnId': 'new',
+      'error': {'message': 'Codex reply failed'},
+    };
+    transport.notify('error', {...error, 'willRetry': true});
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.turnIssueForTask('task'), isNull);
+
+    transport.notify('error', {...error, 'willRetry': false});
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.takeTurnIssuePopup('task', 'new'), isTrue);
+    transport.notify('turn/completed', {
+      'threadId': 'task',
+      'turn': {
+        'id': 'new',
+        'status': 'failed',
+        'error': {
+          'message': 'Codex reply failed',
+          'codexErrorInfo': {
+            'httpConnectionFailed': {'httpStatusCode': 503}
+          },
+          'additionalDetails': 'Service unavailable',
+        },
+      },
+    });
+    await Future<void>.delayed(Duration.zero);
+    final issue = controller.turnIssueForTask('task')!;
+    expect(issue.code, 'httpConnectionFailed');
+    expect(issue.details, 'Service unavailable');
+    expect(controller.takeTurnIssuePopup('task', 'new'), isFalse);
+
+    transport.notify('error', {
+      ...error,
+      'threadId': 'other',
+      'willRetry': false,
+    });
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.turnIssueForTask('other'), isNotNull);
+    expect(controller.hasTurnIssuePopup('other', 'new'), isFalse);
+  });
+
   test('inherits remote Fast without overriding it on new turns', () async {
     final transport = Transport()
       ..handle = (call) => switch (call['method']) {
