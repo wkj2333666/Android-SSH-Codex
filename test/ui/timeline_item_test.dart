@@ -425,7 +425,8 @@ void main() {
     await tester.pump();
 
     expect(copied, 'final answer = 42;\n');
-    expect(find.text('Code copied'), findsOneWidget);
+    expect(find.byTooltip('Code copied'), findsOneWidget);
+    expect(find.byType(SnackBar), findsNothing);
   });
 
   testWidgets('Markdown links open only safe web URLs', (tester) async {
@@ -566,22 +567,38 @@ void main() {
     String? copied;
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
-        body: TimelineItemView(
-          item: const TaskItem(
-            id: 'user-copy',
-            kind: TaskItemKind.user,
-            text: 'Copy **this** message',
-          ),
-          copyText: (text) async => copied = text,
+        body: Column(
+          children: [
+            TimelineItemView(
+              item: const TaskItem(
+                id: 'user-copy',
+                kind: TaskItemKind.user,
+                text: 'Copy **this** message',
+              ),
+              copyText: (text) async => copied = text,
+            ),
+            const TextField(autofocus: true),
+          ],
         ),
       ),
     ));
+    await tester.pump();
+    final composer = find.byType(EditableText);
+    expect(tester.widget<EditableText>(composer).focusNode.hasFocus, isTrue);
 
     await tester.tap(find.byTooltip('Copy message'));
     await tester.pump();
 
     expect(copied, 'Copy **this** message');
-    expect(find.text('Message copied'), findsOneWidget);
+    expect(find.byTooltip('Message copied'), findsOneWidget);
+    expect(find.byIcon(Icons.check), findsOneWidget);
+    expect(find.byType(SnackBar), findsNothing);
+    expect(tester.widget<EditableText>(composer).focusNode.hasFocus, isTrue);
+    tester.testTextInput.enterText('Still typing');
+    await tester.pump();
+    expect(find.text('Still typing'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 2));
+    expect(find.byTooltip('Copy message'), findsOneWidget);
   });
 
   testWidgets('agent copy excludes hidden Git directives', (tester) async {
@@ -604,7 +621,8 @@ void main() {
     await tester.pump();
 
     expect(copied, '**Published**');
-    expect(find.text('Message copied'), findsOneWidget);
+    expect(find.byTooltip('Message copied'), findsOneWidget);
+    expect(find.byType(SnackBar), findsNothing);
   });
 
   testWidgets('reasoning is collapsed until explicitly expanded',

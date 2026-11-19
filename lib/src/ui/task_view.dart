@@ -21,6 +21,7 @@ import 'widgets/timeline_item.dart';
 import 'widgets/user_input_panel.dart';
 import 'widgets/remote_file_actions.dart';
 import 'widgets/task_question_panel.dart';
+import 'widgets/task_turn_issue_notice.dart';
 import 'task_manager.dart';
 import 'preview_browser.dart';
 import 'widgets/inline_attachment_image.dart';
@@ -169,6 +170,8 @@ class _TaskViewState extends State<TaskView> {
   Widget build(BuildContext context) {
     final task = widget.task;
     final draft = _draft;
+    final controller = widget.controller;
+    final issue = controller.turnIssueForTask(task.id);
     final compact = MediaQuery.sizeOf(context).width < 800;
     final approvals = widget.controller.approvals
         .where((approval) => approval.threadId == task.id)
@@ -219,6 +222,13 @@ class _TaskViewState extends State<TaskView> {
           onCommand: _handleCommand,
         ),
         const Divider(height: 1),
+        if (issue != null)
+          TaskTurnIssueNotice(
+            key: ValueKey((controller.selectedHostId, task.id)),
+            issue: issue,
+            autoShow: controller.hasTurnIssuePopup(task.id, issue.turnId),
+            takePopup: () => controller.takeTurnIssuePopup(task.id, issue.turnId),
+          ),
         if (!widget.controller.isConnected)
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 12, vertical: 2),

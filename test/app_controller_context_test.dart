@@ -17,10 +17,13 @@ final class _Transport implements RpcTransport {
   @override
   void send(String message) {
     final request = jsonDecode(message) as Map<String, dynamic>;
-    if (request['method'] == 'thread/goal/get') {
-      reply(request, {'goal': null});
-    } else {
-      outgoing.add(request);
+    switch (request['method']) {
+      case 'thread/goal/get':
+        reply(request, {'goal': null});
+      case 'thread/turns/list':
+        reply(request, {'data': []});
+      default:
+        outgoing.add(request);
     }
   }
 

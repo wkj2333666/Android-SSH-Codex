@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import '../tasks/task_reducer.dart';
+import '../tasks/task_turn_issue.dart';
 import '../tasks/message_attachments.dart';
 import '../projects/remote_project.dart';
 import 'json_rpc_client.dart';
@@ -366,20 +367,32 @@ final class CodexRemoteApi {
   }
 
   Future<String?> readActiveTurnId(String threadId) async {
-    final result = _map(await _rpc.request('thread/turns/list', {
+    final turn = await _readLatestTurn(threadId);
+    return _isActiveTurnStatus(turn['status']) ? turn['id'] as String? : null;
+  }
+
+  Future<TaskTurnIssue?> readLatestTurnIssue(String threadId) async =>
+      _parseFailedTurn(await _readLatestTurn(
+        threadId,
+        timeout: const Duration(seconds: 10),
+      ));
+
+  Future<Map<String, dynamic>> _readLatestTurn(
+    String threadId, {
+    Duration? timeout,
+  }) async {
+    const method = 'thread/turns/list';
+    final params = {
       'threadId': threadId,
       'limit': 1,
       'sortDirection': 'desc',
       'itemsView': 'notLoaded',
-    }));
+    };
+    final result = _map(timeout == null
+        ? await _rpc.request(method, params)
+        : await _rpc.requestWithTimeout(method, params, timeout));
     final turns = result['data'] as List<dynamic>? ?? const [];
-    for (final rawTurn in turns) {
-      final turn = _map(rawTurn);
-      if (_isActiveTurnStatus(turn['status'])) {
-        return turn['id'] as String?;
-      }
-    }
-    return null;
+    return _map(turns.firstOrNull);
   }
 
   Future<({String id, String? serviceTier})> startThread(
@@ -712,6 +725,17 @@ final class CodexRemoteApi {
     );
   }
 
+  static TaskTurnIssue? parseTurnIssue(
+    String method,
+    Map<String, dynamic> params,
+  ) =>
+      switch (method) {
+        'turn/completed' => _parseFailedTurn(_map(params['turn'])),
+        'error' when params['willRetry'] != true =>
+          _parseTurnIssue(params['turnId'], params['error']),
+        _ => null,
+      };
+
   static TaskEvent? parseNotification(
     String method,
     Map<String, dynamic> params,
@@ -772,6 +796,28 @@ final class CodexRemoteApi {
       availableDecisions: decisions,
     );
   }
+}
+
+TaskTurnIssue? _parseFailedTurn(Map<String, dynamic> turn) {
+  if (_parseStatus(turn['status']) != TaskStatus.failed) return null;
+  final id = turn['id'];
+  if (id is! String || id.isEmpty) return null;
+  return _parseTurnIssue(id, turn['error']) ??
+      TaskTurnIssue(turnId: id, message: null);
+}
+
+TaskTurnIssue? _parseTurnIssue(Object? turnId, Object? raw) {
+  if (turnId is! String || turnId.isEmpty) return null;
+  final error = _map(raw);
+  final message = _firstText(error['message']);
+  if (message == null) return null;
+  final info = error['codexErrorInfo'];
+  return TaskTurnIssue(
+    turnId: turnId,
+    message: message,
+    code: info is String ? info : _map(info).keys.firstOrNull,
+    details: _firstText(error['additionalDetails']),
+  );
 }
 
 bool _isActiveTurnStatus(Object? raw) {

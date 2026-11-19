@@ -7,6 +7,7 @@ import 'package:markdown/markdown.dart' as md;
 import 'package:url_launcher/url_launcher.dart';
 
 import 'formula_markdown.dart';
+import 'copy_feedback_button.dart';
 import 'inline_attachment_image.dart';
 import 'remote_file_actions.dart';
 import '../../attachment_media.dart';
@@ -220,15 +221,9 @@ class _CopyableCodeBlock extends StatelessWidget {
             child: SizedBox(
               width: 32,
               height: 32,
-              child: IconButton(
-                tooltip: 'Copy code',
-                padding: EdgeInsets.zero,
-                visualDensity: VisualDensity.compact,
-                iconSize: 16,
-                onPressed: () => unawaited(
-                  _copyCode(context, text, copyText),
-                ),
-                icon: const Icon(Icons.copy_all_outlined),
+              child: CopyFeedbackButton(
+                label: 'code',
+                onCopy: () => copyText(text),
               ),
             ),
           ),
@@ -238,25 +233,6 @@ class _CopyableCodeBlock extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-Future<void> _copyCode(
-  BuildContext context,
-  String text,
-  MarkdownTextCopier copyText,
-) async {
-  try {
-    await copyText(text);
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Code copied')),
-    );
-  } catch (_) {
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Could not copy code.')),
     );
   }
 }
