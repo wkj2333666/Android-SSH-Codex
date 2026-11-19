@@ -583,7 +583,10 @@ void main() {
       ),
     ));
     await tester.pump();
-    final composer = find.byType(EditableText);
+    final composer = find.descendant(
+      of: find.byType(TextField),
+      matching: find.byType(EditableText),
+    );
     expect(tester.widget<EditableText>(composer).focusNode.hasFocus, isTrue);
 
     await tester.tap(find.byTooltip('Copy message'));
