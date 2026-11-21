@@ -18,6 +18,7 @@ import 'task_timeline_render_cache.dart';
 import 'timeline_entries.dart';
 import 'turn_settings_picker.dart';
 import 'widgets/timeline_item.dart';
+import 'widgets/composer_keyboard_shortcuts.dart';
 import 'widgets/user_input_panel.dart';
 import 'widgets/remote_file_actions.dart';
 import 'widgets/task_question_panel.dart';
@@ -2019,18 +2020,23 @@ class _Composer extends StatelessWidget {
                       ],
                     ),
                   Expanded(
-                    child: TextField(
+                    child: ComposerKeyboardShortcuts(
                       controller: controller,
-                      focusNode: focusNode,
-                      enabled: inputEnabled,
-                      minLines: 1,
-                      maxLines: 5,
-                      textCapitalization: TextCapitalization.sentences,
-                      decoration: const InputDecoration(
-                        hintText: 'Message Codex',
-                        isDense: true,
-                        contentPadding:
-                            EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      onSend: sendEnabled ? onSend : null,
+                      child: TextField(
+                        controller: controller,
+                        focusNode: focusNode,
+                        enabled: inputEnabled,
+                        minLines: 1,
+                        maxLines: 5,
+                        textInputAction: TextInputAction.newline,
+                        textCapitalization: TextCapitalization.sentences,
+                        decoration: const InputDecoration(
+                          hintText: 'Message Codex',
+                          isDense: true,
+                          contentPadding: EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 10),
+                        ),
                       ),
                     ),
                   ),
