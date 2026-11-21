@@ -10,10 +10,12 @@ import 'package:dartssh2/dartssh2.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class MemorySource implements DownloadSource {
-  MemorySource(this.bytes, {this.failAt, this.corrupt = false});
+  MemorySource(this.bytes,
+      {this.failAt, this.corrupt = false, this.beforeRead});
   final List<int> bytes;
   final int? failAt;
   final bool corrupt;
+  final Future<void> Function(int)? beforeRead;
   bool closed = false;
   int active = 0;
   int peak = 0;
@@ -26,6 +28,7 @@ class MemorySource implements DownloadSource {
     offsets.add(offset);
     peak = ++active > peak ? active : peak;
     try {
+      await beforeRead?.call(offset);
       await Future<void>.delayed(const Duration(milliseconds: 1));
       if (failAt != null && offset >= failAt!) {
         throw TimeoutException('simulated network loss');
@@ -45,15 +48,16 @@ class MemorySource implements DownloadSource {
 }
 
 class InterruptingSource implements DownloadSource {
-  InterruptingSource(this.inner, this.client);
+  InterruptingSource(this.inner, this.client, this.breakAt);
   final DownloadSource inner;
   final SSHClient client;
+  final int breakAt;
   @override
   Future<DownloadIdentity> identify() => inner.identify();
   @override
   Future<List<int>> read(int offset, int length) {
     final pending = inner.read(offset, length);
-    if (offset >= 1024 * 1024) client.close();
+    if (offset >= breakAt) client.close();
     return pending;
   }
 
@@ -62,6 +66,7 @@ class InterruptingSource implements DownloadSource {
 }
 
 void main() {
+  const windowBytes = resumableReadBytes * resumableReadWindow;
   late Directory directory;
   late File output;
   final bytes =
@@ -89,10 +94,45 @@ void main() {
     );
     expect(retries, [1024 * 1024]);
     expect(second.offsets.first, 1024 * 1024);
-    expect(first.peak, 4);
-    expect(second.peak, 4);
+    expect(first.peak, greaterThan(4));
+    expect(second.peak, greaterThan(4));
+    expect(first.peak, lessThanOrEqualTo(resumableReadWindow));
+    expect(second.peak, lessThanOrEqualTo(resumableReadWindow));
     expect(first.closed && second.closed, isTrue);
     expect(await output.readAsBytes(), bytes);
+  });
+
+  test('request window refills without waiting for the rest of the batch',
+      () async {
+    final initialWindow = Completer<void>();
+    final refilled = Completer<void>();
+    final firstBlock = Completer<void>();
+    final secondBlock = Completer<void>();
+    final payload = Uint8List(windowBytes + 3 * resumableReadBytes)..[0] = 117;
+    final source = MemorySource(payload, beforeRead: (offset) async {
+      if (offset == windowBytes - resumableReadBytes) initialWindow.complete();
+      if (offset == windowBytes) refilled.complete();
+      if (offset == 0) await firstBlock.future;
+      if (offset == resumableReadBytes) await secondBlock.future;
+    });
+    final transferring = downloadResumableFile(
+      connect: () async => source,
+      destination: output,
+      cancellation: DownloadCancellation(),
+    );
+    try {
+      await initialWindow.future.timeout(const Duration(seconds: 3));
+      expect(source.offsets.length, resumableReadWindow);
+      firstBlock.complete();
+      await refilled.future.timeout(const Duration(seconds: 3));
+      expect(source.offsets.length, resumableReadWindow + 1);
+      expect(await output.length(), 0); // The second block still gates writes.
+    } finally {
+      if (!firstBlock.isCompleted) firstBlock.complete();
+      secondBlock.complete();
+      await transferring;
+    }
+    expect(sha256.convert(await output.readAsBytes()), sha256.convert(payload));
   });
 
   test('remote change refuses to splice different files', () async {
@@ -167,7 +207,9 @@ void main() {
   test('real SFTP resumes after socket closure and verifies binary content',
       () async {
     final input = File('${directory.path}/' r'''a' "$x; & `id`.bin''');
-    await input.writeAsBytes(bytes);
+    final payload = Uint8List.fromList(
+        List.generate(10 * 1024 * 1024 + 31, (i) => i % 251));
+    await input.writeAsBytes(payload);
     SSHClient? active;
     var connections = 0;
     final retries = <int>[];
@@ -185,7 +227,9 @@ void main() {
         active = client;
         final source = await SftpDownloadSource.open(
             SshConnection(client: client), input.path);
-        return connections == 1 ? InterruptingSource(source, client) : source;
+        return connections == 1
+            ? InterruptingSource(source, client, windowBytes + 1280 * 1024)
+            : source;
       },
       destination: output,
       cancellation: DownloadCancellation(),
@@ -195,12 +239,12 @@ void main() {
     );
     expect(connections, 2);
     expect(retries.single, greaterThanOrEqualTo(1024 * 1024));
-    expect(await output.readAsBytes(), bytes);
+    expect(sha256.convert(await output.readAsBytes()), sha256.convert(payload));
     expect(active!.isClosed, isTrue);
     // Timing is diagnostic only; shared CI runners cannot prove phone speed.
     // ignore: avoid_print
     print(
-        'SFTP resume verified: ${bytes.length} bytes, ${watch.elapsedMilliseconds} ms');
+        'SFTP resume verified: ${payload.length} bytes, ${watch.elapsedMilliseconds} ms');
   },
       timeout: const Timeout(Duration(seconds: 90)),
       skip: !Platform.environment.containsKey('DOWNLOAD_TEST_KEY'));
