@@ -453,39 +453,33 @@ final class AppController extends ChangeNotifier {
     _clearPrediction();
     if (!_canPredictFor(threadId)) return;
     final source = _predictionSource = (threadId: threadId, turnId: turnId);
+    final attempt = _connectionAttempt;
     try {
-      await api.requestComposerPrediction(threadId, turnId);
+      final text = await api.sampleComposerPrediction(threadId, turnId);
+      if (api != _api ||
+          attempt != _connectionAttempt ||
+          _predictionSource != source) {
+        return;
+      }
+      if (text == null || !_canPredictFor(threadId)) {
+        _clearPrediction();
+        return;
+      }
+      _predictionText = text;
+      notifyListeners();
     } catch (error) {
-      if (api != _api) return;
+      if (api != _api || attempt != _connectionAttempt) return;
       if (error is RpcRemoteException && error.code == -32601) {
         _unsupportedPredictionApi = api;
       }
-      if (_predictionSource == source && _predictionText == null) {
-        _clearPrediction();
-      }
+      if (_predictionSource == source) _clearPrediction();
       // Unsupported servers and prediction failures never interrupt chat.
+      Diagnostics.record('prediction.sampleFailed', {
+        'attempt': attempt,
+        'errorType': error.runtimeType.toString(),
+        if (error is RpcRemoteException) 'rpcCode': error.code,
+      });
     }
-  }
-
-  void _receivePrediction(Map<String, dynamic> params) {
-    final source = _predictionSource;
-    if (source == null ||
-        source.threadId != params['threadId'] ||
-        source.turnId != params['sourceTurnId'] ||
-        _predictionText != null) {
-      return;
-    }
-    final result = params['result'];
-    final text =
-        result is Map && result['type'] == 'completed' ? result['text'] : null;
-    if (text is! String ||
-        text.trim().isEmpty ||
-        !_canPredictFor(source.threadId)) {
-      _clearPrediction();
-      return;
-    }
-    _predictionText = text.trim();
-    notifyListeners();
   }
 
   Future<void> _restoreWorkspace() async {
@@ -3069,10 +3063,6 @@ final class AppController extends ChangeNotifier {
     if (attempt != _connectionAttempt) return;
     final method = notification.method;
     final params = notification.params;
-    if (method == 'thread/prediction/updated') {
-      _receivePrediction(params);
-      return;
-    }
     if (method == 'thread/settings/updated') {
       final id = params['threadId'];
       final settings = params['threadSettings'];

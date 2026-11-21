@@ -57,7 +57,14 @@ void main() {
     testWidgets(
         'composer prediction fills an editable draft via ${keyboard ? 'Tab' : 'tap'} without sending',
         (tester) async {
-      final transport = Transport();
+      final transport = Transport()
+        ..handle = (call) => call['method'] == 'thread/sample'
+            ? {
+                'sourceTurnId': 'finished',
+                'responseId': 'sample-response',
+                'text': 'Check the result.',
+              }
+            : {};
       late JsonRpcClient rpc;
       late AppController controller;
       await tester.runAsync(() async {
@@ -83,17 +90,16 @@ void main() {
           'turn': {'id': 'finished', 'status': 'completed'},
         });
         await Future<void>.delayed(Duration.zero);
-        expect(
-          transport.calls.singleWhere((call) =>
-              call['method'] == 'thread/prediction/request')['params'],
-          {'threadId': 'task', 'sourceTurnId': 'finished'},
-        );
-        transport.notify('thread/prediction/updated', {
+        final sample = transport.calls.singleWhere(
+            (call) => call['method'] == 'thread/sample');
+        final params = Map<String, dynamic>.of(
+            sample['params'] as Map<String, dynamic>);
+        expect(params.remove('prompt'), contains('follow-up message'));
+        expect(params, {
           'threadId': 'task',
-          'sourceTurnId': 'finished',
-          'result': {'type': 'completed', 'text': 'Check the result.'},
+          'expectedTurnId': 'finished',
+          'disableMcp': true,
         });
-        await Future<void>.delayed(Duration.zero);
       });
       await tester.pumpAndSettle();
       final suggestion = find.byKey(const Key('composer-prediction'));
@@ -123,7 +129,62 @@ void main() {
 
   test('drops mismatched and late predictions after the draft is edited',
       () async {
-    final transport = Transport();
+    final transport = Transport()..withheldMethods.add('thread/sample');
+    final rpc = JsonRpcClient(transport)..start();
+    final controller =
+        AppController.connectedForTesting(rpc: rpc, cachedTasks: [task()]);
+    addTearDown(() async {
+      controller.dispose();
+      await rpc.close();
+    });
+    await controller.selectTask('task');
+    Iterable<Map<String, dynamic>> samples() =>
+        transport.calls.where((call) => call['method'] == 'thread/sample');
+    void completeTurn(String turnId) {
+      transport.notify('turn/completed', {
+        'threadId': 'task',
+        'turn': {'id': turnId, 'status': 'completed'},
+      });
+    }
+
+    void deliver(String turnId) {
+      transport.input.add(jsonEncode({
+        'id': samples().last['id'],
+        'result': {
+          'sourceTurnId': turnId,
+          'responseId': 'sample-response',
+          'text': 'Suggestion',
+        },
+      }));
+    }
+
+    completeTurn('latest');
+    await Future<void>.delayed(Duration.zero);
+    deliver('old');
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.composerPredictionFor('task'), isNull);
+
+    completeTurn('next');
+    await Future<void>.delayed(Duration.zero);
+    final draft = controller.draftForTask('task').composer;
+    draft.text = 'My draft';
+    draft.clear(); // Even clearing it must not revive an obsolete request.
+    deliver('next');
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.composerPredictionFor('task'), isNull);
+    expect(controller.acceptComposerPrediction('task', 'Suggestion'), isFalse);
+    expect(draft.text, isEmpty);
+
+    draft.text = 'Do not replace';
+    completeTurn('has-draft');
+    await Future<void>.delayed(Duration.zero);
+    expect(samples(), hasLength(2));
+    expect(draft.text, 'Do not replace');
+  });
+
+  test('an older server without thread/sample leaves the composer usable',
+      () async {
+    final transport = Transport()..withheldMethods.add('thread/sample');
     final rpc = JsonRpcClient(transport)..start();
     final controller =
         AppController.connectedForTesting(rpc: rpc, cachedTasks: [task()]);
@@ -134,42 +195,28 @@ void main() {
     await controller.selectTask('task');
     transport.notify('turn/completed', {
       'threadId': 'task',
-      'turn': {'id': 'latest', 'status': 'completed'},
+      'turn': {'id': 'first', 'status': 'completed'},
     });
     await Future<void>.delayed(Duration.zero);
-    void deliver(String threadId, String turnId) {
-      transport.notify('thread/prediction/updated', {
-        'threadId': threadId,
-        'sourceTurnId': turnId,
-        'result': {'type': 'completed', 'text': 'Suggestion'},
-      });
-    }
-
-    deliver('other-task', 'latest');
-    deliver('task', 'old');
+    final request = transport.calls.singleWhere(
+        (call) => call['method'] == 'thread/sample');
+    transport.input.add(jsonEncode({
+      'id': request['id'],
+      'error': {'code': -32601, 'message': 'Method not found'},
+    }));
     await Future<void>.delayed(Duration.zero);
-    expect(controller.composerPredictionFor('task'), isNull);
-
-    final draft = controller.draftForTask('task').composer;
-    draft.text = 'My draft';
-    draft.clear(); // Even clearing it must not revive an obsolete request.
-    deliver('task', 'latest');
-    await Future<void>.delayed(Duration.zero);
-    expect(controller.composerPredictionFor('task'), isNull);
-    expect(controller.acceptComposerPrediction('task', 'Suggestion'), isFalse);
-    expect(draft.text, isEmpty);
-
-    draft.text = 'Do not replace';
     transport.notify('turn/completed', {
       'threadId': 'task',
       'turn': {'id': 'second', 'status': 'completed'},
     });
     await Future<void>.delayed(Duration.zero);
-    expect(
-      transport.calls.where((c) => c['method'] == 'thread/prediction/request'),
-      hasLength(1),
-    );
-    expect(draft.text, 'Do not replace');
+    expect(transport.calls.where((call) => call['method'] == 'thread/sample'),
+        hasLength(1));
+    expect(controller.composerPredictionFor('task'), isNull);
+    expect(controller.isConnected, isTrue);
+    await controller.sendPrompt('Continue normally');
+    expect(transport.calls.where((call) => call['method'] == 'turn/start'),
+        hasLength(1));
   });
 
   test('restores the latest failed turn without opening a historical popup',
