@@ -314,6 +314,10 @@ final class AppController extends ChangeNotifier {
   String? _selectedTaskId;
   final Map<String, String> _activeTurnIds = {};
   final _turnIssues = TaskTurnIssues();
+  final _predictionTurns = <(String, String)>{};
+  ({String threadId, String turnId})? _predictionSource;
+  String? _predictionText;
+  CodexRemoteApi? _unsupportedPredictionApi;
   final Map<String, DateTime> _projectActivityByCwd = {};
   String? _error;
   HostKeyChallenge? _hostKeyChallenge;
@@ -380,6 +384,9 @@ final class AppController extends ChangeNotifier {
       final saved = _savedDrafts[(hostId, taskId)];
       if (saved != null) draft.restore(saved);
       void save() {
+        if (hostId == _selectedHostId && draft.hasComposerInput) {
+          _clearPrediction(taskId);
+        }
         if (_disposed || draft.sending) return;
         _savedDrafts[(hostId, taskId)] = draft.toJson();
         _draftSaveTimer?.cancel();
@@ -399,6 +406,87 @@ final class AppController extends ChangeNotifier {
 
   String? deliveryState(String id) => _deliveryStates[id];
   RemoteThreadGoal? get selectedGoal => _goals[_selectedTaskId];
+
+  String? composerPredictionFor(String taskId) =>
+      _predictionSource?.threadId == taskId && _canPredictFor(taskId)
+          ? _predictionText
+          : null;
+
+  bool acceptComposerPrediction(String taskId, String expected) {
+    if (composerPredictionFor(taskId) != expected) return false;
+    _clearPrediction(taskId);
+    draftForTask(taskId).composer.value = TextEditingValue(
+      text: expected,
+      selection: TextSelection.collapsed(offset: expected.length),
+    );
+    return true;
+  }
+
+  bool _canPredictFor(String threadId) =>
+      !_disposed &&
+      !_inBackground &&
+      isConnected &&
+      _selectedHostId == _workspaceHostId &&
+      _section == AppSection.tasks &&
+      _selectedTaskId == threadId &&
+      !_activeTurnIds.containsKey(threadId) &&
+      !_messageQueue.hasPending(threadId) &&
+      !draftForTask(threadId).hasComposerInput;
+
+  void _clearPrediction([String? threadId]) {
+    if (threadId != null && _predictionSource?.threadId != threadId) return;
+    _predictionSource = null;
+    _predictionText = null;
+  }
+
+  Future<void> _requestPrediction(String threadId, String turnId) async {
+    final api = _api;
+    if (_selectedTaskId != threadId ||
+        api == null ||
+        api == _unsupportedPredictionApi ||
+        !_predictionTurns.add((threadId, turnId))) {
+      return;
+    }
+    if (_predictionTurns.length > 128) {
+      _predictionTurns.remove(_predictionTurns.first);
+    }
+    _clearPrediction();
+    if (!_canPredictFor(threadId)) return;
+    final source = _predictionSource = (threadId: threadId, turnId: turnId);
+    try {
+      await api.requestComposerPrediction(threadId, turnId);
+    } catch (error) {
+      if (api != _api) return;
+      if (error is RpcRemoteException && error.code == -32601) {
+        _unsupportedPredictionApi = api;
+      }
+      if (_predictionSource == source && _predictionText == null) {
+        _clearPrediction();
+      }
+      // Unsupported servers and prediction failures never interrupt chat.
+    }
+  }
+
+  void _receivePrediction(Map<String, dynamic> params) {
+    final source = _predictionSource;
+    if (source == null ||
+        source.threadId != params['threadId'] ||
+        source.turnId != params['sourceTurnId'] ||
+        _predictionText != null) {
+      return;
+    }
+    final result = params['result'];
+    final text =
+        result is Map && result['type'] == 'completed' ? result['text'] : null;
+    if (text is! String ||
+        text.trim().isEmpty ||
+        !_canPredictFor(source.threadId)) {
+      _clearPrediction();
+      return;
+    }
+    _predictionText = text.trim();
+    notifyListeners();
+  }
 
   Future<void> _restoreWorkspace() async {
     final store = _store;
@@ -556,6 +644,7 @@ final class AppController extends ChangeNotifier {
 
   void selectSection(AppSection section) {
     if (_section == section) return;
+    _clearPrediction();
     _section = section;
     notifyListeners();
   }
@@ -998,6 +1087,8 @@ final class AppController extends ChangeNotifier {
       'keepAliveCached': _keepAlive.isEnabled,
     });
     _inBackground = true;
+    final hadPrediction = _predictionText != null;
+    _clearPrediction();
     _expediteReconnect = false;
     _refreshTimer?.cancel();
     _refreshTimer = null;
@@ -1005,6 +1096,7 @@ final class AppController extends ChangeNotifier {
       _reconnectTimer?.cancel();
       _reconnectTimer = null;
     }
+    if (hadPrediction) notifyListeners();
     // Keep the transport; backgrounding is not an explicit disconnect.
   }
 
@@ -1237,6 +1329,7 @@ final class AppController extends ChangeNotifier {
   }
 
   Future<void> selectTask(String taskId) async {
+    if (_selectedTaskId != taskId) _clearPrediction();
     _selectedTaskId = taskId;
     _section = AppSection.tasks;
     _historyLoadState.clear();
@@ -1245,6 +1338,7 @@ final class AppController extends ChangeNotifier {
   }
 
   void clearSelectedTask() {
+    _clearPrediction();
     _selectedTaskId = null;
     _historyLoadState.clear();
     notifyListeners();
@@ -1374,6 +1468,7 @@ final class AppController extends ChangeNotifier {
         : _projects.where((project) => project.id == projectId).firstOrNull;
     if (projectId != null && project == null) return;
     if (_selectedProjectId == projectId) return;
+    _clearPrediction();
     if (_selectedProjectId case final previous?) {
       _cachedProjectTaskIds[previous] = List.of(_taskCatalog.projectTaskIds);
     }
@@ -2974,6 +3069,10 @@ final class AppController extends ChangeNotifier {
     if (attempt != _connectionAttempt) return;
     final method = notification.method;
     final params = notification.params;
+    if (method == 'thread/prediction/updated') {
+      _receivePrediction(params);
+      return;
+    }
     if (method == 'thread/settings/updated') {
       final id = params['threadId'];
       final settings = params['threadSettings'];
@@ -3034,6 +3133,7 @@ final class AppController extends ChangeNotifier {
       final id = params['threadId'] as String?;
       if (id != null) {
         _agentDeltaBatcher.clear();
+        _clearPrediction(id);
         _turnIssues.clearTask(id);
         _taskReducer.replaceItems(_epoch, id, const []);
         if (_selectedTaskId == id) unawaited(_loadInitialTaskContext(id));
@@ -3078,13 +3178,22 @@ final class AppController extends ChangeNotifier {
       final turn = notification.params['turn'];
       final turnId = turn is Map ? turn['id'] as String? : null;
       if (threadId != null && turnId != null) {
+        _clearPrediction(threadId);
         _turnIssues.turnStarted();
         activeTurnChanged = _activeTurnIds[threadId] != turnId;
         _activeTurnIds[threadId] = turnId;
       }
     } else if (notification.method == 'turn/completed' && threadId != null) {
       _interactiveThreadIds.remove(threadId);
+      final activeTurn = _activeTurnIds[threadId];
       activeTurnChanged = _activeTurnIds.remove(threadId) != null;
+      final turn = params['turn'];
+      if (turn is Map &&
+          turn['status'] == 'completed' &&
+          turn['id'] is String &&
+          (activeTurn == null || activeTurn == turn['id'])) {
+        unawaited(_requestPrediction(threadId, turn['id'] as String));
+      }
       unawaited(refreshTasks());
       unawaited(_flushQueuedPrompt(threadId));
     }
@@ -3212,6 +3321,9 @@ final class AppController extends ChangeNotifier {
 
   Future<void> _closeTransport(
       {String reason = 'connection_replaced_or_closed'}) async {
+    _clearPrediction();
+    _predictionTurns.clear();
+    _unsupportedPredictionApi = null;
     final closingPorts = portForwards.detach();
     accountUsage.bind(null);
     _userInputRequests = const [];

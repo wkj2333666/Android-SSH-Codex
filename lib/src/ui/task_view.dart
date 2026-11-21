@@ -18,6 +18,7 @@ import 'task_timeline_render_cache.dart';
 import 'timeline_entries.dart';
 import 'turn_settings_picker.dart';
 import 'widgets/timeline_item.dart';
+import 'widgets/composer_keyboard_shortcuts.dart';
 import 'widgets/user_input_panel.dart';
 import 'widgets/remote_file_actions.dart';
 import 'widgets/task_question_panel.dart';
@@ -172,6 +173,7 @@ class _TaskViewState extends State<TaskView> {
     final draft = _draft;
     final controller = widget.controller;
     final issue = controller.turnIssueForTask(task.id);
+    final prediction = controller.composerPredictionFor(task.id);
     final compact = MediaQuery.sizeOf(context).width < 800;
     final approvals = widget.controller.approvals
         .where((approval) => approval.threadId == task.id)
@@ -403,6 +405,17 @@ class _TaskViewState extends State<TaskView> {
           completions: _completions,
           loadingCompletions: _loadingSkills,
           onCompletion: _selectCompletion,
+          prediction: prediction,
+          onAcceptPrediction: prediction == null
+              ? null
+              : () {
+                  if (!controller.acceptComposerPrediction(
+                      task.id, prediction)) {
+                    return false;
+                  }
+                  _composerFocus.requestFocus();
+                  return true;
+                },
           onSend: _send,
           sendMode: _sendMode,
           onAttach: Attachments.supported && !_sending && !_pickingAttachment
@@ -1975,6 +1988,8 @@ class _Composer extends StatelessWidget {
     required this.onCompletion,
     required this.onSend,
     required this.sendMode,
+    this.prediction,
+    this.onAcceptPrediction,
     this.onAttach,
   });
 
@@ -1987,6 +2002,8 @@ class _Composer extends StatelessWidget {
   final ValueChanged<ComposerCompletion> onCompletion;
   final VoidCallback onSend;
   final TaskSendMode sendMode;
+  final String? prediction;
+  final bool Function()? onAcceptPrediction;
   final ValueChanged<bool>? onAttach;
 
   @override
@@ -1997,6 +2014,22 @@ class _Composer extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (prediction case final suggestion?)
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton.icon(
+                    key: const Key('composer-prediction'),
+                    style: TextButton.styleFrom(
+                      alignment: Alignment.centerLeft,
+                      minimumSize: const Size(0, 32),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    onPressed: onAcceptPrediction,
+                    icon: const Icon(Icons.auto_awesome, size: 16),
+                    label: Text(suggestion,
+                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ),
+                ),
               if (completions.isNotEmpty || loadingCompletions)
                 _CompletionPicker(
                   completions: completions,
@@ -2019,18 +2052,24 @@ class _Composer extends StatelessWidget {
                       ],
                     ),
                   Expanded(
-                    child: TextField(
+                    child: ComposerKeyboardShortcuts(
                       controller: controller,
-                      focusNode: focusNode,
-                      enabled: inputEnabled,
-                      minLines: 1,
-                      maxLines: 5,
-                      textCapitalization: TextCapitalization.sentences,
-                      decoration: const InputDecoration(
-                        hintText: 'Message Codex',
-                        isDense: true,
-                        contentPadding:
-                            EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      onSend: sendEnabled ? onSend : null,
+                      onAcceptPrediction: onAcceptPrediction,
+                      child: TextField(
+                        controller: controller,
+                        focusNode: focusNode,
+                        enabled: inputEnabled,
+                        minLines: 1,
+                        maxLines: 5,
+                        textInputAction: TextInputAction.newline,
+                        textCapitalization: TextCapitalization.sentences,
+                        decoration: const InputDecoration(
+                          hintText: 'Message Codex',
+                          isDense: true,
+                          contentPadding: EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 10),
+                        ),
                       ),
                     ),
                   ),

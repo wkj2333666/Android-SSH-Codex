@@ -377,6 +377,17 @@ final class CodexRemoteApi {
         timeout: const Duration(seconds: 10),
       ));
 
+  Future<void> requestComposerPrediction(
+    String threadId,
+    String sourceTurnId,
+  ) async {
+    await _rpc.requestWithTimeout(
+      'thread/prediction/request',
+      {'threadId': threadId, 'sourceTurnId': sourceTurnId},
+      const Duration(seconds: 8),
+    );
+  }
+
   Future<Map<String, dynamic>> _readLatestTurn(
     String threadId, {
     Duration? timeout,
