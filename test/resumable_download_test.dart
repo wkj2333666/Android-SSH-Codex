@@ -26,6 +26,7 @@ class MemorySource implements DownloadSource {
     identities++;
     return DownloadIdentity(bytes.length, sha256.convert(bytes).toString());
   }
+
   @override
   Future<List<int>> read(int offset, int length) async {
     offsets.add(offset);

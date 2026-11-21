@@ -13,19 +13,21 @@ void main() {
     final saved = Completer<SavedDownload>();
     final nativeCalls = <MethodCall>[];
     final messenger = tester.binding.defaultBinaryMessenger;
-    messenger.setMockMethodCallHandler(PublicDownloadStorage.channel, (call) async {
+    messenger.setMockMethodCallHandler(PublicDownloadStorage.channel,
+        (call) async {
       nativeCalls.add(call);
       return null;
     });
-    addTearDown(() => messenger.setMockMethodCallHandler(PublicDownloadStorage.channel, null));
+    addTearDown(() => messenger.setMockMethodCallHandler(
+        PublicDownloadStorage.channel, null));
     late void Function(DownloadProgress) update;
     final queue = DownloadQueue((_, __, progress) {
       update = progress;
       return saved.future;
     }, onChanged: () {});
     addTearDown(queue.dispose);
-    await tester.pumpWidget(MaterialApp(
-        home: DownloadsView(queue: queue, retry: (_) async {})));
+    await tester.pumpWidget(
+        MaterialApp(home: DownloadsView(queue: queue, retry: (_) async {})));
     expect(find.text('No downloads yet'), findsOneWidget);
     queue.enqueue('pi', '/tmp/data.zip', 'Pi');
     update(const DownloadProgress(1048576, 2097152, bytesPerSecond: 4194304));

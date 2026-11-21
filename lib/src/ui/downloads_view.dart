@@ -97,11 +97,10 @@ class DownloadsView extends StatelessWidget {
         'Reconnecting · ${_size(progress.received)} received',
       DownloadState.transferring when progress.verifying =>
         total == null ? 'Preparing download…' : 'Verifying file…',
-      DownloadState.transferring =>
-        '${_size(progress.received)}'
-            '${total == null ? "" : " / ${_size(total)}"}'
-            '${fraction == null ? "" : " · ${(fraction * 100).toStringAsFixed(0)}%"}'
-            '${progress.bytesPerSecond == null ? "" : " · ${_size(progress.bytesPerSecond!)}/s"}',
+      DownloadState.transferring => '${_size(progress.received)}'
+          '${total == null ? "" : " / ${_size(total)}"}'
+          '${fraction == null ? "" : " · ${(fraction * 100).toStringAsFixed(0)}%"}'
+          '${progress.bytesPerSecond == null ? "" : " · ${_size(progress.bytesPerSecond!)}/s"}',
       DownloadState.saving => 'Saving to Downloads/RemoteCodex…',
       DownloadState.completed =>
         total == null ? 'Complete' : 'Complete · ${_size(total)}',
@@ -134,9 +133,11 @@ class DownloadsView extends StatelessWidget {
       ),
       onTap: entry.state != DownloadState.completed
           ? null
-          : () => _run(context, uri == null
-              ? PublicDownloadStorage.showFolder
-              : () => PublicDownloadStorage.open(uri)),
+          : () => _run(
+              context,
+              uri == null
+                  ? PublicDownloadStorage.showFolder
+                  : () => PublicDownloadStorage.open(uri)),
       trailing: entry.canCancel
           ? IconButton(
               tooltip: 'Cancel download',
@@ -162,23 +163,26 @@ class DownloadsView extends StatelessWidget {
                       const PopupMenuItem(value: 'retry', child: Text('Retry')),
                     if (entry.state == DownloadState.completed)
                       const PopupMenuItem(
-                        value: 'folder', child: Text('Show in Downloads'),
+                        value: 'folder',
+                        child: Text('Show in Downloads'),
                       ),
                     const PopupMenuItem(
-                      value: 'remove', child: Text('Remove from history'),
+                      value: 'remove',
+                      child: Text('Remove from history'),
                     ),
                   ],
                 ),
     );
   }
 
-  Future<void> _run(BuildContext context, Future<void> Function() action) async {
+  Future<void> _run(
+      BuildContext context, Future<void> Function() action) async {
     try {
       await action();
     } catch (error) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(downloadErrorMessage(error))));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(downloadErrorMessage(error))));
     }
   }
 

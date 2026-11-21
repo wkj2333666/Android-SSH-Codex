@@ -2133,8 +2133,8 @@ final class AppController extends ChangeNotifier {
   void _downloadQueueChanged() {
     if (_workspaceLoaded) {
       unawaited(_saveWorkspace().catchError((Object error) {
-        Diagnostics.record('download.historyFailed',
-            Diagnostics.errorFields(error));
+        Diagnostics.record(
+            'download.historyFailed', Diagnostics.errorFields(error));
       }));
     }
     final busy = downloadQueue.activeCount > 0;
@@ -2153,8 +2153,8 @@ final class AppController extends ChangeNotifier {
         _profiles.where((profile) => profile.id == entry.hostId).firstOrNull;
     if (profile == null) throw StateError('The SSH host was removed.');
     return _receiveFile(profile, entry.path, cancellation,
-        purpose: 'download', onProgress: onProgress,
-        openFile: (file, name) async {
+        purpose: 'download',
+        onProgress: onProgress, openFile: (file, name) async {
       final size = await file.length();
       cancellation.check();
       onProgress(downloads.DownloadProgress(size, size, saving: true));
@@ -2232,8 +2232,8 @@ final class AppController extends ChangeNotifier {
     Directory? temporary;
     var stage = 'temporary_storage';
     try {
-      final cache =
-          await PublicDownloadStorage.channel.invokeMethod<String>('stagingDirectory');
+      final cache = await PublicDownloadStorage.channel
+          .invokeMethod<String>('stagingDirectory');
       if (cache == null) throw StateError('No download directory');
       temporary = await Directory(cache).createTemp('codex-download-');
       final file = File('${temporary.path}/payload.bin');
@@ -2267,12 +2267,12 @@ final class AppController extends ChangeNotifier {
         },
         onRetry: (retry, received, error) {
           retryCount = retry;
-            Diagnostics.record('download.retry', {
-          'purpose': purpose,
-          'retry': retry,
-          'receivedBytes': received,
-          ...Diagnostics.errorFields(error),
-            });
+          Diagnostics.record('download.retry', {
+            'purpose': purpose,
+            'retry': retry,
+            'receivedBytes': received,
+            ...Diagnostics.errorFields(error),
+          });
         },
       );
       transfer.stop();

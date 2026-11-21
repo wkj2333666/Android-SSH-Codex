@@ -99,9 +99,15 @@ object PublicDownloads {
         }
     }
 
-    private fun safeName(name: String): String =
-        name.replace(Regex("""[\\/:*?"<>|\p{Cntrl}]"""), "_")
-            .trim().trimStart('.').take(100).ifBlank { "download" }
+    private fun safeName(name: String): String {
+        val cleaned = name.replace(Regex("""[\\/:*?"<>|\p{Cntrl}]"""), "_")
+            .trim().trimStart('.').ifBlank { "download" }
+        if (cleaned.length <= 80) return cleaned
+        val extension = cleaned.substringAfterLast('.', "")
+            .takeIf { it.length in 1..16 && !it.any(Char::isWhitespace) }
+            ?.let { ".$it" }.orEmpty()
+        return cleaned.take(80 - extension.length) + extension
+    }
 
     @android.annotation.TargetApi(29)
     private fun publishMediaStore(app: Context, source: File, name: String,

@@ -7,7 +7,14 @@ import 'package:flutter/services.dart';
 import 'file_download.dart';
 import 'resumable_download.dart';
 
-enum DownloadState { queued, transferring, saving, completed, failed, cancelled }
+enum DownloadState {
+  queued,
+  transferring,
+  saving,
+  completed,
+  failed,
+  cancelled
+}
 
 typedef SavedDownload = ({String name, String? uri});
 
@@ -51,12 +58,12 @@ class DownloadEntry {
         value['hostLabel'] is! String) {
       return null;
     }
-    final entry = DownloadEntry._(
-        value['host'] as String, value['path'] as String,
-        value['hostLabel'] as String);
-    entry._state =
-        DownloadState.values.where((s) => s.name == value['state']).firstOrNull ??
-            DownloadState.failed;
+    final entry = DownloadEntry._(value['host'] as String,
+        value['path'] as String, value['hostLabel'] as String);
+    entry._state = DownloadState.values
+            .where((s) => s.name == value['state'])
+            .firstOrNull ??
+        DownloadState.failed;
     final size = value['size'] as int?;
     if (entry.state == DownloadState.completed && value['name'] is String) {
       entry._saved =
@@ -126,7 +133,9 @@ class DownloadQueue extends ChangeNotifier {
   void retry(DownloadEntry entry) {
     if (!_entries.contains(entry) || !entry.canRetry) return;
     if (_entries.any((other) =>
-        other.active && other.hostId == entry.hostId && other.path == entry.path)) {
+        other.active &&
+        other.hostId == entry.hostId &&
+        other.path == entry.path)) {
       return;
     }
     _checkSpace();
@@ -169,7 +178,8 @@ class DownloadQueue extends ChangeNotifier {
     if (_disposed) return;
     var completed = _entries.where((entry) => !entry.active).length;
     if (completed > maxHistory) {
-      _entries.removeWhere((entry) => !entry.active && completed-- > maxHistory);
+      _entries
+          .removeWhere((entry) => !entry.active && completed-- > maxHistory);
     }
     onChanged();
     notifyListeners();
@@ -232,8 +242,8 @@ abstract final class PublicDownloadStorage {
   static const location = 'Downloads/RemoteCodex';
 
   static Future<SavedDownload> save(String path, String name) async {
-    final result = await channel
-        .invokeMapMethod<String, String>('publish', {'path': path, 'name': name});
+    final result = await channel.invokeMapMethod<String, String>(
+        'publish', {'path': path, 'name': name});
     if (result == null || result['name'] == null) {
       throw StateError('Android did not return a saved file');
     }

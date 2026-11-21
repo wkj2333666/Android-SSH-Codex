@@ -69,14 +69,18 @@ void main() {
     final queue = DownloadQueue((entry, cancellation, update) async {
       if (entry.path == '/busy.zip') return cancellation.wait(hanging.future);
       update(const DownloadProgress(20, 20, saving: true));
-      return (name: 'saved.zip', uri: 'content://media/external_primary/downloads/1');
+      return (
+        name: 'saved.zip',
+        uri: 'content://media/external_primary/downloads/1'
+      );
     }, onChanged: () {});
     addTearDown(queue.dispose);
     queue.enqueue('a', '/saved.zip', 'Host A');
     queue.enqueue('a', '/busy.zip', 'Host A');
     await Future<void>.delayed(Duration.zero);
     final restored = DownloadQueue((_, __, ___) {
-      fail('An interrupted download should not auto-start after process death.');
+      fail(
+          'An interrupted download should not auto-start after process death.');
     }, onChanged: () {});
     addTearDown(restored.dispose);
     restored.restore(queue.toJson());
@@ -85,6 +89,7 @@ void main() {
     expect(restored.entries.first.error, contains('Interrupted'));
     expect(restored.entries.last.state, DownloadState.completed);
     expect(restored.entries.last.progress.total, 20);
-    expect(restored.entries.last.uri, 'content://media/external_primary/downloads/1');
+    expect(restored.entries.last.uri,
+        'content://media/external_primary/downloads/1');
   });
 }

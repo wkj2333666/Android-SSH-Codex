@@ -111,8 +111,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('download does not block chat while enqueueing',
-      (tester) async {
+  testWidgets('download does not block chat while enqueueing', (tester) async {
     final completion = Completer<void>();
     var tapped = false;
     await tester.pumpWidget(MaterialApp(
