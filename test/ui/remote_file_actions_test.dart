@@ -48,7 +48,6 @@ void main() {
             body: RemoteFileActions(
       download: (_) async {
         downloads++;
-        return true;
       },
       previewVideo: (path, {onProgress, onReady}) async {
         expect(path, '/remote/a.mp4');
@@ -154,7 +153,6 @@ void main() {
             body: RemoteFileActions(
       download: (path) async {
         downloads.add(path);
-        return true;
       },
       child: MarkdownContent(
         text: '[Report](sandbox:/mnt/data/report.pdf)',
