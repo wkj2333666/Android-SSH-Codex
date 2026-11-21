@@ -92,11 +92,13 @@ void main() {
     final controller = TextEditingController(text: 'Draft');
     var sends = 0;
     await _mountComposer(tester, controller, () => sends++);
-    final focus = tester.widget<Focus>(find.descendant(
-      of: find.byType(ComposerKeyboardShortcuts),
-      matching: find.byWidgetPredicate(
-          (widget) => widget is Focus && widget.onKeyEvent != null),
-    ).first);
+    final focus = tester.widget<Focus>(find
+        .descendant(
+          of: find.byType(ComposerKeyboardShortcuts),
+          matching: find.byWidgetPredicate(
+              (widget) => widget is Focus && widget.onKeyEvent != null),
+        )
+        .first);
     final result = focus.onKeyEvent!(
       FocusManager.instance.primaryFocus!,
       const KeyDownEvent(
