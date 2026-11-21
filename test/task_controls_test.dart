@@ -90,10 +90,10 @@ void main() {
           'turn': {'id': 'finished', 'status': 'completed'},
         });
         await Future<void>.delayed(Duration.zero);
-        final sample = transport.calls.singleWhere(
-            (call) => call['method'] == 'thread/sample');
-        final params = Map<String, dynamic>.of(
-            sample['params'] as Map<String, dynamic>);
+        final sample = transport.calls
+            .singleWhere((call) => call['method'] == 'thread/sample');
+        final params =
+            Map<String, dynamic>.of(sample['params'] as Map<String, dynamic>);
         expect(params.remove('prompt'), contains('follow-up message'));
         expect(params, {
           'threadId': 'task',
@@ -198,8 +198,8 @@ void main() {
       'turn': {'id': 'first', 'status': 'completed'},
     });
     await Future<void>.delayed(Duration.zero);
-    final request = transport.calls.singleWhere(
-        (call) => call['method'] == 'thread/sample');
+    final request = transport.calls
+        .singleWhere((call) => call['method'] == 'thread/sample');
     transport.input.add(jsonEncode({
       'id': request['id'],
       'error': {'code': -32601, 'message': 'Method not found'},
