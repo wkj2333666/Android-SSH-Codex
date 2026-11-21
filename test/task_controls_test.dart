@@ -58,13 +58,20 @@ void main() {
         'composer prediction fills an editable draft via ${keyboard ? 'Tab' : 'tap'} without sending',
         (tester) async {
       final transport = Transport()
-        ..handle = (call) => call['method'] == 'thread/sample'
-            ? {
-                'sourceTurnId': 'finished',
-                'responseId': 'sample-response',
-                'text': 'Check the result.',
-              }
-            : {};
+        ..handle = (call) => switch (call['method']) {
+              'thread/sample' => {
+                  'sourceTurnId': 'finished',
+                  'responseId': 'sample-response',
+                  'text': 'Check the result.',
+                },
+              // The tap case opens a thread already completed on Desktop.
+              'thread/turns/list' when !keyboard => {
+                  'data': [
+                    {'id': 'finished', 'status': 'completed'},
+                  ],
+                },
+              _ => {},
+            };
       late JsonRpcClient rpc;
       late AppController controller;
       await tester.runAsync(() async {
@@ -72,6 +79,11 @@ void main() {
         controller =
             AppController.connectedForTesting(rpc: rpc, cachedTasks: [task()]);
         await controller.selectTask('task');
+        await Future<void>.delayed(Duration.zero);
+        expect(
+          transport.calls.where((call) => call['method'] == 'thread/sample'),
+          hasLength(keyboard ? 0 : 1),
+        );
       });
       await tester.pumpWidget(MaterialApp(
         home: Scaffold(
@@ -126,6 +138,136 @@ void main() {
       });
     });
   }
+
+  test('reopening a completed task reuses the suggestion without resampling',
+      () async {
+    final transport = Transport()
+      ..handle = (call) => switch (call['method']) {
+            'thread/turns/list' => {
+                'data': [
+                  {'id': 'finished', 'status': 'completed'},
+                ],
+              },
+            'thread/sample' => {
+                'sourceTurnId': 'finished',
+                'text': 'Check the result.',
+              },
+            _ => {},
+          };
+    final rpc = JsonRpcClient(transport)..start();
+    final controller =
+        AppController.connectedForTesting(rpc: rpc, cachedTasks: [task()]);
+    addTearDown(() async {
+      controller.dispose();
+      await rpc.close();
+    });
+    for (var i = 0; i < 2; i++) {
+      await controller.selectTask('task');
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.composerPredictionFor('task'), 'Check the result.');
+      controller.clearSelectedTask();
+    }
+    expect(transport.calls.where((call) => call['method'] == 'thread/sample'),
+        hasLength(1));
+  });
+
+  test('history cannot sample an older turn after a newer live turn starts',
+      () async {
+    final transport = Transport()..withheldMethods.add('thread/turns/list');
+    final rpc = JsonRpcClient(transport)..start();
+    final controller =
+        AppController.connectedForTesting(rpc: rpc, cachedTasks: [task()]);
+    addTearDown(() async {
+      controller.dispose();
+      await rpc.close();
+    });
+    await controller.selectTask('task');
+    final read = transport.calls
+        .singleWhere((call) => call['method'] == 'thread/turns/list');
+    transport.notify('turn/started', {
+      'threadId': 'task',
+      'turn': {'id': 'new', 'status': 'inProgress'},
+    });
+    transport.input.add(jsonEncode({
+      'id': read['id'],
+      'result': {
+        'data': [
+          {'id': 'old', 'status': 'completed'},
+        ],
+      },
+    }));
+    await Future<void>.delayed(Duration.zero);
+    expect(transport.calls.where((call) => call['method'] == 'thread/sample'),
+        isEmpty);
+  });
+
+  test(
+      'history refresh catches a missed completion despite a stale active turn',
+      () async {
+    var finished = false;
+    final transport = Transport()
+      ..handle = (call) => switch (call['method']) {
+            'thread/turns/list' => {
+                'data': [
+                  {
+                    'id': 'turn',
+                    'status': finished ? 'completed' : 'inProgress',
+                  },
+                ],
+              },
+            'thread/sample' => {
+                'sourceTurnId': 'turn',
+                'text': 'Check the result.',
+              },
+            _ => {},
+          };
+    final rpc = JsonRpcClient(transport)..start();
+    final controller =
+        AppController.connectedForTesting(rpc: rpc, cachedTasks: [task()]);
+    addTearDown(() async {
+      controller.dispose();
+      await rpc.close();
+    });
+    await controller.selectTask('task');
+    transport.notify('turn/started', {
+      'threadId': 'task',
+      'turn': {'id': 'turn', 'status': 'inProgress'},
+    });
+    await Future<void>.delayed(Duration.zero);
+    expect(transport.calls.where((call) => call['method'] == 'thread/sample'),
+        isEmpty);
+
+    finished = true;
+    await controller.retrySelectedTaskDetails();
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.composerPredictionFor('task'), 'Check the result.');
+    expect(transport.calls.where((call) => call['method'] == 'thread/sample'),
+        hasLength(1));
+  });
+
+  test('opening a completed task with a draft does not sample', () async {
+    final transport = Transport()
+      ..handle = (call) => call['method'] == 'thread/turns/list'
+          ? {
+              'data': [
+                {'id': 'finished', 'status': 'completed'},
+              ],
+            }
+          : {};
+    final rpc = JsonRpcClient(transport)..start();
+    final controller =
+        AppController.connectedForTesting(rpc: rpc, cachedTasks: [task()]);
+    addTearDown(() async {
+      controller.dispose();
+      await rpc.close();
+    });
+    final draft = controller.draftForTask('task').composer..text = 'My draft';
+    await controller.selectTask('task');
+    await Future<void>.delayed(Duration.zero);
+    expect(draft.text, 'My draft');
+    expect(transport.calls.where((call) => call['method'] == 'thread/sample'),
+        isEmpty);
+  });
 
   test('drops mismatched and late predictions after the draft is edited',
       () async {

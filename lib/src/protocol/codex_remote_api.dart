@@ -371,11 +371,18 @@ final class CodexRemoteApi {
     return _isActiveTurnStatus(turn['status']) ? turn['id'] as String? : null;
   }
 
-  Future<TaskTurnIssue?> readLatestTurnIssue(String threadId) async =>
-      _parseFailedTurn(await _readLatestTurn(
-        threadId,
-        timeout: const Duration(seconds: 10),
-      ));
+  Future<({String? completedTurnId, TaskTurnIssue? issue})>
+      readLatestTurnMetadata(String threadId) async {
+    final turn = await _readLatestTurn(
+      threadId,
+      timeout: const Duration(seconds: 10),
+    );
+    return (
+      completedTurnId:
+          turn['status'] == 'completed' ? turn['id'] as String? : null,
+      issue: _parseFailedTurn(turn),
+    );
+  }
 
   Future<String?> sampleComposerPrediction(
     String threadId,

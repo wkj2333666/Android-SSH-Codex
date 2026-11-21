@@ -43,6 +43,18 @@ import 'transport/ssh_unix_tunnel.dart';
 
 enum AppSection { hosts, tasks }
 
+typedef _PredictionKey = ({String hostId, String threadId, String turnId});
+
+final class _PredictionSample {
+  bool pending = true;
+  String? text;
+
+  void dismiss() {
+    pending = false;
+    text = null;
+  }
+}
+
 enum RemoteConnectionPhase { disconnected, connecting, connected, reconnecting }
 
 enum ConnectionStage {
@@ -314,9 +326,9 @@ final class AppController extends ChangeNotifier {
   String? _selectedTaskId;
   final Map<String, String> _activeTurnIds = {};
   final _turnIssues = TaskTurnIssues();
-  final _predictionTurns = <(String, String)>{};
-  ({String threadId, String turnId})? _predictionSource;
-  String? _predictionText;
+  final _predictionSamples = <_PredictionKey, _PredictionSample>{};
+  _PredictionKey? _predictionSource;
+  int _predictionRevision = 0;
   CodexRemoteApi? _unsupportedPredictionApi;
   final Map<String, DateTime> _projectActivityByCwd = {};
   String? _error;
@@ -385,7 +397,7 @@ final class AppController extends ChangeNotifier {
       if (saved != null) draft.restore(saved);
       void save() {
         if (hostId == _selectedHostId && draft.hasComposerInput) {
-          _clearPrediction(taskId);
+          _dismissPrediction(taskId);
         }
         if (_disposed || draft.sending) return;
         _savedDrafts[(hostId, taskId)] = draft.toJson();
@@ -408,13 +420,15 @@ final class AppController extends ChangeNotifier {
   RemoteThreadGoal? get selectedGoal => _goals[_selectedTaskId];
 
   String? composerPredictionFor(String taskId) =>
-      _predictionSource?.threadId == taskId && _canPredictFor(taskId)
-          ? _predictionText
+      _predictionSource?.threadId == taskId &&
+              _predictionSource?.hostId == _selectedHostId &&
+              _canPredictFor(taskId)
+          ? _predictionSamples[_predictionSource]?.text
           : null;
 
   bool acceptComposerPrediction(String taskId, String expected) {
     if (composerPredictionFor(taskId) != expected) return false;
-    _clearPrediction(taskId);
+    _dismissPrediction(taskId);
     draftForTask(taskId).composer.value = TextEditingValue(
       text: expected,
       selection: TextSelection.collapsed(offset: expected.length),
@@ -434,48 +448,77 @@ final class AppController extends ChangeNotifier {
       !draftForTask(threadId).hasComposerInput;
 
   void _clearPrediction([String? threadId]) {
-    if (threadId != null && _predictionSource?.threadId != threadId) return;
+    if (threadId != null && _selectedTaskId != threadId) return;
+    _predictionRevision++;
     _predictionSource = null;
-    _predictionText = null;
   }
 
-  Future<void> _requestPrediction(String threadId, String turnId) async {
+  void _dismissPrediction(String threadId) {
+    final source = _predictionSource;
+    if (source?.threadId == threadId && source?.hostId == _selectedHostId) {
+      _predictionSamples[source]?.dismiss();
+    }
+    _clearPrediction(threadId);
+  }
+
+  Future<void> _requestPrediction(
+    String threadId,
+    String turnId, {
+    bool fromHistory = false,
+  }) async {
     final api = _api;
-    if (_selectedTaskId != threadId ||
-        api == null ||
-        api == _unsupportedPredictionApi ||
-        !_predictionTurns.add((threadId, turnId))) {
+    final hostId = _selectedHostId;
+    if (api == null || hostId == null || !_canPredictFor(threadId)) return;
+    final source = (hostId: hostId, threadId: threadId, turnId: turnId);
+    final previous = _predictionSamples[source];
+    if (previous != null) {
+      if (fromHistory &&
+          (previous.pending || previous.text != null) &&
+          _predictionSource != source) {
+        _predictionSource = source;
+        if (previous.text != null) notifyListeners();
+      }
       return;
     }
-    if (_predictionTurns.length > 128) {
-      _predictionTurns.remove(_predictionTurns.first);
+    if (api == _unsupportedPredictionApi) return;
+    final sample = _predictionSamples[source] = _PredictionSample();
+    if (_predictionSamples.length > 128) {
+      _predictionSamples.remove(_predictionSamples.keys.first);
     }
-    _clearPrediction();
-    if (!_canPredictFor(threadId)) return;
-    final source = _predictionSource = (threadId: threadId, turnId: turnId);
+    _predictionSource = source;
     final attempt = _connectionAttempt;
+    final trigger = fromHistory ? 'history' : 'live';
+    Diagnostics.record('prediction.sampleRequested', {'trigger': trigger});
     try {
       final text = await api.sampleComposerPrediction(threadId, turnId);
-      if (api != _api ||
-          attempt != _connectionAttempt ||
-          _predictionSource != source) {
+      if (api != _api || attempt != _connectionAttempt || !sample.pending) {
         return;
       }
-      if (text == null || !_canPredictFor(threadId)) {
-        _clearPrediction();
-        return;
+      sample.pending = false;
+      sample.text = text;
+      Diagnostics.record('prediction.sampleReceived', {
+        'trigger': trigger,
+        'hasSuggestion': text != null,
+      });
+      if (text != null &&
+          _predictionSource == source &&
+          _canPredictFor(threadId)) {
+        notifyListeners();
       }
-      _predictionText = text;
-      notifyListeners();
     } catch (error) {
       if (api != _api || attempt != _connectionAttempt) return;
+      if (error is RpcDisconnectedException && sample.pending) {
+        _predictionSamples.remove(source);
+      } else {
+        sample.dismiss();
+      }
       if (error is RpcRemoteException && error.code == -32601) {
         _unsupportedPredictionApi = api;
       }
-      if (_predictionSource == source) _clearPrediction();
       // Unsupported servers and prediction failures never interrupt chat.
       Diagnostics.record('prediction.sampleFailed', {
         'attempt': attempt,
+        'trigger': trigger,
         'errorType': error.runtimeType.toString(),
         if (error is RpcRemoteException) 'rpcCode': error.code,
       });
@@ -1081,7 +1124,7 @@ final class AppController extends ChangeNotifier {
       'keepAliveCached': _keepAlive.isEnabled,
     });
     _inBackground = true;
-    final hadPrediction = _predictionText != null;
+    final hadPrediction = _predictionSamples[_predictionSource]?.text != null;
     _clearPrediction();
     _expediteReconnect = false;
     _refreshTimer?.cancel();
@@ -1372,6 +1415,7 @@ final class AppController extends ChangeNotifier {
     unawaited(_refreshGoal(taskId));
     final attempt = _connectionAttempt;
     final profileId = _selectedHostId!;
+    final predictionRevision = ++_predictionRevision;
     final token = _historyLoadState.beginInitial(taskId);
     notifyListeners();
     try {
@@ -1397,7 +1441,13 @@ final class AppController extends ChangeNotifier {
       _agentDeltaBatcher.flush();
       _taskReducer.mergeLatestItems(epoch, taskId, page.items,
           readToken: readToken);
-      unawaited(_restoreLatestTurnIssue(api, epoch, taskId));
+      unawaited(_restoreLatestTurnMetadata(
+        api,
+        epoch,
+        taskId,
+        predictionRevision: predictionRevision,
+        subscribed: subscriptionError == null,
+      ));
       if (subscriptionError != null) {
         _historyLoadState.fail(token, subscriptionError);
       }
@@ -1408,23 +1458,33 @@ final class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> _restoreLatestTurnIssue(
+  Future<void> _restoreLatestTurnMetadata(
     CodexRemoteApi api,
     int epoch,
-    String taskId,
-  ) async {
+    String taskId, {
+    required int predictionRevision,
+    required bool subscribed,
+  }) async {
     final revision = _turnIssues.revision;
     try {
-      final issue = await api.readLatestTurnIssue(taskId);
-      if (issue == null ||
-          api != _api ||
-          epoch != _epoch ||
-          taskId != _selectedTaskId ||
-          revision != _turnIssues.revision) {
+      final latest = await api.readLatestTurnMetadata(taskId);
+      if (api != _api || epoch != _epoch || taskId != _selectedTaskId) {
         return;
       }
-      _turnIssues.restore(taskId, issue);
-      notifyListeners();
+      final issue = latest.issue;
+      if (issue != null && revision == _turnIssues.revision) {
+        _turnIssues.restore(taskId, issue);
+        notifyListeners();
+      }
+      final turnId = latest.completedTurnId;
+      if (turnId != null &&
+          subscribed &&
+          predictionRevision == _predictionRevision) {
+        // A completion missed while away can leave a cached active turn.
+        // The revision prevents this snapshot from replacing a live update.
+        if (_activeTurnIds.remove(taskId) != null) notifyListeners();
+        unawaited(_requestPrediction(taskId, turnId, fromHistory: true));
+      }
     } catch (_) {
       // Turn metadata is optional; loading the timeline must remain separate.
     }
@@ -3178,6 +3238,7 @@ final class AppController extends ChangeNotifier {
       final activeTurn = _activeTurnIds[threadId];
       activeTurnChanged = _activeTurnIds.remove(threadId) != null;
       final turn = params['turn'];
+      if (_selectedTaskId == threadId) _predictionRevision++;
       if (turn is Map &&
           turn['status'] == 'completed' &&
           turn['id'] is String &&
@@ -3312,7 +3373,9 @@ final class AppController extends ChangeNotifier {
   Future<void> _closeTransport(
       {String reason = 'connection_replaced_or_closed'}) async {
     _clearPrediction();
-    _predictionTurns.clear();
+    // Results and completed attempts deduplicate across reconnects. A sample
+    // still in flight on this transport can be retried on the new one.
+    _predictionSamples.removeWhere((_, sample) => sample.pending);
     _unsupportedPredictionApi = null;
     final closingPorts = portForwards.detach();
     accountUsage.bind(null);
