@@ -63,6 +63,10 @@ final class TaskDraft extends ChangeNotifier {
   bool _disposed = false;
   bool get disposed => _disposed;
 
+  bool get hasComposerInput =>
+      composer.text.isNotEmpty || attachments.isNotEmpty || skill != null ||
+      sending || picking;
+
   Map<String, dynamic> toJson() => {
         'text': composer.text,
         'permissionMode': permissionMode.name,
