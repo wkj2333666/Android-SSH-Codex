@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:dartssh2/dartssh2.dart';
@@ -14,19 +16,37 @@ class DownloadCancelled implements Exception {
 }
 
 class DownloadCancellation {
-  final _done = Completer<void>();
-  bool get isCancelled => _done.isCompleted;
+  final _waiters = <void Function()>{};
+  bool _cancelled = false;
+  bool get isCancelled => _cancelled;
+
   void cancel() {
-    if (!isCancelled) _done.complete();
+    if (isCancelled) return;
+    _cancelled = true;
+    for (final waiter in _waiters) {
+      waiter();
+    }
+    _waiters.clear();
   }
 
   void check() {
     if (isCancelled) throw DownloadCancelled();
   }
 
-  Future<T> wait<T>(Future<T> future) {
-    return Future.any<T>(
-        [future, _done.future.then<T>((_) => throw DownloadCancelled())]);
+  Future<T> wait<T>(Future<T> future) async {
+    final signal = Completer<T>();
+    void wake() => signal.completeError(DownloadCancelled());
+    final result = Future.any([future, signal.future]);
+    if (isCancelled) {
+      wake();
+    } else {
+      _waiters.add(wake);
+    }
+    try {
+      return await result;
+    } finally {
+      _waiters.remove(wake);
+    }
   }
 }
 
@@ -67,13 +87,21 @@ Future<T> _untilClosed<T>(SSHClient client, Future<T> operation) => Future.any([
 /// release its SSH channel, so a download must never borrow the chat client.
 class SftpDownloadSource implements DownloadSource {
   SftpDownloadSource._(
-      this.connection, this.sftp, this.file, this.path, this.maxBytes);
+      this.connection, this.sftp, this.file, this.path, this.maxBytes) {
+    // dartssh2 may leave SFTP replies pending after the transport disappears.
+    // Release them once per connection, not with a close listener per read.
+    unawaited(connection.client.done.then<void>(
+      (_) => _closeSftp(),
+      onError: (Object _, StackTrace __) => _closeSftp(),
+    ));
+  }
   final SshConnection connection;
   final SftpClient sftp;
   final SftpFile file;
   final String path;
   final int maxBytes;
   bool _closed = false;
+  bool _sftpClosed = false;
 
   static Future<SftpDownloadSource> open(SshConnection connection, String path,
       {int maxBytes = maxDownloadBytes}) async {
@@ -117,11 +145,37 @@ class SftpDownloadSource implements DownloadSource {
 
   @override
   Future<List<int>> read(int offset, int length) async {
-    if (connection.client.isClosed) {
-      throw SSHStateError('Download connection closed');
+    BytesBuilder? buffer;
+    var remaining = length;
+    while (remaining > 0) {
+      if (_sftpClosed || connection.client.isClosed) {
+        throw SSHStateError('Download connection closed');
+      }
+      // Keep only one wire request per read future: on socket loss there
+      // are no internal, unobserved SFTP futures left over.
+      final wanted = min(remaining, resumableReadBytes);
+      final bytes = await file
+          .read(
+            offset: offset,
+            length: wanted,
+            chunkSize: wanted,
+            maxPendingRequests: 1,
+          )
+          .fold<Uint8List?>(null, (_, data) => data);
+      if (bytes == null) break;
+      if (bytes.length == length) return bytes;
+      // Some SFTP servers return fewer bytes than requested without EOF.
+      (buffer ??= BytesBuilder(copy: false)).add(bytes);
+      offset += bytes.length;
+      remaining -= bytes.length;
     }
-    return _untilClosed(
-        connection.client, file.readBytes(offset: offset, length: length));
+    return buffer?.takeBytes() ?? Uint8List(0);
+  }
+
+  void _closeSftp() {
+    if (_sftpClosed) return;
+    _sftpClosed = true;
+    sftp.close();
   }
 
   @override
@@ -129,15 +183,30 @@ class SftpDownloadSource implements DownloadSource {
     if (_closed) return;
     _closed = true;
     try {
-      sftp.close();
+      _closeSftp();
     } finally {
       await connection.close(reason: 'download_connection_closed');
     }
   }
 }
 
-/// Four 256 KiB reads in flight, one ordered writer. The SFTP channel's
-/// listener stays unpaused while disk writes run; payload buffering <= 1 MiB.
+const resumableReadBytes = 32 * 1024;
+const resumableReadWindow = 256;
+const _writeBatchBytes = 256 * 1024;
+
+typedef _ReadResult = List<int> Function();
+
+Future<_ReadResult> _prefetch(DownloadSource source, int offset, int length) =>
+    Future.sync(() => source.read(offset, length)).then<_ReadResult>(
+      (bytes) => () => bytes,
+      // A later offset can fail even while we are writing an earlier one.
+      // Observe that error immediately, then rethrow in file order.
+      onError: (Object error, StackTrace stack) =>
+          () => Error.throwWithStackTrace(error, stack),
+    );
+
+/// Slide the window as each ordered read completes instead of stopping at
+/// batch boundaries. At most 8 MiB of reads plus one disk batch is buffered.
 /// A retry resumes only from successfully written bytes and only for identical
 /// remote content. No automatic retry of writes or unsafe command submissions.
 Future<void> downloadResumableFile({
@@ -170,12 +239,14 @@ Future<void> downloadResumableFile({
           if (openingExpired || cancellation.isCancelled) await value.close();
           return value;
         });
-        source = await cancellation.wait(opening).timeout(operationTimeout);
+        final activeSource =
+            await cancellation.wait(opening).timeout(operationTimeout);
+        source = activeSource;
         stage = 'identify';
         onProgress
             ?.call(DownloadProgress(received, identity?.size, verifying: true));
         final remote = await cancellation
-            .wait(source.identify())
+            .wait(activeSource.identify())
             .timeout(verificationTimeout);
         if (remote.size < 0 || remote.size > maxDownloadBytes) {
           throw const FileDownloadException(
@@ -188,30 +259,38 @@ Future<void> downloadResumableFile({
         identity ??= remote;
         speedStart = received;
         speed.reset();
-        while (received < identity.size) {
-          cancellation.check();
-          stage = 'read';
-          final lengths = <int>[];
-          final pending = <Future<List<int>>>[];
-          var offset = received;
-          for (var i = 0; i < 4 && offset < identity.size; i++) {
-            final length = min(downloadChunkBytes, identity.size - offset);
-            lengths.add(length);
-            pending.add(source.read(offset, length));
+        final pending = Queue<(int, Future<_ReadResult>)>();
+        final writeBatch = BytesBuilder(copy: false);
+        var offset = received;
+        void prefetch() {
+          while (pending.length < resumableReadWindow &&
+              offset < remote.size) {
+            final length = min(resumableReadBytes, remote.size - offset);
+            pending.add((length, _prefetch(activeSource, offset, length)));
             offset += length;
           }
-          final blocks = await cancellation
-              .wait(Future.wait(pending, eagerError: true))
-              .timeout(operationTimeout);
-          for (var i = 0; i < blocks.length; i++) {
+        }
+
+        stage = 'read';
+        prefetch();
+        while (pending.isNotEmpty) {
+          cancellation.check();
+          stage = 'read';
+          final (length, read) = pending.removeFirst();
+          final block =
+              (await cancellation.wait(read.timeout(operationTimeout)))();
+          if (block.length != length) {
+            throw const FileDownloadException(
+                'Remote file was truncated during download.');
+          }
+          writeBatch.add(block);
+          prefetch();
+          if (writeBatch.length >= _writeBatchBytes || pending.isEmpty) {
             cancellation.check();
-            if (blocks[i].length != lengths[i]) {
-              throw const FileDownloadException(
-                  'Remote file was truncated during download.');
-            }
             stage = 'write';
-            await output.writeFrom(blocks[i]);
-            received += blocks[i].length;
+            final bytes = writeBatch.takeBytes();
+            await output.writeFrom(bytes);
+            received += bytes.length;
             if (updates.elapsedMilliseconds >= 100 ||
                 received == identity.size) {
               onProgress?.call(DownloadProgress(received, identity.size,
@@ -226,7 +305,7 @@ Future<void> downloadResumableFile({
         onProgress
             ?.call(DownloadProgress(received, identity.size, verifying: true));
         final finalIdentity = await cancellation
-            .wait(source.identify())
+            .wait(activeSource.identify())
             .timeout(verificationTimeout);
         if (!identity.matches(finalIdentity)) {
           throw const FileDownloadException(
