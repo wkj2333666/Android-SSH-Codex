@@ -409,7 +409,8 @@ class _TaskViewState extends State<TaskView> {
           onAcceptPrediction: prediction == null
               ? null
               : () {
-                  if (!controller.acceptComposerPrediction(task.id, prediction)) {
+                  if (!controller.acceptComposerPrediction(
+                      task.id, prediction)) {
                     return false;
                   }
                   _composerFocus.requestFocus();

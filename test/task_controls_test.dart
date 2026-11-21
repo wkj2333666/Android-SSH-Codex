@@ -84,8 +84,8 @@ void main() {
         });
         await Future<void>.delayed(Duration.zero);
         expect(
-          transport.calls.singleWhere(
-              (call) => call['method'] == 'thread/prediction/request')['params'],
+          transport.calls.singleWhere((call) =>
+              call['method'] == 'thread/prediction/request')['params'],
           {'threadId': 'task', 'sourceTurnId': 'finished'},
         );
         transport.notify('thread/prediction/updated', {
@@ -111,7 +111,8 @@ void main() {
       expect(suggestion, findsNothing);
       expect(draft.text, 'Check the result.');
       expect(draft.selection.baseOffset, draft.text.length);
-      expect(transport.calls.where((c) => c['method'] == 'turn/start'), isEmpty);
+      expect(
+          transport.calls.where((c) => c['method'] == 'turn/start'), isEmpty);
       await tester.pumpWidget(const SizedBox());
       await tester.runAsync(() async {
         controller.dispose();

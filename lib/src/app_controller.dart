@@ -408,8 +408,7 @@ final class AppController extends ChangeNotifier {
   RemoteThreadGoal? get selectedGoal => _goals[_selectedTaskId];
 
   String? composerPredictionFor(String taskId) =>
-      _predictionSource?.threadId == taskId &&
-              _canPredictFor(taskId)
+      _predictionSource?.threadId == taskId && _canPredictFor(taskId)
           ? _predictionText
           : null;
 
@@ -477,9 +476,8 @@ final class AppController extends ChangeNotifier {
       return;
     }
     final result = params['result'];
-    final text = result is Map && result['type'] == 'completed'
-        ? result['text']
-        : null;
+    final text =
+        result is Map && result['type'] == 'completed' ? result['text'] : null;
     if (text is! String ||
         text.trim().isEmpty ||
         !_canPredictFor(source.threadId)) {
