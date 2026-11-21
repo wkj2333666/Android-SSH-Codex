@@ -18,11 +18,14 @@ class MemorySource implements DownloadSource {
   final Future<void> Function(int)? beforeRead;
   bool closed = false;
   int active = 0;
+  int identities = 0;
   int peak = 0;
   final offsets = <int>[];
   @override
-  Future<DownloadIdentity> identify() async =>
-      DownloadIdentity(bytes.length, sha256.convert(bytes).toString());
+  Future<DownloadIdentity> identify() async {
+    identities++;
+    return DownloadIdentity(bytes.length, sha256.convert(bytes).toString());
+  }
   @override
   Future<List<int>> read(int offset, int length) async {
     offsets.add(offset);
@@ -99,6 +102,8 @@ void main() {
     expect(first.peak, lessThanOrEqualTo(resumableReadWindow));
     expect(second.peak, lessThanOrEqualTo(resumableReadWindow));
     expect(first.closed && second.closed, isTrue);
+    expect(first.identities, 1);
+    expect(second.identities, 1);
     expect(await output.readAsBytes(), bytes);
   });
 

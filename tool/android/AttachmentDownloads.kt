@@ -2,6 +2,7 @@ package io.github.wkj2333666.android_ssh_codex
 
 import android.app.Activity
 import android.content.Intent
+import android.os.Build
 import android.webkit.MimeTypeMap
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
@@ -31,6 +32,13 @@ class AttachmentDownloads(private val activity: Activity) {
                     cached.parentFile?.parentFile == activity.cacheDir.canonicalFile && cached.isFile &&
                     cached.length() <= 1024L * 1024L * 1024L)
                 cached
+            }
+            if (Build.VERSION.SDK_INT >= 29 && file.name == "payload.bin") {
+                PublicDownloads.publish(activity, file.absolutePath, name) { saved ->
+                    if (saved.isSuccess) result.success(true)
+                    else result.error("SAVE_FAILED", "Cannot save to Downloads/RemoteCodex", null)
+                }
+                return
             }
             val mime = if (video) {
                 MimeTypeMap.getSingleton().getMimeTypeFromExtension(

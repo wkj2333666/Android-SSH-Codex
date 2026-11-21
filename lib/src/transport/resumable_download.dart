@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
@@ -228,6 +229,12 @@ Future<void> downloadResumableFile({
   final updates = Stopwatch()..start();
   final speed = Stopwatch()..start();
   var speedStart = 0;
+  Digest? digest;
+  final checksum = sha256.startChunkedConversion(
+      ChunkedConversionSink.withCallback((digests) => digest = digests.single));
+  // Reuse the batch for every disk write instead of allocating one buffer
+  // per 256 KiB. It is only reused once both I/O and hashing finish.
+  final writeBatch = Uint8List(_writeBatchBytes);
   try {
     while (true) {
       cancellation.check();
@@ -257,10 +264,11 @@ Future<void> downloadResumableFile({
               'Remote file changed. Retry the download from the beginning.');
         }
         identity ??= remote;
+        onProgress?.call(DownloadProgress(received, remote.size));
         speedStart = received;
         speed.reset();
         final pending = Queue<(int, Future<_ReadResult>)>();
-        final writeBatch = BytesBuilder(copy: false);
+        var batchLength = 0;
         var offset = received;
         void prefetch() {
           while (pending.length < resumableReadWindow && offset < remote.size) {
@@ -282,14 +290,16 @@ Future<void> downloadResumableFile({
             throw const FileDownloadException(
                 'Remote file was truncated during download.');
           }
-          writeBatch.add(block);
+          writeBatch.setRange(batchLength, batchLength + length, block);
+          batchLength += length;
           prefetch();
-          if (writeBatch.length >= _writeBatchBytes || pending.isEmpty) {
+          if (batchLength == _writeBatchBytes || pending.isEmpty) {
             cancellation.check();
             stage = 'write';
-            final bytes = writeBatch.takeBytes();
-            await output.writeFrom(bytes);
-            received += bytes.length;
+            await output.writeFrom(writeBatch, 0, batchLength);
+            checksum.addSlice(writeBatch, 0, batchLength, false);
+            received += batchLength;
+            batchLength = 0;
             if (updates.elapsedMilliseconds >= 100 ||
                 received == identity.size) {
               onProgress?.call(DownloadProgress(received, identity.size,
@@ -303,16 +313,11 @@ Future<void> downloadResumableFile({
         stage = 'verify';
         onProgress
             ?.call(DownloadProgress(received, identity.size, verifying: true));
-        final finalIdentity = await cancellation
-            .wait(activeSource.identify())
-            .timeout(verificationTimeout);
-        if (!identity.matches(finalIdentity)) {
-          throw const FileDownloadException(
-              'Remote file changed during download.');
-        }
+        // Verify the bytes committed across all attempts against the
+        // fingerprint of the original remote snapshot. Each reconnect must
+        // still match that fingerprint before any additional bytes are read.
         await output.flush();
-        final digest =
-            await cancellation.wait(sha256.bind(destination.openRead()).first);
+        checksum.close();
         if (digest.toString() != identity.digest) {
           throw const FileDownloadException(
               'Download checksum mismatch. The incomplete file was not saved.');

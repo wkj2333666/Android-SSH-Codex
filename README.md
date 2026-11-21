@@ -81,11 +81,15 @@ UDP and public/shared tunnels are not provided.
 
 Android downloads use a dedicated SSH/SFTP connection with bounded parallel
 reads, a 1 GiB size limit, speed/progress display, and cancellation. Downloads
-retry transient failures up to three times within the current operation and
-resume from written bytes only when the remote SHA-256 still matches. Completed
-content is verified before opening the phone save picker. Resuming after app
-process death is not supported. Missing SFTP support or checksum tools produces
-an error rather than silently falling back to slow per-block shell commands.
+run in the background and are automatically saved to **Downloads/RemoteCodex**.
+The Downloads screen shows the queue and history and can open a saved file or the
+downloads folder. Android 8–9 prompt for storage permission.
+
+Transfers retry transient failures up to three times, resuming from written
+bytes only when the remote SHA-256 still matches. The app verifies content before
+it appears in shared storage. Once the app process is stopped, interrupted
+downloads can be restarted from the Downloads screen. An enabled SFTP subsystem
+and checksum tools are required.
 
 The Android service declares the `specialUse` type for interactive SSH sessions,
 not media playback or periodic data sync. Google Play distribution requires the
@@ -472,10 +476,10 @@ stage without recording file paths or contents.
 
 On Android, tap a file link in an agent reply (absolute remote paths,
 `sandbox:/…`, `file:///…`, or project-relative paths), confirm the download,
-then choose a save location in the system picker. Attachment cards also have a
-Download action. Files use a dedicated resumable SSH/SFTP connection, with a
-1 GiB limit; temporary copies are removed
-after saving, cancelling or failure. HTTP/HTTPS links still open in your browser.
+then keep working while it runs. Attachment cards also have a Download action.
+Open **Downloads** from the app toolbar to check progress, cancel or retry a
+transfer, or find a completed file in **Downloads/RemoteCodex**. HTTP/HTTPS links
+still open in your browser.
 Remote files must exist on the connected SSH host; links to a different sandbox
 cannot be downloaded through this connection.
 
