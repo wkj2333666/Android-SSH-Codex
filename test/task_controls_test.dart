@@ -201,7 +201,8 @@ void main() {
         isEmpty);
   });
 
-  test('history refresh catches a missed completion despite a stale active turn',
+  test(
+      'history refresh catches a missed completion despite a stale active turn',
       () async {
     var finished = false;
     final transport = Transport()
