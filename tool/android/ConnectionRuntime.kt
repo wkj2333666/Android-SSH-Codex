@@ -31,6 +31,7 @@ object ConnectionRuntime {
             if (call.method == "snapshot") result.success(diagnostics?.snapshot())
             else result.notImplemented()
         }
+        PublicDownloads.install(app, created.dartExecutor.binaryMessenger)
         installDetachedHandlers(app, created)
         created.dartExecutor.executeDartEntrypoint(DartExecutor.DartEntrypoint.createDefault())
         DiagnosticLog.record(app, "runtime.created")
@@ -73,9 +74,8 @@ object ConnectionRuntime {
                 } else result.error("ACTIVITY_CLOSED", "Open the app to export diagnostics", null)
             }
         MethodChannel(messenger, "android_ssh_codex/attachments")
-            .setMethodCallHandler { call, result ->
-                if (call.method == "downloadDirectory") result.success(app.cacheDir.absolutePath)
-                else result.error("ACTIVITY_CLOSED", "Open the app to select or save files", null)
+            .setMethodCallHandler { _, result ->
+                result.error("ACTIVITY_CLOSED", "Open the app to select or preview files", null)
             }
         MethodChannel(messenger, "android_ssh_codex/previews")
             .setMethodCallHandler { _, result ->

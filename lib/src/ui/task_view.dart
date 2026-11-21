@@ -14,6 +14,7 @@ import '../tasks/task_reducer.dart';
 import '../tasks/task_draft.dart';
 import 'composer_completion.dart';
 import 'document_preview.dart';
+import 'downloads_view.dart';
 import 'task_timeline_render_cache.dart';
 import 'timeline_entries.dart';
 import 'turn_settings_picker.dart';
@@ -240,8 +241,8 @@ class _TaskViewState extends State<TaskView> {
           ),
         Expanded(
             child: RemoteFileActions(
-                download: widget.controller.downloadFile,
-                downloadWithProgress: widget.controller.downloadFile,
+                download: (link) =>
+                    widget.controller.queueDownload(link, cwd: widget.task.cwd),
                 previewVideo: Attachments.supported
                     ? widget.controller.previewVideo
                     : null,
@@ -1446,6 +1447,7 @@ class _SubagentHistoryState extends State<_SubagentHistory> {
       appBar: AppBar(
         title: Text(_title ?? widget.agent.label),
         actions: [
+          if (Attachments.supported) DownloadsAction(controller: controller),
           IconButton(
             tooltip: 'Refresh subagent history',
             onPressed: _loading || _loadingOlder ? null : () => _load(),
@@ -1458,8 +1460,7 @@ class _SubagentHistoryState extends State<_SubagentHistory> {
           Text(_role == null ? 'Read-only subagent' : 'Read-only · $_role'),
           Expanded(
             child: RemoteFileActions(
-              download: controller.downloadFile,
-              downloadWithProgress: controller.downloadFile,
+              download: (link) => controller.queueDownload(link, cwd: ''),
               previewVideo:
                   Attachments.supported ? controller.previewVideo : null,
               previewVisualization: Attachments.supported

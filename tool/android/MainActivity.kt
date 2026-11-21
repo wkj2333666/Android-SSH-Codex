@@ -17,6 +17,7 @@ class MainActivity : FlutterActivity() {
     override fun shouldDestroyEngineWithHost(): Boolean = false
 
     private var permissionResult: MethodChannel.Result? = null
+    private var storagePermissionResult: MethodChannel.Result? = null
     private var exportResult: MethodChannel.Result? = null
     private var videoResult: MethodChannel.Result? = null
     private var imageResult: MethodChannel.Result? = null
@@ -103,7 +104,17 @@ class MainActivity : FlutterActivity() {
         }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger,
             "android_ssh_codex/attachments").setMethodCallHandler { call, result ->
-            if (call.method == "downloadDirectory") result.success(cacheDir.absolutePath)
+            if (call.method == "authorizeDownloads") {
+                if (Build.VERSION.SDK_INT >= 29 ||
+                    checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
+                    result.success(true)
+                } else if (storagePermissionResult != null) {
+                    result.error("BUSY", "Storage permission request already open", null)
+                } else {
+                    storagePermissionResult = result
+                    requestPermissions(arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE), 4106)
+                }
+            }
             else if (call.method == "saveDownload") {
                 val downloads = attachmentDownloads
                 if (downloads == null) result.error("ACTIVITY_CLOSED", "Save picker closed", null)
@@ -279,6 +290,11 @@ class MainActivity : FlutterActivity() {
             permissionResult?.success(getSystemService(NotificationManager::class.java).areNotificationsEnabled())
             permissionResult = null
         }
+        if (requestCode == 4106) {
+            storagePermissionResult?.success(
+                grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED)
+            storagePermissionResult = null
+        }
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
@@ -293,6 +309,8 @@ class MainActivity : FlutterActivity() {
         finishExport(false, "Connection activity closed")
         ConnectionRuntime.installDetachedHandlers(applicationContext, flutterEngine)
         permissionResult?.error("ACTIVITY_CLOSED", "Connection activity closed", null)
+        storagePermissionResult?.error("ACTIVITY_CLOSED", "Storage permission request closed", null)
+        storagePermissionResult = null
         permissionResult = null
         videoResult?.error("ACTIVITY_CLOSED", "Video preview activity closed", null)
         videoResult = null

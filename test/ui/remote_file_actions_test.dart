@@ -48,7 +48,6 @@ void main() {
             body: RemoteFileActions(
       download: (_) async {
         downloads++;
-        return true;
       },
       previewVideo: (path, {onProgress, onReady}) async {
         expect(path, '/remote/a.mp4');
@@ -111,51 +110,32 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('download reports progress and specific failure', (tester) async {
-    final completion = Completer<bool>();
-    var cancellations = 0;
-    void Function(DownloadProgress)? update;
+  testWidgets('download does not block chat while enqueueing', (tester) async {
+    final completion = Completer<void>();
+    var tapped = false;
     await tester.pumpWidget(MaterialApp(
         home: Scaffold(
             body: RemoteFileActions(
-      download: (_) async => false,
-      cancelDownload: () => cancellations++,
-      downloadWithProgress: (_, {onProgress}) {
-        update = onProgress;
-        return completion.future;
-      },
+      download: (_) => completion.future,
       child: Builder(
-          builder: (context) => TextButton(
-                onPressed: () => showRemoteFileDownload(context, '/tmp/file'),
-                child: const Text('Start'),
-              )),
+          builder: (context) => Column(children: [
+                TextButton(
+                  onPressed: () => showRemoteFileDownload(context, '/tmp/file'),
+                  child: const Text('Start'),
+                ),
+                TextButton(
+                  onPressed: () => tapped = true,
+                  child: const Text('Keep working'),
+                ),
+              ])),
     ))));
     await tester.tap(find.text('Start'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Download'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-    update!(const DownloadProgress(1048576, 2097152));
-    await tester.pump();
-    expect(
-        tester
-            .widget<LinearProgressIndicator>(
-                find.byType(LinearProgressIndicator))
-            .value,
-        0.5);
-    expect(find.text('1.00 MiB received · 50%'), findsOneWidget);
-    update!(const DownloadProgress(1048576, 2097152, reconnecting: true));
-    await tester.pump();
-    expect(find.text('Connection interrupted. Reconnecting and resuming…'),
-        findsOneWidget);
-    update!(const DownloadProgress(1048576, 2097152, verifying: true));
-    await tester.pump();
-    expect(find.text('Verifying file integrity…'), findsOneWidget);
-    update!(const DownloadProgress(1048576, 2097152, bytesPerSecond: 2097152));
-    await tester.pump();
-    expect(find.text('2.00 MiB/s'), findsOneWidget);
-    await tester.tap(find.text('Cancel download'));
-    expect(cancellations, 1);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Keep working'));
+    expect(tapped, isTrue);
+    expect(find.byType(LinearProgressIndicator), findsNothing);
     completion
         .completeError(const FileDownloadException('File does not exist.'));
     await tester.pumpAndSettle();
@@ -173,7 +153,6 @@ void main() {
             body: RemoteFileActions(
       download: (path) async {
         downloads.add(path);
-        return true;
       },
       child: MarkdownContent(
         text: '[Report](sandbox:/mnt/data/report.pdf)',
@@ -190,7 +169,7 @@ void main() {
     await tester.tap(find.text('Download'));
     await tester.pumpAndSettle();
     expect(downloads, ['sandbox:/mnt/data/report.pdf']);
-    expect(find.text('File saved'), findsOneWidget);
+    expect(find.text('Download remote file?'), findsNothing);
     markdown.onTapLink!('Web', 'https://example.com', '');
     await tester.pumpAndSettle();
     expect(web.single.host, 'example.com');

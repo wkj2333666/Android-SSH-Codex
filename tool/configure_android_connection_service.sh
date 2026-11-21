@@ -8,6 +8,9 @@ for permission in FOREGROUND_SERVICE FOREGROUND_SERVICE_SPECIAL_USE POST_NOTIFIC
     sed -i "/<manifest/a\\    <uses-permission android:name=\"android.permission.$permission\" />" "$manifest"
   fi
 done
+if ! grep -Fq 'android.permission.WRITE_EXTERNAL_STORAGE' "$manifest"; then
+  sed -i '/<manifest/a\    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />' "$manifest"
+fi
 if ! grep -Fq 'android:name=".ConnectionService"' "$manifest"; then
   sed -i '/<\/application>/i\        <service android:name=".ConnectionService" android:exported="false" android:stopWithTask="true" android:foregroundServiceType="specialUse">\n            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Maintains a user-initiated interactive SSH tunnel to a remote coding agent while switching apps." />\n        </service>' "$manifest"
 fi
@@ -34,6 +37,7 @@ mkdir -p "$kotlin_dir" "$android_root/app/src/main/res/drawable"
 cp "$template_root/MainActivity.kt" "$template_root/ConnectionService.kt" "$template_root/DiagnosticLog.kt" "$kotlin_dir/"
 cp "$template_root/AttachmentPicker.kt" "$kotlin_dir/"
 cp "$template_root/AttachmentDownloads.kt" "$kotlin_dir/"
+cp "$template_root/PublicDownloads.kt" "$kotlin_dir/"
 cp "$template_root/VideoPreviewActivity.kt" "$kotlin_dir/"
 cp "$template_root/ConnectionDiagnostics.kt" "$kotlin_dir/"
 cp "$template_root/ConnectionRuntime.kt" "$kotlin_dir/"

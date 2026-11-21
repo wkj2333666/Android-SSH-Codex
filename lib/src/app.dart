@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 import 'app_controller.dart';
+import 'attachments.dart';
 import 'connection_lifecycle.dart';
 import 'diagnostics.dart';
+import 'ui/downloads_view.dart';
 import 'ui/hosts_view.dart';
 import 'ui/tasks_view.dart';
 import 'ui/port_forwards_view.dart';
@@ -98,6 +100,8 @@ class _Workspace extends StatelessWidget {
                         : AppBar(
                             title: const Text('Remote Codex'),
                             actions: [
+                              if (Attachments.supported)
+                                DownloadsAction(controller: controller),
                               _PortsAction(controller: controller),
                               if (Diagnostics.supported)
                                 const _DiagnosticExport(),
@@ -188,6 +192,8 @@ class _DesktopNavigation extends StatelessWidget {
                   onPressed: () => controller.selectSection(AppSection.tasks),
                 ),
                 const Divider(indent: 12, endIndent: 12),
+                if (Attachments.supported)
+                  DownloadsAction(controller: controller),
                 _PortsAction(controller: controller),
                 if (Diagnostics.supported) const _DiagnosticExport(),
                 _ConnectionAction(controller: controller),

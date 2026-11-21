@@ -36,6 +36,7 @@ import 'transport/anonymous_workspace.dart';
 import 'transport/codex_daemon.dart';
 import 'transport/connection_setup.dart';
 import 'transport/attachment_upload.dart';
+import 'transport/download_queue.dart';
 import 'transport/file_download.dart' as downloads;
 import 'transport/resumable_download.dart';
 import 'transport/ssh_connector.dart';
@@ -224,6 +225,12 @@ final class AppController extends ChangeNotifier {
   final SshConnector _connector;
   Future<String> Function()? _testCreateAnonymousWorkspace;
   final ConnectionKeepAlive _keepAlive = ConnectionKeepAlive();
+  bool _connectionWantsKeepAlive = false;
+  bool _downloadWantsKeepAlive = false;
+  late final downloadQueue = DownloadQueue(
+    _publishQueuedDownload,
+    onChanged: _downloadQueueChanged,
+  );
   late final ConnectionNetwork _network = ConnectionNetwork(_networkChanged);
   bool _networkAvailable = true;
   String? _keepAliveWarning;
@@ -530,6 +537,7 @@ final class AppController extends ChangeNotifier {
     if (store is! WorkspaceStore) return;
     final saved = await (store as WorkspaceStore).readWorkspace();
     portForwards.restore(saved['portForwards']);
+    downloadQueue.restore(saved['downloads']);
     for (final raw in saved['drafts'] as List? ?? const []) {
       final entry = raw as Map;
       _savedDrafts[(entry['host'] as String, entry['task'] as String)] =
@@ -557,6 +565,7 @@ final class AppController extends ChangeNotifier {
     }
     final snapshot = <String, dynamic>{
       'portForwards': portForwards.rules.map((rule) => rule.toJson()).toList(),
+      'downloads': downloadQueue.toJson(),
       'drafts': [
         for (final entry in _savedDrafts.entries)
           {'host': entry.key.$1, 'task': entry.key.$2, 'draft': entry.value}
@@ -1138,9 +1147,17 @@ final class AppController extends ChangeNotifier {
   }
 
   Future<void> _setKeepAlive(bool enabled) async {
+    _connectionWantsKeepAlive = enabled;
+    await _syncKeepAlive(verifyNative: enabled);
+  }
+
+  Future<void> _syncKeepAlive({bool verifyNative = false}) async {
     final attempt = _connectionAttempt;
     try {
-      await _keepAlive.setEnabled(enabled, verifyNative: enabled);
+      await _keepAlive.setEnabled(
+        !_disposed && (_connectionWantsKeepAlive || _downloadWantsKeepAlive),
+        verifyNative: verifyNative,
+      );
       if (attempt == _connectionAttempt) _keepAliveWarning = null;
     } catch (exception) {
       if (attempt != _connectionAttempt) return;
@@ -2089,18 +2106,61 @@ final class AppController extends ChangeNotifier {
     cancellation.cancel();
   }
 
-  Future<bool> downloadFile(String link,
-          {void Function(downloads.DownloadProgress)? onProgress}) =>
-      _receiveRemoteFile(link, onProgress: onProgress,
-          openFile: (file, name) async {
-        final size = await file.length();
-        onProgress?.call(downloads.DownloadProgress(size, size, saving: true));
-        return await Attachments.channel.invokeMethod<bool>('saveDownload', {
-              'path': file.path,
-              'name': name,
-            }) ??
-            false;
-      });
+  Future<void> queueDownload(String link, {String? cwd}) async {
+    if (!Attachments.supported) throw UnsupportedError('Android download only');
+    final profile = selectedHost;
+    final path = downloads.remoteFilePath(link, cwd ?? selectedTask?.cwd ?? '');
+    if (profile == null || path == null) {
+      throw StateError('Remote file unavailable');
+    }
+    await _authorizeDownloads();
+    downloadQueue.enqueue(profile.id, path, profile.label);
+  }
+
+  Future<void> retryDownload(DownloadEntry entry) async {
+    await _authorizeDownloads();
+    downloadQueue.retry(entry);
+  }
+
+  Future<void> _authorizeDownloads() async {
+    if (await Attachments.channel.invokeMethod<bool>('authorizeDownloads') !=
+        true) {
+      throw StateError('Allow storage access in Android settings to download.');
+    }
+    if (_disposed) throw StateError('Downloads are closed');
+  }
+
+  void _downloadQueueChanged() {
+    if (_workspaceLoaded) {
+      unawaited(_saveWorkspace().catchError((Object error) {
+        Diagnostics.record(
+            'download.historyFailed', Diagnostics.errorFields(error));
+      }));
+    }
+    final busy = downloadQueue.activeCount > 0;
+    if (_downloadWantsKeepAlive != busy) {
+      _downloadWantsKeepAlive = busy;
+      unawaited(_syncKeepAlive());
+    }
+  }
+
+  Future<SavedDownload> _publishQueuedDownload(
+    DownloadEntry entry,
+    DownloadCancellation cancellation,
+    void Function(downloads.DownloadProgress) onProgress,
+  ) {
+    final profile =
+        _profiles.where((profile) => profile.id == entry.hostId).firstOrNull;
+    if (profile == null) throw StateError('The SSH host was removed.');
+    return _receiveFile(profile, entry.path, cancellation,
+        purpose: 'download',
+        onProgress: onProgress, openFile: (file, name) async {
+      final size = await file.length();
+      cancellation.check();
+      onProgress(downloads.DownloadProgress(size, size, saving: true));
+      return PublicDownloadStorage.save(file.path, name);
+    });
+  }
 
   Future<bool> previewVideo(String link,
           {void Function(downloads.DownloadProgress)? onProgress,
@@ -2133,7 +2193,7 @@ final class AppController extends ChangeNotifier {
 
   Future<bool> _receiveRemoteFile(String link,
       {required Future<bool> Function(File file, String name) openFile,
-      String purpose = 'download',
+      required String purpose,
       int maxBytes = downloads.maxDownloadBytes,
       String? cwd,
       void Function(downloads.DownloadProgress)? onProgress}) async {
@@ -2148,16 +2208,41 @@ final class AppController extends ChangeNotifier {
     _downloadingFile = true;
     final cancellation = DownloadCancellation();
     _downloadCancellation = cancellation;
+    try {
+      return await _receiveFile(profile, path, cancellation,
+          purpose: purpose,
+          maxBytes: maxBytes,
+          onProgress: onProgress,
+          openFile: openFile);
+    } finally {
+      _downloadingFile = false;
+      _downloadCancellation = null;
+    }
+  }
+
+  Future<T> _receiveFile<T>(
+    HostProfile profile,
+    String path,
+    DownloadCancellation cancellation, {
+    required String purpose,
+    required Future<T> Function(File file, String name) openFile,
+    int maxBytes = downloads.maxDownloadBytes,
+    void Function(downloads.DownloadProgress)? onProgress,
+  }) async {
     Directory? temporary;
     var stage = 'temporary_storage';
     try {
-      final cache =
-          await Attachments.channel.invokeMethod<String>('downloadDirectory');
+      final cache = await PublicDownloadStorage.channel
+          .invokeMethod<String>('stagingDirectory');
       if (cache == null) throw StateError('No download directory');
       temporary = await Directory(cache).createTemp('codex-download-');
       final file = File('${temporary.path}/payload.bin');
       stage = 'ssh_transfer';
       final secret = await _store.readSecret(profile.id);
+      final transfer = Stopwatch()..start();
+      int? preparationMs;
+      int? totalBytes;
+      var retryCount = 0;
       await downloadResumableFile(
         destination: file,
         cancellation: cancellation,
@@ -2171,20 +2256,42 @@ final class AppController extends ChangeNotifier {
           }
           return SftpDownloadSource.open(connection, path, maxBytes: maxBytes);
         },
-        onProgress: onProgress,
-        onRetry: (retry, received, error) =>
-            Diagnostics.record('download.retry', {
-          'purpose': purpose,
-          'retry': retry,
-          'receivedBytes': received,
-          ...Diagnostics.errorFields(error),
-        }),
+        onProgress: (progress) {
+          totalBytes = progress.total ?? totalBytes;
+          if (!progress.verifying &&
+              !progress.reconnecting &&
+              progress.total != null) {
+            preparationMs ??= transfer.elapsedMilliseconds;
+          }
+          onProgress?.call(progress);
+        },
+        onRetry: (retry, received, error) {
+          retryCount = retry;
+          Diagnostics.record('download.retry', {
+            'purpose': purpose,
+            'retry': retry,
+            'receivedBytes': received,
+            ...Diagnostics.errorFields(error),
+          });
+        },
       );
+      transfer.stop();
       cancellation.check();
       stage = purpose == 'download' ? 'phone_save' : 'phone_preview';
       // The player owns the file until it closes. Do not delete the temporary
       // payload while the native decoder might still seek within it.
-      return await openFile(file, path.split('/').last);
+      final publish = Stopwatch()..start();
+      final result = await openFile(file, path.split('/').last);
+      if (purpose == 'download') {
+        Diagnostics.record('download.completed', {
+          'bytes': totalBytes,
+          'preflightMs': preparationMs,
+          'transferMs': transfer.elapsedMilliseconds,
+          'publishMs': publish.elapsedMilliseconds,
+          'retries': retryCount,
+        });
+      }
+      return result;
     } catch (error) {
       Diagnostics.record('download.failed', {
         'purpose': purpose,
@@ -2202,9 +2309,8 @@ final class AppController extends ChangeNotifier {
     } finally {
       try {
         await temporary?.delete(recursive: true);
-      } finally {
-        _downloadingFile = false;
-        _downloadCancellation = null;
+      } on FileSystemException {
+        // Android can reclaim a cache file; cleanup must not mask the result.
       }
     }
   }
@@ -3438,6 +3544,7 @@ final class AppController extends ChangeNotifier {
     }
     _drafts.clear();
     cancelDownload();
+    downloadQueue.dispose();
     _network.dispose();
     _connectionAttempt++;
     _openingAttempt?.cancel(StateError('Controller disposed'));
