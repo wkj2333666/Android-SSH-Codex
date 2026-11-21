@@ -207,8 +207,8 @@ void main() {
   test('real SFTP resumes after socket closure and verifies binary content',
       () async {
     final input = File('${directory.path}/' r'''a' "$x; & `id`.bin''');
-    final payload =
-        Uint8List.fromList(List.generate(10 * 1024 * 1024 + 31, (i) => i % 251));
+    final payload = Uint8List.fromList(
+        List.generate(10 * 1024 * 1024 + 31, (i) => i % 251));
     await input.writeAsBytes(payload);
     SSHClient? active;
     var connections = 0;

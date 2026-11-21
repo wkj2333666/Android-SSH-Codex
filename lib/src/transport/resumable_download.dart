@@ -263,8 +263,7 @@ Future<void> downloadResumableFile({
         final writeBatch = BytesBuilder(copy: false);
         var offset = received;
         void prefetch() {
-          while (pending.length < resumableReadWindow &&
-              offset < remote.size) {
+          while (pending.length < resumableReadWindow && offset < remote.size) {
             final length = min(resumableReadBytes, remote.size - offset);
             pending.add((length, _prefetch(activeSource, offset, length)));
             offset += length;
