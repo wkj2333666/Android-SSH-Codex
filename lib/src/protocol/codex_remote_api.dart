@@ -377,15 +377,29 @@ final class CodexRemoteApi {
         timeout: const Duration(seconds: 10),
       ));
 
-  Future<void> requestComposerPrediction(
+  Future<String?> sampleComposerPrediction(
     String threadId,
     String sourceTurnId,
   ) async {
-    await _rpc.requestWithTimeout(
-      'thread/prediction/request',
-      {'threadId': threadId, 'sourceTurnId': sourceTurnId},
-      const Duration(seconds: 8),
-    );
+    final result = _map(await _rpc.requestWithTimeout(
+      'thread/sample',
+      {
+        'threadId': threadId,
+        'expectedTurnId': sourceTurnId,
+        'prompt':
+            'Predict one concise, useful follow-up message from the user based '
+                'on the conversation so far. Use the language of the user. '
+                'Output only the suggested text. Do not invoke tools.',
+        'disableMcp': true,
+      },
+      const Duration(seconds: 30),
+    ));
+    final text = result['text'];
+    if (result['sourceTurnId'] != sourceTurnId || text is! String) {
+      return null;
+    }
+    final suggestion = text.trim();
+    return suggestion.isEmpty ? null : suggestion;
   }
 
   Future<Map<String, dynamic>> _readLatestTurn(
