@@ -95,8 +95,9 @@ class DownloadsView extends StatelessWidget {
       DownloadState.queued => 'Waiting in queue',
       DownloadState.transferring when progress.reconnecting =>
         'Reconnecting · ${_size(progress.received)} received',
-      DownloadState.transferring when progress.verifying =>
-        total == null ? 'Preparing download…' : 'Verifying file…',
+      DownloadState.transferring when progress.checking =>
+        'Checking remote file…',
+      DownloadState.transferring when total == null => 'Connecting…',
       DownloadState.transferring => '${_size(progress.received)}'
           '${total == null ? "" : " / ${_size(total)}"}'
           '${fraction == null ? "" : " · ${(fraction * 100).toStringAsFixed(0)}%"}'
@@ -122,7 +123,7 @@ class DownloadsView extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: 6, bottom: 4),
               child: LinearProgressIndicator(
-                value: progress.verifying ||
+                value: progress.checking ||
                         progress.reconnecting ||
                         progress.saving
                     ? null

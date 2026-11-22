@@ -11,13 +11,13 @@ class DownloadProgress {
   const DownloadProgress(this.received, this.total,
       {this.saving = false,
       this.reconnecting = false,
-      this.verifying = false,
+      this.checking = false,
       this.bytesPerSecond});
   final int received;
   final int? total;
   final bool saving;
   final bool reconnecting;
-  final bool verifying;
+  final bool checking;
   final double? bytesPerSecond;
 }
 
@@ -65,13 +65,17 @@ String? remoteFilePath(String value, String cwd) {
   }
 }
 
-String fileDownloadCommand(String path, {int? offset}) {
+void validateRemoteFilePath(String path) {
   if (!path.startsWith('/') ||
       path.contains('\u0000') ||
       path.contains('\n') ||
       path.contains('\r')) {
     throw ArgumentError('Invalid path');
   }
+}
+
+String fileDownloadCommand(String path, {int? offset}) {
+  validateRemoteFilePath(path);
   final quoted = _shellQuote(path);
   if (offset != null && (offset < 0 || offset % downloadChunkBytes != 0)) {
     throw ArgumentError('Invalid download offset');
@@ -93,11 +97,6 @@ String _posixShellCommand(String script) {
 }
 
 String _shellQuote(String value) => "'${value.replaceAll("'", "'\\''")}'";
-
-// The bounded producer is shell-isolated; the outer pipeline works with fish
-// and POSIX login shells alike. SFTP metadata and final digest detect changes.
-String fileDownloadDigestCommand(String path) =>
-    '${fileDownloadCommand(path)} | sha256sum';
 
 Future<void> downloadRemoteFile(SSHClient client, String path, File destination,
     {void Function(DownloadProgress)? onProgress}) async {

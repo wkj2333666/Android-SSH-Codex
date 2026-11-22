@@ -13,16 +13,28 @@ export 'diagnostics_redaction.dart';
 /// Never records RPC payloads. Bootstrap errors get bounded, redacted details.
 abstract final class Diagnostics {
   static const channel = MethodChannel('android_ssh_codex/diagnostics');
+  static final _relayKey = Object();
   static int _pending = 0;
 
   static bool get supported =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
   static void record(String event, [Map<String, Object?> fields = const {}]) {
+    final relay = Zone.current[_relayKey] as DiagnosticRelay?;
+    if (relay != null) {
+      relay(event, fields);
+      return;
+    }
     if (!supported || _pending >= 128) return;
     _pending++;
     unawaited(_record(event, fields));
   }
+
+  static Future<T> relayWhile<T>(
+    DiagnosticRelay relay,
+    Future<T> Function() operation,
+  ) =>
+      runZoned(operation, zoneValues: {_relayKey: relay});
 
   static Future<void> _record(String event, Map<String, Object?> fields) async {
     try {
@@ -108,3 +120,6 @@ abstract final class Diagnostics {
 
   static Future<void> clear() => channel.invokeMethod<void>('clear');
 }
+
+typedef DiagnosticRelay = void Function(
+    String event, Map<String, Object?> fields);

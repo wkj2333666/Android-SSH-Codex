@@ -102,9 +102,8 @@ Future<void> _showRemotePreview(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 LinearProgressIndicator(
-                    value: value.verifying || value.reconnecting
-                        ? null
-                        : fraction),
+                    value:
+                        value.checking || value.reconnecting ? null : fraction),
                 const SizedBox(height: 12),
                 Text(
                     '${(value.received / 1048576).toStringAsFixed(2)} MiB received'
@@ -112,7 +111,7 @@ Future<void> _showRemotePreview(
                 if (value.reconnecting)
                   const Text(
                       'Connection interrupted. Reconnecting and resuming…'),
-                if (value.verifying) const Text('Verifying file integrity…'),
+                if (value.checking) const Text('Checking remote file…'),
                 if (cancel != null)
                   TextButton(
                       onPressed: cancel, child: const Text('Cancel loading')),

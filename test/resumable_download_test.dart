@@ -1,30 +1,37 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:android_ssh_codex/src/diagnostics.dart';
+import 'package:android_ssh_codex/src/profiles/host_profile.dart';
 import 'package:android_ssh_codex/src/transport/file_download.dart';
 import 'package:android_ssh_codex/src/transport/resumable_download.dart';
+import 'package:android_ssh_codex/src/transport/sftp_download_worker.dart';
 import 'package:android_ssh_codex/src/transport/ssh_connector.dart';
-import 'package:crypto/crypto.dart';
 import 'package:dartssh2/dartssh2.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class MemorySource implements DownloadSource {
   MemorySource(this.bytes,
-      {this.failAt, this.corrupt = false, this.beforeRead});
+      {this.failAt,
+      this.modifiedAt = 1,
+      this.endingModifiedAt,
+      this.beforeRead});
   final List<int> bytes;
   final int? failAt;
-  final bool corrupt;
+  final int? modifiedAt;
+  final int? endingModifiedAt;
   final Future<void> Function(int)? beforeRead;
   bool closed = false;
   int active = 0;
-  int identities = 0;
+  int stats = 0;
   int peak = 0;
   final offsets = <int>[];
   @override
-  Future<DownloadIdentity> identify() async {
-    identities++;
-    return DownloadIdentity(bytes.length, sha256.convert(bytes).toString());
+  Future<DownloadMetadata> metadata() async {
+    final modified = ++stats == 1 ? modifiedAt : endingModifiedAt ?? modifiedAt;
+    return DownloadMetadata(bytes.length, modified);
   }
 
   @override
@@ -37,9 +44,7 @@ class MemorySource implements DownloadSource {
       if (failAt != null && offset >= failAt!) {
         throw TimeoutException('simulated network loss');
       }
-      final block = bytes.sublist(offset, offset + length);
-      if (corrupt && block.isNotEmpty) block[0] ^= 1;
-      return block;
+      return bytes.sublist(offset, offset + length);
     } finally {
       active--;
     }
@@ -57,7 +62,7 @@ class InterruptingSource implements DownloadSource {
   final SSHClient client;
   final int breakAt;
   @override
-  Future<DownloadIdentity> identify() => inner.identify();
+  Future<DownloadMetadata> metadata() => inner.metadata();
   @override
   Future<List<int>> read(int offset, int length) {
     final pending = inner.read(offset, length);
@@ -103,8 +108,8 @@ void main() {
     expect(first.peak, lessThanOrEqualTo(resumableReadWindow));
     expect(second.peak, lessThanOrEqualTo(resumableReadWindow));
     expect(first.closed && second.closed, isTrue);
-    expect(first.identities, 1);
-    expect(second.identities, 1);
+    expect(first.stats, 1);
+    expect(second.stats, 2);
     expect(await output.readAsBytes(), bytes);
   });
 
@@ -138,36 +143,51 @@ void main() {
       secondBlock.complete();
       await transferring;
     }
-    expect(sha256.convert(await output.readAsBytes()), sha256.convert(payload));
+    expect(await output.readAsBytes(), payload);
   });
 
-  test('remote change refuses to splice different files', () async {
-    var opens = 0;
-    final changed = Uint8List.fromList(bytes)..[0] = 255;
-    await expectLater(
-        downloadResumableFile(
-          connect: () async => ++opens == 1
-              ? MemorySource(bytes, failAt: 1024 * 1024)
-              : MemorySource(changed),
+  for (final mtime in <int?>[2, null]) {
+    test('restarts without splicing when the new modification time is $mtime',
+        () async {
+      var opens = 0;
+      final changed = Uint8List.fromList(bytes)..[0] = 255;
+      final second = MemorySource(changed, modifiedAt: mtime);
+      await downloadResumableFile(
+          connect: () async =>
+              ++opens == 1 ? MemorySource(bytes, failAt: 1024 * 1024) : second,
           destination: output,
           cancellation: DownloadCancellation(),
-          retryDelay: Duration.zero,
+          retryDelay: Duration.zero);
+      expect(opens, 2);
+      expect(second.offsets.first, 0);
+      expect(await output.readAsBytes(), changed);
+    });
+  }
+
+  test('restart truncates the old prefix when a reconnected file is smaller',
+      () async {
+    var opens = 0;
+    final smaller = MemorySource([9, 10]);
+    await downloadResumableFile(
+      connect: () async =>
+          ++opens == 1 ? MemorySource(bytes, failAt: 1024 * 1024) : smaller,
+      destination: output,
+      cancellation: DownloadCancellation(),
+      retryDelay: Duration.zero,
+    );
+    expect(smaller.offsets.first, 0);
+    expect(await output.readAsBytes(), [9, 10]);
+  });
+
+  test('refuses to publish a file modified during transfer', () async {
+    await expectLater(
+        downloadResumableFile(
+          connect: () async => MemorySource(bytes, endingModifiedAt: 2),
+          destination: output,
+          cancellation: DownloadCancellation(),
         ),
         throwsA(isA<FileDownloadException>().having(
             (e) => e.message, 'message', contains('Remote file changed'))));
-    expect(opens, 2);
-    expect(await output.length(), 1024 * 1024);
-  });
-
-  test('same-length corrupted content fails final checksum', () async {
-    await expectLater(
-        downloadResumableFile(
-          connect: () async => MemorySource(bytes, corrupt: true),
-          destination: output,
-          cancellation: DownloadCancellation(),
-        ),
-        throwsA(isA<FileDownloadException>().having(
-            (e) => e.message, 'message', contains('checksum mismatch'))));
   });
 
   test('cancellation closes the source without subsequent writes', () async {
@@ -245,7 +265,7 @@ void main() {
     );
     expect(connections, 2);
     expect(retries.single, greaterThanOrEqualTo(1024 * 1024));
-    expect(sha256.convert(await output.readAsBytes()), sha256.convert(payload));
+    expect(await output.readAsBytes(), payload);
     expect(active!.isClosed, isTrue);
     // Timing is diagnostic only; shared CI runners cannot prove phone speed.
     // ignore: avoid_print
@@ -254,4 +274,87 @@ void main() {
   },
       timeout: const Timeout(Duration(seconds: 90)),
       skip: !Platform.environment.containsKey('DOWNLOAD_TEST_KEY'));
+
+  test(
+      'worker SFTP matches curl on the same SSH server and uses the stored pin',
+      () async {
+    final input = File('${directory.path}/curl baseline.bin');
+    final payload =
+        Uint8List.fromList(List.generate(3 * 1024 * 1024 + 11, (i) => i % 251));
+    await input.writeAsBytes(payload);
+    final keyPath = Platform.environment['DOWNLOAD_TEST_KEY']!;
+    final fixturePin = Platform.environment['DOWNLOAD_TEST_HOST_KEY']!;
+    final user = Platform.environment['USER']!;
+    final uri =
+        Uri(scheme: 'sftp', host: '127.0.0.1', port: 22229, path: input.path);
+    final curlFile = File('${directory.path}/curl');
+    // curl's key pin CLI depends on its SSH backend. This is an ephemeral,
+    // loopback-only fixture with a generated key, not the app's host policy.
+    final curl = await Process.run('/usr/bin/curl', [
+      '--disable',
+      '--noproxy',
+      '*',
+      '--insecure',
+      '--silent',
+      '--show-error',
+      '--max-time',
+      '20',
+      '--user',
+      '$user:',
+      '--key',
+      keyPath,
+      '--pubkey',
+      '$keyPath.pub',
+      '--output',
+      curlFile.path,
+      uri.toString(),
+    ]);
+    expect(curl.exitCode, 0, reason: curl.stderr.toString());
+    final profile = HostProfile(
+      id: 'sftp-worker-test',
+      label: 'Loopback SSH test',
+      hostName: '127.0.0.1',
+      user: user,
+      port: 22229,
+    );
+    final secret = HostSecret(privateKey: await File(keyPath).readAsString());
+    final hostKey = formatHostKeyFingerprint(utf8.encode(fixturePin));
+    Future<int> run(String? pin, DownloadCancellation cancellation,
+            {void Function(DownloadProgress)? onProgress}) =>
+        downloadSftpInWorker(
+          profile: profile,
+          secret: secret,
+          targetKey: pin,
+          jumpKey: null,
+          path: input.path,
+          destination: output.path,
+          purpose: 'download-test',
+          maxBytes: maxDownloadBytes,
+          cancellation: cancellation,
+          onProgress: onProgress,
+        );
+    await expectLater(run(null, DownloadCancellation()),
+        throwsA(isA<DownloadWorkerFailure>()));
+    expect(await output.length(), 0);
+    final diagnostics = <String>[];
+    final progress = <DownloadProgress>[];
+    final retries = await Diagnostics.relayWhile((event, fields) {
+      if (fields.containsKey('downloadWorkId')) diagnostics.add(event);
+    }, () => run(hostKey, DownloadCancellation(), onProgress: progress.add));
+    expect(retries, 0);
+    expect(diagnostics, contains('ssh.open'));
+    expect(progress.any((status) => status.received > 0), isTrue);
+    final downloaded = await output.readAsBytes();
+    expect(downloaded, payload);
+    expect(downloaded, await curlFile.readAsBytes());
+
+    final cancellation = DownloadCancellation();
+    await expectLater(
+        run(hostKey, cancellation, onProgress: (progress) {
+          if (progress.checking) cancellation.cancel();
+        }),
+        throwsA(isA<DownloadCancelled>()));
+  },
+      timeout: const Timeout(Duration(seconds: 90)),
+      skip: !Platform.environment.containsKey('DOWNLOAD_TEST_HOST_KEY'));
 }
