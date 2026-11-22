@@ -39,6 +39,7 @@ import 'transport/attachment_upload.dart';
 import 'transport/download_queue.dart';
 import 'transport/file_download.dart' as downloads;
 import 'transport/resumable_download.dart';
+import 'transport/sftp_download_worker.dart';
 import 'transport/ssh_connector.dart';
 import 'transport/ssh_unix_tunnel.dart';
 
@@ -2239,40 +2240,31 @@ final class AppController extends ChangeNotifier {
       final file = File('${temporary.path}/payload.bin');
       stage = 'ssh_transfer';
       final secret = await _store.readSecret(profile.id);
+      final targetKey = await _store.readHostFingerprint(profile.id);
+      final jumpKey = profile.proxyJump == null
+          ? null
+          : await _store.readHostFingerprint('${profile.id}.jump');
       final transfer = Stopwatch()..start();
       int? preparationMs;
       int? totalBytes;
-      var retryCount = 0;
-      await downloadResumableFile(
-        destination: file,
+      final retryCount = await downloadSftpInWorker(
+        profile: profile,
+        secret: secret,
+        targetKey: targetKey,
+        jumpKey: jumpKey,
+        path: path,
+        destination: file.path,
+        purpose: purpose,
+        maxBytes: maxBytes,
         cancellation: cancellation,
-        connect: () async {
-          cancellation.check();
-          final connection = await _connector.connect(profile, secret,
-              prompt: (_) async => false, diagnosticRole: purpose);
-          if (cancellation.isCancelled) {
-            await connection.close(reason: 'download_cancelled');
-            throw DownloadCancelled();
-          }
-          return SftpDownloadSource.open(connection, path, maxBytes: maxBytes);
-        },
         onProgress: (progress) {
           totalBytes = progress.total ?? totalBytes;
-          if (!progress.verifying &&
+          if (!progress.checking &&
               !progress.reconnecting &&
               progress.total != null) {
             preparationMs ??= transfer.elapsedMilliseconds;
           }
           onProgress?.call(progress);
-        },
-        onRetry: (retry, received, error) {
-          retryCount = retry;
-          Diagnostics.record('download.retry', {
-            'purpose': purpose,
-            'retry': retry,
-            'receivedBytes': received,
-            ...Diagnostics.errorFields(error),
-          });
         },
       );
       transfer.stop();
@@ -2301,9 +2293,9 @@ final class AppController extends ChangeNotifier {
           'receivedBytes': error.received,
           'exitCode': error.exitCode,
         },
-        ...Diagnostics.errorFields(error is downloads.FileDownloadException
-            ? error.cause ?? error
-            : error),
+        ...(error is DownloadWorkerFailure
+            ? error.diagnosticFields
+            : Diagnostics.errorFields(error)),
       });
       rethrow;
     } finally {

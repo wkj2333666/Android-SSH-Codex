@@ -1,11 +1,9 @@
 import 'dart:async';
 import 'dart:collection';
-import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
-import 'package:crypto/crypto.dart';
 import 'package:dartssh2/dartssh2.dart';
 
 import 'file_download.dart';
@@ -24,43 +22,55 @@ class DownloadCancellation {
   void cancel() {
     if (isCancelled) return;
     _cancelled = true;
-    for (final waiter in _waiters) {
+    final listeners = _waiters.toList();
+    _waiters.clear();
+    for (final waiter in listeners) {
       waiter();
     }
-    _waiters.clear();
   }
 
   void check() {
     if (isCancelled) throw DownloadCancelled();
   }
 
+  void Function() onCancel(void Function() listener) {
+    if (isCancelled) {
+      listener();
+    } else {
+      _waiters.add(listener);
+    }
+    return () => _waiters.remove(listener);
+  }
+
   Future<T> wait<T>(Future<T> future) async {
     final signal = Completer<T>();
-    void wake() => signal.completeError(DownloadCancelled());
     final result = Future.any([future, signal.future]);
-    if (isCancelled) {
-      wake();
-    } else {
-      _waiters.add(wake);
-    }
+    final unsubscribe = onCancel(() => signal.completeError(DownloadCancelled()));
     try {
       return await result;
     } finally {
-      _waiters.remove(wake);
+      unsubscribe();
     }
   }
 }
 
-class DownloadIdentity {
-  const DownloadIdentity(this.size, this.digest);
+class DownloadMetadata {
+  const DownloadMetadata(this.size, this.modifiedAt);
   final int size;
-  final String digest;
-  bool matches(DownloadIdentity other) =>
-      size == other.size && digest == other.digest;
+  final int? modifiedAt;
+
+  bool canResumeWith(DownloadMetadata other) =>
+      modifiedAt != null && modifiedAt == other.modifiedAt && size == other.size;
+
+  bool changedFrom(DownloadMetadata other) =>
+      size != other.size ||
+      (modifiedAt != null &&
+          other.modifiedAt != null &&
+          modifiedAt != other.modifiedAt);
 }
 
 abstract class DownloadSource {
-  Future<DownloadIdentity> identify();
+  Future<DownloadMetadata> metadata();
   Future<List<int>> read(int offset, int length);
   Future<void> close();
 }
@@ -87,8 +97,7 @@ Future<T> _untilClosed<T>(SSHClient client, Future<T> operation) => Future.any([
 /// Owns its entire SSH connection. dartssh2 2.x SftpClient.close alone does not
 /// release its SSH channel, so a download must never borrow the chat client.
 class SftpDownloadSource implements DownloadSource {
-  SftpDownloadSource._(
-      this.connection, this.sftp, this.file, this.path, this.maxBytes) {
+  SftpDownloadSource._(this.connection, this.sftp, this.file, this.maxBytes) {
     // dartssh2 may leave SFTP replies pending after the transport disappears.
     // Release them once per connection, not with a close listener per read.
     unawaited(connection.client.done.then<void>(
@@ -99,7 +108,6 @@ class SftpDownloadSource implements DownloadSource {
   final SshConnection connection;
   final SftpClient sftp;
   final SftpFile file;
-  final String path;
   final int maxBytes;
   bool _closed = false;
   bool _sftpClosed = false;
@@ -108,12 +116,12 @@ class SftpDownloadSource implements DownloadSource {
       {int maxBytes = maxDownloadBytes}) async {
     SftpClient? sftp;
     try {
-      fileDownloadCommand(path); // Reject malformed paths before any remote IO.
+      validateRemoteFilePath(path);
       sftp =
           await connection.client.sftp().timeout(const Duration(seconds: 15));
       final file = await _untilClosed(connection.client, sftp.open(path))
           .timeout(const Duration(seconds: 15));
-      return SftpDownloadSource._(connection, sftp, file, path, maxBytes);
+      return SftpDownloadSource._(connection, sftp, file, maxBytes);
     } catch (_) {
       sftp?.close();
       await connection.close(reason: 'download_open_failed');
@@ -122,7 +130,7 @@ class SftpDownloadSource implements DownloadSource {
   }
 
   @override
-  Future<DownloadIdentity> identify() async {
+  Future<DownloadMetadata> metadata() async {
     if (connection.client.isClosed) {
       throw SSHStateError('Download connection closed');
     }
@@ -132,16 +140,7 @@ class SftpDownloadSource implements DownloadSource {
       throw FileDownloadException('Download requires a regular file of at most '
           '${maxBytes == maxDownloadBytes ? '1 GiB' : '${maxBytes ~/ 1048576} MiB'}.');
     }
-    final result = await _untilClosed(connection.client,
-        connection.client.runWithResult(fileDownloadDigestCommand(path)));
-    final digest = RegExp(r'^([a-fA-F0-9]{64})\s')
-        .firstMatch(String.fromCharCodes(result.stdout))
-        ?.group(1);
-    if (result.exitCode != 0 || digest == null) {
-      throw const FileDownloadException(
-          'Cannot verify the remote file (sha256sum is required).');
-    }
-    return DownloadIdentity(size, digest.toLowerCase());
+    return DownloadMetadata(size, attrs.modifyTime);
   }
 
   @override
@@ -208,8 +207,8 @@ Future<_ReadResult> _prefetch(DownloadSource source, int offset, int length) =>
 
 /// Slide the window as each ordered read completes instead of stopping at
 /// batch boundaries. At most 8 MiB of reads plus one disk batch is buffered.
-/// A retry resumes only from successfully written bytes and only for identical
-/// remote content. No automatic retry of writes or unsafe command submissions.
+/// A retry resumes only from successfully written bytes and only when size and
+/// modification time match. Metadata is not a content fingerprint.
 Future<void> downloadResumableFile({
   required Future<DownloadSource> Function() connect,
   required File destination,
@@ -218,22 +217,18 @@ Future<void> downloadResumableFile({
   void Function(int attempt, int received, Object error)? onRetry,
   int maxRetries = 3,
   Duration operationTimeout = const Duration(seconds: 30),
-  Duration verificationTimeout = const Duration(minutes: 30),
   Duration retryDelay = const Duration(seconds: 1),
 }) async {
   final output = await destination.open(mode: FileMode.write);
   var received = 0;
-  DownloadIdentity? identity;
+  DownloadMetadata? previous;
   var retries = 0;
   var stage = 'connect';
   final updates = Stopwatch()..start();
   final speed = Stopwatch()..start();
   var speedStart = 0;
-  Digest? digest;
-  final checksum = sha256.startChunkedConversion(
-      ChunkedConversionSink.withCallback((digests) => digest = digests.single));
   // Reuse the batch for every disk write instead of allocating one buffer
-  // per 256 KiB. It is only reused once both I/O and hashing finish.
+  // per 256 KiB. It is only reused once the write completes.
   final writeBatch = Uint8List(_writeBatchBytes);
   try {
     while (true) {
@@ -249,21 +244,25 @@ Future<void> downloadResumableFile({
         final activeSource =
             await cancellation.wait(opening).timeout(operationTimeout);
         source = activeSource;
-        stage = 'identify';
+        stage = 'stat';
         onProgress
-            ?.call(DownloadProgress(received, identity?.size, verifying: true));
+            ?.call(DownloadProgress(received, previous?.size, checking: true));
         final remote = await cancellation
-            .wait(activeSource.identify())
-            .timeout(verificationTimeout);
+            .wait(activeSource.metadata())
+            .timeout(operationTimeout);
         if (remote.size < 0 || remote.size > maxDownloadBytes) {
           throw const FileDownloadException(
               'File exceeds the 1 GiB download limit.');
         }
-        if (identity != null && !identity.matches(remote)) {
-          throw const FileDownloadException(
-              'Remote file changed. Retry the download from the beginning.');
+        if (received > 0 && previous?.canResumeWith(remote) != true) {
+          // An altered or unidentifiable source must never be appended to the
+          // partial file, even if it has the same length.
+          stage = 'write';
+          await output.truncate(0);
+          await output.setPosition(0);
+          received = 0;
         }
-        identity ??= remote;
+        previous = remote;
         onProgress?.call(DownloadProgress(received, remote.size));
         speedStart = received;
         speed.reset();
@@ -297,12 +296,11 @@ Future<void> downloadResumableFile({
             cancellation.check();
             stage = 'write';
             await output.writeFrom(writeBatch, 0, batchLength);
-            checksum.addSlice(writeBatch, 0, batchLength, false);
             received += batchLength;
             batchLength = 0;
             if (updates.elapsedMilliseconds >= 100 ||
-                received == identity.size) {
-              onProgress?.call(DownloadProgress(received, identity.size,
+                received == remote.size) {
+              onProgress?.call(DownloadProgress(received, remote.size,
                   bytesPerSecond: (received - speedStart) *
                       1000000 /
                       max(1, speed.elapsedMicroseconds)));
@@ -310,20 +308,20 @@ Future<void> downloadResumableFile({
             }
           }
         }
-        stage = 'verify';
+        stage = 'stat';
         onProgress
-            ?.call(DownloadProgress(received, identity.size, verifying: true));
-        // Verify the bytes committed across all attempts against the
-        // fingerprint of the original remote snapshot. Each reconnect must
-        // still match that fingerprint before any additional bytes are read.
-        await output.flush();
-        checksum.close();
-        if (digest.toString() != identity.digest) {
+            ?.call(DownloadProgress(received, remote.size, checking: true));
+        final ending = await cancellation
+            .wait(activeSource.metadata())
+            .timeout(operationTimeout);
+        if (received != remote.size || ending.changedFrom(remote)) {
           throw const FileDownloadException(
-              'Download checksum mismatch. The incomplete file was not saved.');
+              'Remote file changed during download. Retry from the beginning.');
         }
+        stage = 'write';
+        await output.flush();
         cancellation.check();
-        onProgress?.call(DownloadProgress(received, identity.size));
+        onProgress?.call(DownloadProgress(received, remote.size));
         return;
       } catch (error) {
         openingExpired = true;
@@ -343,7 +341,7 @@ Future<void> downloadResumableFile({
         await source?.close();
       }
       onProgress?.call(
-          DownloadProgress(received, identity?.size, reconnecting: true));
+          DownloadProgress(received, previous?.size, reconnecting: true));
       await cancellation.wait(Future<void>.delayed(retryDelay * retries));
     }
   } finally {

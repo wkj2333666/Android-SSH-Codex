@@ -86,10 +86,11 @@ The Downloads screen shows the queue and history and can open a saved file or th
 downloads folder. Android 8–9 prompt for storage permission.
 
 Transfers retry transient failures up to three times, resuming from written
-bytes only when the remote SHA-256 still matches. The app verifies content before
-it appears in shared storage. Once the app process is stopped, interrupted
-downloads can be restarted from the Downloads screen. An enabled SFTP subsystem
-and checksum tools are required.
+bytes when the remote size and modification time still match, otherwise
+restarting the file. SFTP transfers run outside the UI isolate and do not scan
+or hash the whole file. The app checks the byte count and remote metadata
+before saving to shared storage. Once the app process is stopped, interrupted
+downloads can be restarted from the Downloads screen.
 
 The Android service declares the `specialUse` type for interactive SSH sessions,
 not media playback or periodic data sync. Google Play distribution requires the
@@ -203,7 +204,7 @@ an SSH exec channel and renders the resulting tasks and events.
 
 - A reachable SSH server that allows session and exec channels.
 - `/bin/sh`, `base64`, and a writable home directory.
-- For file downloads: an enabled SFTP subsystem, `head`, and `sha256sum`.
+- For file downloads: an enabled SFTP subsystem. No shell command is required.
 - Codex CLI installed and authenticated on that machine.
 - Codex CLI 0.146.0 or newer for automatic **Shared** mode startup. Use a current
   release whenever possible.
