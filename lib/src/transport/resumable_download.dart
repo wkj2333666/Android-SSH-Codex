@@ -45,7 +45,8 @@ class DownloadCancellation {
   Future<T> wait<T>(Future<T> future) async {
     final signal = Completer<T>();
     final result = Future.any([future, signal.future]);
-    final unsubscribe = onCancel(() => signal.completeError(DownloadCancelled()));
+    final unsubscribe =
+        onCancel(() => signal.completeError(DownloadCancelled()));
     try {
       return await result;
     } finally {
@@ -60,7 +61,9 @@ class DownloadMetadata {
   final int? modifiedAt;
 
   bool canResumeWith(DownloadMetadata other) =>
-      modifiedAt != null && modifiedAt == other.modifiedAt && size == other.size;
+      modifiedAt != null &&
+      modifiedAt == other.modifiedAt &&
+      size == other.size;
 
   bool changedFrom(DownloadMetadata other) =>
       size != other.size ||
@@ -298,8 +301,7 @@ Future<void> downloadResumableFile({
             await output.writeFrom(writeBatch, 0, batchLength);
             received += batchLength;
             batchLength = 0;
-            if (updates.elapsedMilliseconds >= 100 ||
-                received == remote.size) {
+            if (updates.elapsedMilliseconds >= 100 || received == remote.size) {
               onProgress?.call(DownloadProgress(received, remote.size,
                   bytesPerSecond: (received - speedStart) *
                       1000000 /

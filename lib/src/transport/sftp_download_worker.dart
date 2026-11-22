@@ -124,7 +124,9 @@ Future<Object> _transfer(
   final store = MemoryProfileStore();
   final targetKey = request.targetKey;
   final jumpKey = request.jumpKey;
-  if (targetKey != null) await store.writeHostFingerprint(profile.id, targetKey);
+  if (targetKey != null) {
+    await store.writeHostFingerprint(profile.id, targetKey);
+  }
   if (jumpKey != null) {
     await store.writeHostFingerprint('${profile.id}.jump', jumpKey);
   }

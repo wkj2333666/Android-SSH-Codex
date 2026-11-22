@@ -102,9 +102,8 @@ Future<void> _showRemotePreview(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 LinearProgressIndicator(
-                    value: value.checking || value.reconnecting
-                        ? null
-                        : fraction),
+                    value:
+                        value.checking || value.reconnecting ? null : fraction),
                 const SizedBox(height: 12),
                 Text(
                     '${(value.received / 1048576).toStringAsFixed(2)} MiB received'

@@ -14,7 +14,10 @@ import 'package:flutter_test/flutter_test.dart';
 
 class MemorySource implements DownloadSource {
   MemorySource(this.bytes,
-      {this.failAt, this.modifiedAt = 1, this.endingModifiedAt, this.beforeRead});
+      {this.failAt,
+      this.modifiedAt = 1,
+      this.endingModifiedAt,
+      this.beforeRead});
   final List<int> bytes;
   final int? failAt;
   final int? modifiedAt;
@@ -150,9 +153,8 @@ void main() {
       final changed = Uint8List.fromList(bytes)..[0] = 255;
       final second = MemorySource(changed, modifiedAt: mtime);
       await downloadResumableFile(
-          connect: () async => ++opens == 1
-              ? MemorySource(bytes, failAt: 1024 * 1024)
-              : second,
+          connect: () async =>
+              ++opens == 1 ? MemorySource(bytes, failAt: 1024 * 1024) : second,
           destination: output,
           cancellation: DownloadCancellation(),
           retryDelay: Duration.zero);
@@ -167,9 +169,8 @@ void main() {
     var opens = 0;
     final smaller = MemorySource([9, 10]);
     await downloadResumableFile(
-      connect: () async => ++opens == 1
-          ? MemorySource(bytes, failAt: 1024 * 1024)
-          : smaller,
+      connect: () async =>
+          ++opens == 1 ? MemorySource(bytes, failAt: 1024 * 1024) : smaller,
       destination: output,
       cancellation: DownloadCancellation(),
       retryDelay: Duration.zero,
@@ -274,31 +275,41 @@ void main() {
       timeout: const Timeout(Duration(seconds: 90)),
       skip: !Platform.environment.containsKey('DOWNLOAD_TEST_KEY'));
 
-  test('worker SFTP matches curl on the same SSH server and uses the stored pin',
+  test(
+      'worker SFTP matches curl on the same SSH server and uses the stored pin',
       () async {
     final input = File('${directory.path}/curl baseline.bin');
-    final payload = Uint8List.fromList(
-        List.generate(3 * 1024 * 1024 + 11, (i) => i % 251));
+    final payload =
+        Uint8List.fromList(List.generate(3 * 1024 * 1024 + 11, (i) => i % 251));
     await input.writeAsBytes(payload);
     final keyPath = Platform.environment['DOWNLOAD_TEST_KEY']!;
     final fixturePin = Platform.environment['DOWNLOAD_TEST_HOST_KEY']!;
     final user = Platform.environment['USER']!;
-    final uri = Uri(scheme: 'sftp', host: '127.0.0.1', port: 22229, path: input.path);
+    final uri =
+        Uri(scheme: 'sftp', host: '127.0.0.1', port: 22229, path: input.path);
     final curlFile = File('${directory.path}/curl');
     await curlFile.writeAsBytes(payload.sublist(0, 65537));
     // curl's key pin CLI depends on its SSH backend. This is an ephemeral,
     // loopback-only fixture with a generated key, not the app's host policy.
     final curl = await Process.run('/usr/bin/curl', [
       '--disable',
-      '--noproxy', '*',
+      '--noproxy',
+      '*',
       '--insecure',
-      '--silent', '--show-error',
-      '--max-time', '20',
-      '--user', '$user:',
-      '--key', keyPath,
-      '--pubkey', '$keyPath.pub',
-      '--continue-at', '-',
-      '--output', curlFile.path,
+      '--silent',
+      '--show-error',
+      '--max-time',
+      '20',
+      '--user',
+      '$user:',
+      '--key',
+      keyPath,
+      '--pubkey',
+      '$keyPath.pub',
+      '--continue-at',
+      '-',
+      '--output',
+      curlFile.path,
       uri.toString(),
     ]);
     expect(curl.exitCode, 0, reason: curl.stderr.toString());
