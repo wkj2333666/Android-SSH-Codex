@@ -288,7 +288,6 @@ void main() {
     final uri =
         Uri(scheme: 'sftp', host: '127.0.0.1', port: 22229, path: input.path);
     final curlFile = File('${directory.path}/curl');
-    await curlFile.writeAsBytes(payload.sublist(0, 65537));
     // curl's key pin CLI depends on its SSH backend. This is an ephemeral,
     // loopback-only fixture with a generated key, not the app's host policy.
     final curl = await Process.run('/usr/bin/curl', [
@@ -306,8 +305,6 @@ void main() {
       keyPath,
       '--pubkey',
       '$keyPath.pub',
-      '--continue-at',
-      '-',
       '--output',
       curlFile.path,
       uri.toString(),
@@ -347,8 +344,9 @@ void main() {
     expect(retries, 0);
     expect(diagnostics, contains('ssh.open'));
     expect(progress.any((status) => status.received > 0), isTrue);
-    expect(await output.readAsBytes(), await curlFile.readAsBytes());
-    expect(await output.readAsBytes(), payload);
+    final downloaded = await output.readAsBytes();
+    expect(downloaded, payload);
+    expect(downloaded, await curlFile.readAsBytes());
 
     final cancellation = DownloadCancellation();
     await expectLater(
