@@ -13,6 +13,32 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  windows-host:
+    name: Windows host regression tests
+    runs-on: windows-2022
+    timeout-minutes: 20
+    env:
+      PUB_CACHE: C:\pub-cache
+      GIT_CONFIG_COUNT: 1
+      GIT_CONFIG_KEY_0: core.longpaths
+      GIT_CONFIG_VALUE_0: true
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.35.7
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: git diff --exit-code -- pubspec.lock
+      - name: Test native PowerShell transport and host editing
+        run: >-
+          flutter test --reporter expanded
+          test/transport/windows_commands_test.dart
+          test/transport/windows_host_test.dart
+          test/profiles/host_profile_test.dart
+          test/ui/profile_editor_test.dart
+          test/projects/remote_project_test.dart
   test:
     name: Analyze and test
     runs-on: ubuntu-24.04

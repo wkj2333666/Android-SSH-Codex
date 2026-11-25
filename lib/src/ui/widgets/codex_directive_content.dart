@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
+import '../../transport/remote_path.dart';
 import 'markdown_content.dart';
 import 'remote_file_actions.dart';
 
@@ -106,9 +107,9 @@ String? _visualizationPath(String line) {
         jsonDecode(value.substring(_visualizeStart.length, value.length - 1));
     if (payload is! Map || payload['path'] is! String) return null;
     final path = payload['path'] as String;
-    if (!path.startsWith('/') ||
+    if (!isRemoteAbsolutePath(path) ||
         path.startsWith('//') ||
-        path.split('/').contains('..') ||
+        normalizeRemotePath(path).split('/').contains('..') ||
         path.contains(RegExp(r'[\x00-\x1f\x7f]')) ||
         !RegExp(r'\.html?$', caseSensitive: false).hasMatch(path)) {
       return null;

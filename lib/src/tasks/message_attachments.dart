@@ -1,4 +1,5 @@
 import '../attachment_media.dart';
+import '../transport/remote_path.dart';
 
 /// Presentation metadata only. The original prompt is never rewritten.
 class MessageAttachment {
@@ -17,8 +18,9 @@ class MessageAttachment {
 
   String get label {
     if (name != null) return name!;
-    final basename = path.split('/').last;
-    if (path.contains('/.local/share/android-ssh-codex/attachments/') &&
+    final normalized = normalizeRemotePath(path);
+    final basename = normalized.split('/').last;
+    if (normalized.contains('/android-ssh-codex/attachments/') &&
         basename.startsWith('file-')) {
       return basename.substring(5);
     }
@@ -72,7 +74,7 @@ List<MessageAttachment> outputImageAttachments(Map<String, dynamic> item) {
       if (source == null || source.isEmpty || !seen.add(source)) continue;
       images.add(MessageAttachment(
           path: source,
-          name: source.startsWith('/') ? null : 'Image',
+          name: isRemoteAbsolutePath(source) ? null : 'Image',
           isImage: true,
           mimeType: mime is String ? mime : null));
     }
@@ -104,7 +106,7 @@ AttachmentMessage parseAttachmentMessage(
     final parsed = <({MessageAttachment attachment, bool clipboardImage})>[];
     for (final entry in entries) {
       final match = RegExp(
-        r'^## (.+): (/[^\r\n]+)(?:\r?\n(Image attachment: true))?$',
+        r'^## (.+): ((?:/|[A-Za-z]:[\\/])[^\r\n]+)(?:\r?\n(Image attachment: true))?$',
       ).firstMatch(entry.trim());
       if (match == null) return AttachmentMessage(text, native);
       parsed.add((
@@ -154,7 +156,7 @@ AttachmentMessage parseAttachmentMessage(
           mimeType = video.group(1);
           path = paths[++i];
         }
-        if (!path.startsWith('/') || path.trim() != path) {
+        if (!isRemoteAbsolutePath(path) || path.trim() != path) {
           valid = false;
           break;
         }

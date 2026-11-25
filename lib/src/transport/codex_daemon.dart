@@ -4,6 +4,9 @@ import 'package:crypto/crypto.dart';
 import 'package:dartssh2/dartssh2.dart';
 
 import '../diagnostics_redaction.dart';
+import '../profiles/remote_platform.dart';
+import 'remote_path.dart';
+import 'windows_commands.dart';
 
 final class SshCommandResult {
   const SshCommandResult({
@@ -75,10 +78,14 @@ final class CodexDaemon {
       _shellCommand('$executableResolutionScript\n'
           r'exec "$codex_executable" app-server daemon start');
 
-  static String proxyCommand(String socketPath) => _shellCommandPreservingStdin(
-        '$executableResolutionScript\n'
-        'exec "\$codex_executable" app-server proxy --sock ${_shellQuote(socketPath)}',
-      );
+  static String proxyCommand(String socketPath,
+          {RemotePlatform platform = RemotePlatform.posix}) =>
+      platform == RemotePlatform.windows
+          ? windowsCodexCommand(['app-server', 'proxy', '--sock', socketPath])
+          : _shellCommandPreservingStdin(
+              '$executableResolutionScript\n'
+              'exec "\$codex_executable" app-server proxy --sock ${_shellQuote(socketPath)}',
+            );
 
   // Keep an existing SSH PATH selection. Otherwise probe interactive Bash in
   // isolation: .bashrc output and reads must never touch the proxy's stdin or
@@ -202,14 +209,18 @@ fi
   static Future<String> startShared(
     SshCommandRunner run, {
     required Map<String, String> environment,
+    RemotePlatform platform = RemotePlatform.posix,
   }) async {
     final result = await _runWithEnvironment(
       run,
-      sharedStartCommand,
+      platform == RemotePlatform.windows
+          ? windowsCodexCommand(['app-server', 'daemon', 'start'])
+          : sharedStartCommand,
       environment,
     );
     if (_commandFailed(result)) {
-      if (_daemonSubcommandIsUnsupported(result)) {
+      if (platform == RemotePlatform.posix &&
+          _daemonSubcommandIsUnsupported(result)) {
         return _probeExistingSharedSocket(run, environment);
       }
       throw CodexBootstrapException(
@@ -239,7 +250,10 @@ fi
       );
     }
     final socketPath = decoded['socketPath'];
-    if (socketPath is! String || !_isAbsoluteUnixSocketPath(socketPath)) {
+    if (socketPath is! String ||
+        !(platform == RemotePlatform.windows
+            ? isWindowsAbsolutePath(socketPath)
+            : _isAbsoluteUnixSocketPath(socketPath))) {
       throw const CodexBootstrapException(
         'Shared app-server daemon returned an invalid socketPath.',
         reason: 'shared_start_invalid_socket',

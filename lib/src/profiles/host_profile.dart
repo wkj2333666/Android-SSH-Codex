@@ -1,7 +1,10 @@
 import 'package:collection/collection.dart';
 
 import '../ssh_config/ssh_config.dart';
+import 'remote_platform.dart';
 import 'ssh_connection_options.dart';
+
+export 'remote_platform.dart';
 export 'ssh_connection_options.dart';
 
 enum HostAuthMethod { password, privateKey }
@@ -60,6 +63,7 @@ final class HostProfile {
     JumpHostProfile? proxyJump,
     Map<String, String> environment = const {},
     AppServerMode appServerMode = AppServerMode.shared,
+    RemotePlatform remotePlatform = RemotePlatform.posix,
     String? customAppServerSocket,
     SshConnectionOptions sshOptions = const SshConnectionOptions(),
   }) =>
@@ -74,6 +78,7 @@ final class HostProfile {
         proxyJump: proxyJump,
         environment: Map.unmodifiable(environment),
         appServerMode: appServerMode,
+        remotePlatform: remotePlatform,
         customAppServerSocket: customAppServerSocket,
         sshOptions: sshOptions,
       );
@@ -89,6 +94,7 @@ final class HostProfile {
     required this.proxyJump,
     required this.environment,
     required this.appServerMode,
+    required this.remotePlatform,
     required this.customAppServerSocket,
     required this.sshOptions,
   });
@@ -139,6 +145,10 @@ final class HostProfile {
           (value) => value.name == json['appServerMode'],
           orElse: () => AppServerMode.shared,
         ),
+        remotePlatform: RemotePlatform.values.firstWhere(
+          (value) => value.name == json['remotePlatform'],
+          orElse: () => RemotePlatform.posix,
+        ),
         customAppServerSocket: json['customAppServerSocket'] as String?,
         sshOptions: json['sshOptions'] is Map
             ? SshConnectionOptions.fromJson(
@@ -161,6 +171,7 @@ final class HostProfile {
   final JumpHostProfile? proxyJump;
   final Map<String, String> environment;
   final AppServerMode appServerMode;
+  final RemotePlatform remotePlatform;
   final String? customAppServerSocket;
   final SshConnectionOptions sshOptions;
 
@@ -181,6 +192,7 @@ final class HostProfile {
     JumpHostProfile? proxyJump,
     Map<String, String>? environment,
     AppServerMode? appServerMode,
+    RemotePlatform? remotePlatform,
     String? customAppServerSocket,
     bool clearProxyJump = false,
     bool clearCustomAppServerSocket = false,
@@ -198,6 +210,7 @@ final class HostProfile {
         environment: environment ?? this.environment,
         sshOptions: sshOptions ?? this.sshOptions,
         appServerMode: appServerMode ?? this.appServerMode,
+        remotePlatform: remotePlatform ?? this.remotePlatform,
         customAppServerSocket: clearCustomAppServerSocket
             ? null
             : customAppServerSocket ?? this.customAppServerSocket,
@@ -216,6 +229,7 @@ final class HostProfile {
         if (proxyJump != null) 'proxyJump': proxyJump!.toJson(),
         if (environment.isNotEmpty) 'environment': environment,
         'appServerMode': appServerMode.name,
+        'remotePlatform': remotePlatform.name,
         if (appServerMode == AppServerMode.custom &&
             customAppServerSocket != null)
           'customAppServerSocket': customAppServerSocket,
@@ -234,6 +248,7 @@ final class HostProfile {
       other.sshOptions == sshOptions &&
       other.proxyJump == proxyJump &&
       other.appServerMode == appServerMode &&
+      other.remotePlatform == remotePlatform &&
       other.customAppServerSocket == customAppServerSocket &&
       const MapEquality<String, String>().equals(
         other.environment,
@@ -252,6 +267,7 @@ final class HostProfile {
         sshOptions,
         proxyJump,
         appServerMode,
+        remotePlatform,
         customAppServerSocket,
         const MapEquality<String, String>().hash(environment),
       );

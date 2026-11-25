@@ -4,6 +4,33 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('Windows host editing preserves the platform and custom socket',
+      (tester) async {
+    final profile = _profile(
+            appServerMode: AppServerMode.custom,
+            customAppServerSocket: r'C:\Users\dev\app.sock')
+        .copyWith(remotePlatform: RemotePlatform.windows);
+    final result = await _openEditor(tester, profile: profile);
+    await _scrollTo(tester, 'App-server Windows socket');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(result()!.profile.remotePlatform, RemotePlatform.windows);
+    expect(result()!.profile.customAppServerSocket, r'C:\Users\dev\app.sock');
+  });
+
+  testWidgets('Windows isolated mode cannot silently fall back to Shared',
+      (tester) async {
+    final result = await _openEditor(tester,
+        profile: _profile(appServerMode: AppServerMode.isolated)
+            .copyWith(remotePlatform: RemotePlatform.windows));
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(result(), isNull);
+    expect(
+        find.text(
+            'Windows supports Shared and Custom modes. Select one below.'),
+        findsOneWidget);
+  });
   testWidgets('advanced SSH manually adds a jump host and credentials',
       (tester) async {
     final result = await _openEditor(tester, profile: _profile());

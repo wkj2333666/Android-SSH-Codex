@@ -7,6 +7,7 @@ import 'dart:typed_data';
 import 'package:dartssh2/dartssh2.dart';
 
 import 'file_download.dart';
+import 'remote_path.dart';
 import 'ssh_connector.dart';
 
 class DownloadCancelled implements Exception {
@@ -122,8 +123,9 @@ class SftpDownloadSource implements DownloadSource {
       validateRemoteFilePath(path);
       sftp =
           await connection.client.sftp().timeout(const Duration(seconds: 15));
-      final file = await _untilClosed(connection.client, sftp.open(path))
-          .timeout(const Duration(seconds: 15));
+      final file =
+          await _untilClosed(connection.client, sftp.open(remoteSftpPath(path)))
+              .timeout(const Duration(seconds: 15));
       return SftpDownloadSource._(connection, sftp, file, maxBytes);
     } catch (_) {
       sftp?.close();

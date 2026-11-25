@@ -6,6 +6,7 @@ import 'package:dartssh2/dartssh2.dart';
 import 'package:flutter/foundation.dart';
 
 import '../diagnostics.dart';
+import '../profiles/remote_platform.dart';
 import 'codex_daemon.dart';
 
 abstract interface class SshProxyChannel {
@@ -77,12 +78,13 @@ final class SshUnixTunnel {
     SSHClient client,
     String remoteSocketPath, {
     Map<String, String> environment = const {},
+    RemotePlatform platform = RemotePlatform.posix,
   }) =>
       startWithOpener(
         remoteSocketPath,
         () async {
           final session = await client.execute(
-            CodexDaemon.proxyCommand(remoteSocketPath),
+            CodexDaemon.proxyCommand(remoteSocketPath, platform: platform),
             environment: environment.isEmpty ? null : environment,
           );
           return _SshSessionProxyChannel(session);

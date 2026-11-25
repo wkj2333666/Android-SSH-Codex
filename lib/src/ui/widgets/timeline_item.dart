@@ -1,20 +1,20 @@
 import 'dart:async';
 
-import '../../attachment_media.dart';
-
-import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 
-import '../../tasks/task_reducer.dart';
+import '../../attachment_media.dart';
 import '../../tasks/message_attachments.dart';
+import '../../tasks/task_reducer.dart';
+import '../../transport/remote_path.dart';
+import '../preview_browser.dart';
 import 'codex_directive_content.dart';
 import 'copy_feedback_button.dart';
-import 'markdown_content.dart';
 import 'inline_attachment_image.dart';
+import 'markdown_content.dart';
 import 'remote_file_actions.dart';
-import 'task_question_panel.dart';
 import 'task_question_content.dart';
-import '../preview_browser.dart';
+import 'task_question_panel.dart';
 
 typedef MessageTextCopier = Future<void> Function(String text);
 
@@ -423,7 +423,7 @@ class _AttachmentCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final thisContext = context;
-    final document = attachment.path.startsWith('/') &&
+    final document = isRemoteAbsolutePath(attachment.path) &&
         DocumentPreviewKind.forPath(attachment.path) != null &&
         RemoteFileActions.maybeOf(context)?.previewDocument != null;
     return Card(
@@ -431,10 +431,10 @@ class _AttachmentCard extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (attachment.isVideo && attachment.path.startsWith('/'))
+          if (attachment.isVideo && isRemoteAbsolutePath(attachment.path))
             RemoteVideoPreview(path: attachment.path, label: attachment.label),
           if (attachment.isImage &&
-              ((attachment.path.startsWith('/') && loadImage != null) ||
+              ((isRemoteAbsolutePath(attachment.path) && loadImage != null) ||
                   attachment.path.startsWith('data:image/')))
             InlineAttachmentImage(
               key: ValueKey(attachment.path),
@@ -477,7 +477,7 @@ class _AttachmentCard extends StatelessWidget {
                                   : attachment.path),
                         ),
                         actions: [
-                          if (attachment.path.startsWith('/') &&
+                          if (isRemoteAbsolutePath(attachment.path) &&
                               RemoteFileActions.maybeOf(thisContext) != null)
                             TextButton(
                                 onPressed: () => unawaited(
@@ -485,7 +485,7 @@ class _AttachmentCard extends StatelessWidget {
                                         thisContext, attachment.path)),
                                 child: const Text('Download')),
                           if (attachment.isImage &&
-                              ((attachment.path.startsWith('/') &&
+                              ((isRemoteAbsolutePath(attachment.path) &&
                                       loadImage != null) ||
                                   attachment.path.startsWith('data:image/')))
                             TextButton(

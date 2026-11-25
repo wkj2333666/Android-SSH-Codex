@@ -4,40 +4,41 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import 'account_usage.dart';
+import 'attachment_media.dart';
+import 'attachments.dart';
 import 'connection_keep_alive.dart';
 import 'connection_network.dart';
-import 'attachments.dart';
-import 'attachment_media.dart';
 import 'diagnostics.dart';
+import 'ports/port_discovery.dart';
+import 'ports/port_forward.dart';
+import 'ports/port_forward_manager.dart';
 import 'profiles/host_profile.dart';
 import 'profiles/profile_store.dart';
 import 'projects/remote_project.dart';
 import 'projects/shared_project_sync.dart';
 import 'protocol/codex_remote_api.dart';
-import 'account_usage.dart';
-import 'ports/port_forward.dart';
-import 'ports/port_forward_manager.dart';
-import 'ports/port_discovery.dart';
-import 'protocol/user_input_request.dart';
 import 'protocol/foreground_probe.dart';
 import 'protocol/json_rpc_client.dart';
+import 'protocol/user_input_request.dart';
 import 'protocol/websocket_rpc_transport.dart';
+import 'tasks/permission_mode.dart';
 import 'tasks/task_catalog.dart';
 import 'tasks/task_draft.dart';
-import 'tasks/turn_settings.dart';
-import 'tasks/permission_mode.dart';
 import 'tasks/task_event_batcher.dart';
 import 'tasks/task_message_queue.dart';
 import 'tasks/task_operation_lock.dart';
 import 'tasks/task_reducer.dart';
 import 'tasks/task_refresh_lock.dart';
 import 'tasks/task_turn_issue.dart';
+import 'tasks/turn_settings.dart';
 import 'transport/anonymous_workspace.dart';
+import 'transport/attachment_upload.dart';
 import 'transport/codex_daemon.dart';
 import 'transport/connection_setup.dart';
-import 'transport/attachment_upload.dart';
 import 'transport/download_queue.dart';
 import 'transport/file_download.dart' as downloads;
+import 'transport/remote_path.dart';
 import 'transport/resumable_download.dart';
 import 'transport/sftp_download_worker.dart';
 import 'transport/ssh_connector.dart';
@@ -139,25 +140,33 @@ Future<String> resolveCodexSocketForProfile(
   SshCommandRunner run,
   HostProfile profile,
 ) async {
+  if (profile.remotePlatform == RemotePlatform.windows &&
+      profile.appServerMode == AppServerMode.isolated) {
+    throw const CodexBootstrapException(
+        'Windows hosts support Shared and Custom modes. Select one in the host editor.');
+  }
   switch (profile.appServerMode) {
     case AppServerMode.shared:
       return CodexDaemon.startShared(
         run,
         environment: profile.environment,
+        platform: profile.remotePlatform,
       );
     case AppServerMode.custom:
+      final invalidSocketMessage = profile.remotePlatform ==
+              RemotePlatform.windows
+          ? 'Custom app-server socket must be an absolute Windows drive path.'
+          : 'Custom app-server socket must be an absolute Unix socket path.';
       final configuredSocketPath = profile.customAppServerSocket;
       if (configuredSocketPath == null ||
           RegExp(r'[\x00-\x1F\x7F]').hasMatch(configuredSocketPath)) {
-        throw const CodexBootstrapException(
-          'Custom app-server socket must be an absolute Unix socket path.',
-        );
+        throw CodexBootstrapException(invalidSocketMessage);
       }
       final socketPath = configuredSocketPath.trim();
-      if (socketPath.isEmpty || !socketPath.startsWith('/')) {
-        throw const CodexBootstrapException(
-          'Custom app-server socket must be an absolute Unix socket path.',
-        );
+      if (profile.remotePlatform == RemotePlatform.windows
+          ? !isWindowsAbsolutePath(socketPath)
+          : socketPath.isEmpty || !socketPath.startsWith('/')) {
+        throw CodexBootstrapException(invalidSocketMessage);
       }
       return socketPath;
     case AppServerMode.isolated:
@@ -287,7 +296,8 @@ final class AppController extends ChangeNotifier {
         hostId != _workspaceHostId) {
       throw StateError('Connect to this SSH host to discover ports.');
     }
-    final ports = await discoverListeningPorts(ssh.client);
+    final ports = await discoverListeningPorts(ssh.client,
+        platform: selectedHost?.remotePlatform ?? RemotePlatform.posix);
     if (!identical(ssh, _ssh) || hostId != _selectedHostId) {
       throw StateError('SSH connection changed during port discovery.');
     }
@@ -873,6 +883,7 @@ final class AppController extends ChangeNotifier {
                 client,
                 socketPath,
                 environment: profile.environment,
+                platform: profile.remotePlatform,
               ),
           closeLateResult: (value) => value.close());
       if (attempt != _connectionAttempt) return;
@@ -1677,7 +1688,7 @@ final class AppController extends ChangeNotifier {
     if (normalizedName.isEmpty || normalizedCwd.isEmpty) {
       throw ArgumentError('Project name and remote directory are required.');
     }
-    if (!normalizedCwd.startsWith('/')) {
+    if (!isRemoteAbsolutePath(normalizedCwd)) {
       throw ArgumentError('Use an absolute remote directory path.');
     }
     final api = _requireApi();
@@ -2036,14 +2047,16 @@ final class AppController extends ChangeNotifier {
     if (override != null) return override();
     final ssh = _ssh;
     if (ssh == null) throw StateError('SSH is disconnected');
-    return createRemoteAnonymousWorkspace(ssh.client);
+    return createRemoteAnonymousWorkspace(ssh.client,
+        platform: selectedHost?.remotePlatform ?? RemotePlatform.posix);
   }
 
   Future<Uint8List> loadAttachmentImage(String path) async {
     final ssh = _ssh;
     final attempt = _connectionAttempt;
     if (ssh == null) throw StateError('SSH is disconnected');
-    final bytes = await readAttachmentImage(ssh.client, path);
+    final bytes = await readAttachmentImage(ssh.client, path,
+        platform: selectedHost?.remotePlatform ?? RemotePlatform.posix);
     if (!identical(ssh, _ssh) || attempt != _connectionAttempt) {
       throw StateError('Connection changed');
     }
@@ -2088,7 +2101,8 @@ final class AppController extends ChangeNotifier {
           cancellation.check();
           throw StateError('Selected host changed during attachment upload.');
         }
-        return SftpAttachmentUploadSession.open(connection, target);
+        return SftpAttachmentUploadSession.open(connection, target,
+            platform: profile.remotePlatform);
       },
     );
     if (_selectedHostId != profileId) {

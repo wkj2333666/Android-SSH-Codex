@@ -1,0 +1,1 @@
+enum RemotePlatform { posix, windows }
