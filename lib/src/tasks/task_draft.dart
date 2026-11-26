@@ -57,6 +57,7 @@ final class TaskDraft extends ChangeNotifier {
   RemoteSkill? skill;
   PermissionMode permissionMode = PermissionMode.inherit;
   TurnSettings settings = const TurnSettings();
+
   /// True only while the user has explicitly selected a composer override.
   /// Restored drafts intentionally do not set this: the remote thread is
   /// authoritative when the task is reopened or resumed.

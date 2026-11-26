@@ -2004,11 +2004,13 @@ final class AppController extends ChangeNotifier {
     final threadId = created.id;
     draftForTask(threadId).permissionMode = permissionMode;
     _subscribedThreadIds = {..._subscribedThreadIds, threadId};
-    draftForTask(threadId).setSettings(TurnSettings(
-      model: model,
-      effort: effort,
-      serviceTier: serviceTier,
-    ), explicit: model != null || effort != null || serviceTier != null);
+    draftForTask(threadId).setSettings(
+        TurnSettings(
+          model: model,
+          effort: effort,
+          serviceTier: serviceTier,
+        ),
+        explicit: model != null || effort != null || serviceTier != null);
     _selectedTaskId = threadId;
     _taskReducer.applyEvent(
       _epoch,

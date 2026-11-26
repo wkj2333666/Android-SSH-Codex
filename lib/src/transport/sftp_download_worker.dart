@@ -149,6 +149,7 @@ Future<Object> _transfer(
     progressClock.reset();
     request.reply.send(progress);
   }
+
   try {
     await downloadResumableFile(
       connect: () {
