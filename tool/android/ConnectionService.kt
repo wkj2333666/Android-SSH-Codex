@@ -20,6 +20,7 @@ class ConnectionService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var connectionEngine: io.flutter.embedding.engine.FlutterEngine? = null
     private var downloadMode = false
+    private var networkBinding: ConnectionNetworkBinding? = null
 
     @SuppressLint("WakelockTimeout") // Lifetime is bounded by the visible connection service.
     override fun onCreate() {
@@ -49,6 +50,8 @@ class ConnectionService : Service() {
         wakeLock = getSystemService(PowerManager::class.java)
             .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$packageName:SSHConnection")
             .also { it.setReferenceCounted(false); it.acquire() }
+        networkBinding =
+            ConnectionNetworkBinding(applicationContext).also { it.start() }
         active = true
         connectionEngine = ConnectionRuntime.obtain(applicationContext)
         DiagnosticLog.record(this, "service.foreground", mapOf("wakeLockHeld" to wakeLock?.isHeld))
@@ -93,6 +96,8 @@ class ConnectionService : Service() {
     override fun onDestroy() {
         active = false
         connectionEngine = null
+        networkBinding?.stop()
+        networkBinding = null
         DiagnosticLog.record(this, "service.destroy", mapOf("wakeLockHeld" to wakeLock?.isHeld))
         wakeLock?.let { if (it.isHeld) it.release() }
         wakeLock = null
