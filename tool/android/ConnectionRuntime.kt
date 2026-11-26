@@ -50,7 +50,12 @@ object ConnectionRuntime {
                     when (call.method) {
                         "status" -> result.success(ConnectionService.active)
                         "start" -> {
-                            app.startForegroundService(Intent(app, ConnectionService::class.java))
+                            app.startForegroundService(
+                                Intent(app, ConnectionService::class.java).putExtra(
+                                    "downloadActive",
+                                    call.argument<Boolean>("downloadActive") == true,
+                                )
+                            )
                             result.success(app.getSystemService(NotificationManager::class.java).areNotificationsEnabled())
                         }
                         "stop" -> {

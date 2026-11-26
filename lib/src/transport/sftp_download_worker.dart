@@ -133,6 +133,22 @@ Future<Object> _transfer(
   final connector = SshConnector(store);
   final openings = <Future<void>>[];
   var retries = 0;
+  final progressClock = Stopwatch()..start();
+  DownloadProgress? lastProgress;
+  void emitProgress(DownloadProgress progress) {
+    final terminal = progress.received == progress.total ||
+        progress.checking ||
+        progress.reconnecting ||
+        progress.saving;
+    if (!terminal &&
+        progressClock.elapsedMilliseconds < 250 &&
+        lastProgress != null) {
+      return;
+    }
+    lastProgress = progress;
+    progressClock.reset();
+    request.reply.send(progress);
+  }
   try {
     await downloadResumableFile(
       connect: () {
@@ -142,7 +158,7 @@ Future<Object> _transfer(
       },
       destination: File(request.destination),
       cancellation: cancellation,
-      onProgress: request.reply.send,
+      onProgress: emitProgress,
       onRetry: (attempt, bytes, error) {
         retries = attempt;
         Diagnostics.record('download.retry', {

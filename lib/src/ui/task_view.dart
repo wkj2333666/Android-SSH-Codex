@@ -116,7 +116,13 @@ class _TaskViewState extends State<TaskView> {
   var _lastCommandSucceeded = true;
   RemoteSkill? get _selectedSkill => _draft.skill;
   set _selectedSkill(RemoteSkill? value) => _draft.skill = value;
-  TurnSettings get _turnSettings => _draft.settings;
+  TurnSettings _settingsForTask(TaskRecord task) => _draft.settingsEdited
+      ? _draft.settings
+      : TurnSettings(
+          model: task.model,
+          effort: task.reasoningEffort,
+          serviceTier: task.serviceTier,
+        );
   List<RemoteSkill>? _availableSkills;
   List<ComposerCompletion> _completions = const [];
   var _loadingSkills = false;
@@ -348,7 +354,7 @@ class _TaskViewState extends State<TaskView> {
               accountUsage: widget.controller.accountUsage,
               models: widget.controller.models,
               value: resolveTurnSettings(
-                  widget.controller.models, _turnSettings,
+                  widget.controller.models, _settingsForTask(task),
                   model: task.model,
                   effort: task.reasoningEffort,
                   useCatalogDefault: false),
@@ -357,8 +363,7 @@ class _TaskViewState extends State<TaskView> {
               enabled: !_sending,
               onChanged: (value) {
                 if (draft.disposed) return;
-                draft.settings = value;
-                draft.changed();
+                draft.setSettings(value);
               },
             )),
             SendModePicker(
@@ -472,7 +477,7 @@ class _TaskViewState extends State<TaskView> {
     final submittedAttachments = List<AttachmentTransfer>.of(_attachments);
     final submittedSkill = _selectedSkill;
     final settings = resolveTurnSettings(
-        widget.controller.models, _turnSettings,
+        widget.controller.models, _settingsForTask(widget.task),
         model: widget.task.model,
         effort: widget.task.reasoningEffort,
         useCatalogDefault: false);
@@ -494,6 +499,9 @@ class _TaskViewState extends State<TaskView> {
         permissionMode: draft.permissionMode,
         attachments: submittedAttachments.map((file) => file.remote!).toList(),
       );
+      // The successful turn will update TaskRecord from the server. Do not
+      // keep the previous composer override shadowing that authoritative value.
+      draft.settingsEdited = false;
       await Attachments.releaseAll(
           submittedAttachments.map((file) => file.local));
       if (!mounted || !identical(_draft, draft)) return;
@@ -524,7 +532,7 @@ class _TaskViewState extends State<TaskView> {
     final message = formatTaskQuestionAnswers(item.questions, answers);
     final settings = resolveTurnSettings(
       widget.controller.models,
-      _turnSettings,
+      _settingsForTask(widget.task),
       model: widget.task.model,
       effort: widget.task.reasoningEffort,
       useCatalogDefault: false,

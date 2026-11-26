@@ -57,6 +57,10 @@ final class TaskDraft extends ChangeNotifier {
   RemoteSkill? skill;
   PermissionMode permissionMode = PermissionMode.inherit;
   TurnSettings settings = const TurnSettings();
+  /// True only while the user has explicitly selected a composer override.
+  /// Restored drafts intentionally do not set this: the remote thread is
+  /// authoritative when the task is reopened or resumed.
+  bool settingsEdited = false;
   TaskSendMode sendMode = TaskSendMode.auto;
   bool sending = false;
   bool picking = false;
@@ -112,6 +116,7 @@ final class TaskDraft extends ChangeNotifier {
                 value['serviceTier'] == 'default'
             ? null
             : value['serviceTier'] as String?);
+    settingsEdited = false;
     sendMode = TaskSendMode.values.firstWhere(
         (mode) => mode.name == value['sendMode'],
         orElse: () => TaskSendMode.auto);
@@ -149,6 +154,12 @@ final class TaskDraft extends ChangeNotifier {
 
   void changed() {
     if (!_disposed) notifyListeners();
+  }
+
+  void setSettings(TurnSettings value, {bool explicit = true}) {
+    settings = value;
+    settingsEdited = explicit;
+    changed();
   }
 
   void addAttachment(LocalAttachment local) {
