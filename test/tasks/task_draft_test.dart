@@ -24,6 +24,9 @@ void main() {
     final legacyOff = create()
       ..restore({'model': 'model', 'serviceTier': 'default'});
     expect(legacyOff.settings.serviceTier, 'default');
+    expect(legacyOff.settingsEdited, isFalse);
+    draft.setSettings(const TurnSettings(model: 'new-model'), explicit: true);
+    expect(draft.settingsEdited, isTrue);
     for (final tier in ['default', 'fast', 'priority']) {
       draft.settings = TurnSettings(serviceTier: tier);
       final explicit = create()..restore(draft.toJson());
