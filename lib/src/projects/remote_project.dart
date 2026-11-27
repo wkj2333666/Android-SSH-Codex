@@ -1,4 +1,5 @@
 import '../transport/anonymous_workspace.dart';
+import '../transport/remote_path.dart';
 
 final class RemoteProject {
   const RemoteProject({
@@ -136,8 +137,9 @@ List<RemoteProject> mergeRemoteProjects({
 }
 
 String normalizeRemoteCwd(String cwd) {
-  final normalized = cwd.trim();
+  final normalized = normalizeRemotePath(cwd.trim());
   if (normalized.length <= 1) return normalized;
+  if (RegExp(r'^[a-zA-Z]:/$').hasMatch(normalized)) return normalized;
   return normalized.replaceFirst(RegExp(r'/+$'), '');
 }
 

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../profiles/host_profile.dart';
 import '../ssh_config/ssh_config.dart';
 import '../ssh_config/ssh_environment.dart';
+import '../transport/remote_path.dart';
 
 final class ProfileDraft {
   const ProfileDraft(this.profile, this.secret);
@@ -46,6 +47,7 @@ class _ProfileEditorState extends State<ProfileEditor> {
   late final TextEditingController _customAppServerSocket;
   late HostAuthMethod _authMethod;
   late AppServerMode _appServerMode;
+  late RemotePlatform _remotePlatform;
   late bool _useJump;
   String? _jumpIdentityHint;
   String? _importError;
@@ -77,6 +79,7 @@ class _ProfileEditorState extends State<ProfileEditor> {
     );
     _authMethod = profile?.authMethod ?? HostAuthMethod.password;
     _appServerMode = profile?.appServerMode ?? AppServerMode.shared;
+    _remotePlatform = profile?.remotePlatform ?? RemotePlatform.posix;
     final jump = profile?.proxyJump;
     _useJump = jump != null;
     _jumpIdentityHint = jump?.identityFileHint;
@@ -212,6 +215,27 @@ class _ProfileEditorState extends State<ProfileEditor> {
                     ],
                   ),
                   const SizedBox(height: 14),
+                  DropdownButtonFormField<RemotePlatform>(
+                    initialValue: _remotePlatform,
+                    decoration: const InputDecoration(
+                        labelText: 'Host operating system'),
+                    items: const [
+                      DropdownMenuItem(
+                          value: RemotePlatform.posix,
+                          child: Text('Linux / macOS')),
+                      DropdownMenuItem(
+                          value: RemotePlatform.windows,
+                          child: Text('Windows')),
+                    ],
+                    onChanged: (value) =>
+                        setState(() => _remotePlatform = value!),
+                    validator: (_) => _remotePlatform ==
+                                RemotePlatform.windows &&
+                            _appServerMode == AppServerMode.isolated
+                        ? 'Windows supports Shared and Custom modes. Select one below.'
+                        : null,
+                  ),
+                  const SizedBox(height: 14),
                   SegmentedButton<AppServerMode>(
                     expandedInsets: EdgeInsets.zero,
                     showSelectedIcon: false,
@@ -236,13 +260,26 @@ class _ProfileEditorState extends State<ProfileEditor> {
                     onSelectionChanged: (value) =>
                         setState(() => _appServerMode = value.single),
                   ),
+                  if (_remotePlatform == RemotePlatform.windows &&
+                      _appServerMode != AppServerMode.isolated)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        _appServerMode == AppServerMode.shared
+                            ? 'Shared requires a non-elevated SSH session. For administrator SSH logins, start Codex in a normal Windows terminal, then use Custom.'
+                            : 'Start Codex in a non-administrator Windows terminal as the same user, then enter the returned socketPath below.',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
                   if (_appServerMode == AppServerMode.custom) ...[
                     const SizedBox(height: 10),
                     TextFormField(
                       controller: _customAppServerSocket,
                       style: const TextStyle(fontFamily: 'monospace'),
-                      decoration: const InputDecoration(
-                        labelText: 'App-server Unix socket',
+                      decoration: InputDecoration(
+                        labelText: _remotePlatform == RemotePlatform.windows
+                            ? 'App-server Windows socket'
+                            : 'App-server Unix socket',
                       ),
                       validator: _customSocketValidator,
                     ),
@@ -451,6 +488,7 @@ class _ProfileEditorState extends State<ProfileEditor> {
               keepAliveIntervalSeconds: int.parse(_keepAliveInterval.text)),
           environment: environment,
           appServerMode: _appServerMode,
+          remotePlatform: _remotePlatform,
           customAppServerSocket: _appServerMode == AppServerMode.custom
               ? _customAppServerSocket.text.trim()
               : null,
@@ -493,6 +531,12 @@ class _ProfileEditorState extends State<ProfileEditor> {
 
   String? _customSocketValidator(String? value) {
     final configuredSocketPath = value ?? '';
+    if (_remotePlatform == RemotePlatform.windows) {
+      return isWindowsAbsolutePath(configuredSocketPath.trim()) &&
+              !RegExp(r'[\x00-\x1F\x7F]').hasMatch(configuredSocketPath)
+          ? null
+          : 'Enter an absolute Windows socket path, such as C:/Users/me/codex.sock.';
+    }
     if (RegExp(r'[\x00-\x1F\x7F]').hasMatch(configuredSocketPath)) {
       return 'Enter an absolute Unix socket path.';
     }

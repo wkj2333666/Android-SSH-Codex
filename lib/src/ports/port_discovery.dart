@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:dartssh2/dartssh2.dart';
 
+import '../profiles/remote_platform.dart';
+import '../transport/windows_commands.dart';
 import 'port_forward.dart';
 
 final class ListeningPort {
@@ -17,7 +19,9 @@ List<ListeningPort> parseListeningPorts(String output) {
   for (final line in const LineSplitter().convert(output).take(1024)) {
     final parts = line.trim().split(RegExp(r'\s+'));
     String? address;
-    if (parts.length >= 5 && parts[0] == 'LISTEN') {
+    if (parts.length == 4 && parts[0] == 'TCP' && parts[3] == 'LISTENING') {
+      address = parts[1];
+    } else if (parts.length >= 5 && parts[0] == 'LISTEN') {
       address = parts[3];
     } else if (parts.length >= 6 && parts[1] == 'LISTEN') {
       address = parts[4];
@@ -51,11 +55,18 @@ const listeningPortsCommand = "/bin/sh -c 'if command -v ss >/dev/null 2>&1; "
     "then ss -H -ltn | head -c 65537; elif command -v netstat >/dev/null 2>&1; "
     "then netstat -ltn | head -c 65537; else exit 69; fi'";
 
-Future<List<ListeningPort>> discoverListeningPorts(SSHClient client) async {
+Future<List<ListeningPort>> discoverListeningPorts(SSHClient client,
+    {RemotePlatform platform = RemotePlatform.posix}) async {
   SSHSession? session;
   var finished = false;
   try {
-    session = await client.execute(listeningPortsCommand).then((value) {
+    final command = platform == RemotePlatform.windows
+        ? powershellCommand(
+            r'''Get-NetTCPConnection -State Listen -ErrorAction Stop | Select-Object -First 200 | ForEach-Object {
+  [Console]::WriteLine('TCP ' + $_.LocalAddress + ':' + $_.LocalPort + ' 0.0.0.0:0 LISTENING')
+}''')
+        : listeningPortsCommand;
+    session = await client.execute(command).then((value) {
       if (finished) {
         value.close();
         throw StateError('Discarded late port discovery');
@@ -79,8 +90,11 @@ Future<List<ListeningPort>> discoverListeningPorts(SSHClient client) async {
     ], eagerError: true)
         .timeout(const Duration(seconds: 8));
     if (reading.exitCode != 0 || errors.isNotEmpty) {
-      throw StateError(
-          'Port discovery needs ss or netstat on the SSH host. Add ports manually if unavailable.');
+      final requirement = platform == RemotePlatform.windows
+          ? 'access to Get-NetTCPConnection'
+          : 'ss or netstat';
+      throw StateError('Port discovery needs $requirement on the SSH host. '
+          'Add ports manually if unavailable.');
     }
     return parseListeningPorts(utf8.decode(output, allowMalformed: true));
   } finally {

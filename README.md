@@ -59,7 +59,7 @@ There are up to 32 rules per host (256 saved in total), 16 clients per rule and
 
 Ports reuses the authenticated SSH transport and its jump host. It needs no
 server-side proxy. **Discover listening ports** optionally reads `ss` or
-`netstat` on the target host, without sudo or process arguments; discovery is
+`netstat` on Linux/macOS, or `Get-NetTCPConnection` on Windows, without sudo or process arguments; discovery is
 bounded and is not a background scanner. Detected ports are not automatically
 forwarded. Manual rules work even when discovery tools are unavailable.
 
@@ -184,7 +184,7 @@ OpenSSH private keys.
 ```mermaid
 flowchart LR
   M["Android / OpenHarmony app"] -->|"SSH"| S["Your development machine"]
-  S --> T["Loopback-to-Unix-socket tunnel"]
+  S --> T["Loopback-to-control-socket tunnel"]
   T --> A["Codex app-server"]
   D["Codex Desktop / CLI"] --> A
 ```
@@ -201,6 +201,13 @@ an SSH exec channel and renders the resulting tasks and events.
 - Network access to the SSH server.
 
 ### Development machine
+
+Windows native hosts are supported in **Shared** and **Custom** modes. Select
+**Windows** in the host editor and follow [Windows host setup](docs/WINDOWS.md).
+Shared requires a non-elevated SSH session. Administrator SSH logins should
+start the daemon from a normal Windows terminal and use Custom with its returned
+socket path, as described in that guide.
+The POSIX shell requirements below apply to Linux/macOS hosts.
 
 - A reachable SSH server that allows session and exec channels.
 - `/bin/sh`, `base64`, and a writable home directory.
@@ -311,8 +318,8 @@ Every saved host has an explicit app-server mode:
 | Mode | Use it when | Behavior |
 | --- | --- | --- |
 | **Shared** | You want the same task state as Codex Desktop or other local clients. | Starts or reuses the Codex-managed daemon for the effective `CODEX_HOME`. This is the default and recommended mode. |
-| **Custom** | You already manage an app-server socket. | Connects to an absolute Unix socket path and never starts, restarts, or stops its process. |
-| **Isolated** | You want a mobile-only app-server lifecycle. | Manages a separate socket under the remote cache directory and restarts only that app-owned process when its environment changes. |
+| **Custom** | You already manage an app-server socket. | Connects to an absolute control socket path and never starts, restarts, or stops its process. Windows uses an absolute drive path. |
+| **Isolated** | You want a mobile-only app-server lifecycle on Linux/macOS. | Manages a separate socket under the remote cache directory and restarts only that app-owned process when its environment changes. Not available for Windows hosts. |
 
 The selected mode is authoritative. A connection failure never silently falls
 back to another daemon or socket.
@@ -443,7 +450,7 @@ file picker. Attachment names and contents are excluded from diagnostic logs.
 Update Codex on the development machine and confirm that the selected mode is
 available. For **Shared** mode, Codex CLI 0.146.0 or newer is required to start
 the managed daemon. For **Custom** mode, verify that the configured absolute
-Unix socket exists and belongs to a running app-server.
+control socket exists and belongs to a running app-server.
 
 ### The server rejects an environment variable
 

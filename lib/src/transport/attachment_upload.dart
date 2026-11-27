@@ -7,18 +7,23 @@ import 'dart:typed_data';
 import 'package:dartssh2/dartssh2.dart';
 
 import '../attachments.dart';
+import '../profiles/remote_platform.dart';
+import 'remote_path.dart';
 import 'ssh_connector.dart';
+import 'windows_commands.dart';
 
 /// Bounded image reads for lazily mounted timeline thumbnails and previews.
-Future<Uint8List> readAttachmentImage(SSHClient client, String path) async {
-  if (!path.startsWith('/') || path.contains('\u0000')) {
+Future<Uint8List> readAttachmentImage(SSHClient client, String path,
+    {RemotePlatform platform = RemotePlatform.posix}) async {
+  if (!isRemoteAbsolutePath(path)) {
     throw ArgumentError('Expected a remote absolute path');
   }
   final quoted = "'${path.replaceAll("'", "'\\''")}'";
   var timedOut = false;
   final opening = client
-      .execute(
-          'test -f $quoted && head -c ${Attachments.maxImagePreviewBytes + 1} -- $quoted')
+      .execute(platform == RemotePlatform.windows
+          ? windowsReadFileCommand(path, Attachments.maxImagePreviewBytes + 1)
+          : 'test -f $quoted && head -c ${Attachments.maxImagePreviewBytes + 1} -- $quoted')
       .then((session) {
     if (timedOut) session.close();
     return session;
@@ -50,7 +55,8 @@ Future<Uint8List> readAttachmentImage(SSHClient client, String path) async {
   }
 }
 
-String attachmentUploadCommand(String token, String name) {
+String attachmentUploadCommand(String token, String name,
+    {RemotePlatform platform = RemotePlatform.posix}) {
   if (!RegExp(r'^[a-f0-9]{32}$').hasMatch(token)) {
     throw ArgumentError('Invalid attachment token');
   }
@@ -63,6 +69,20 @@ String attachmentUploadCommand(String token, String name) {
       : safeName.length <= 100
           ? safeName
           : '${safeName.substring(0, 100 - extension.length)}$extension';
+  if (platform == RemotePlatform.windows) {
+    return powershellCommand('$windowsPrivateDirectoryScript\n'
+        r"$base = Join-Path $dataRoot 'attachments'"
+        '\n'
+        'New-PrivateDirectory \$base\n'
+        '\$dir = Join-Path \$base ${powershellLiteral(token)}\n'
+        'New-PrivateDirectory \$dir\n'
+        '\$file = Join-Path \$dir ${powershellLiteral('file-$fileName')}\n'
+        r'''if ([IO.File]::Exists($file) -and (([IO.File]::GetAttributes($file) -band [IO.FileAttributes]::ReparsePoint) -ne 0)) { throw 'Attachment is a reparse point.' }
+$stream = [IO.File]::Open($file, [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::Write, [IO.FileShare]::None)
+$stream.Dispose()
+[Console]::Write($file.Replace('\', '/'))
+''');
+  }
   const relative = '.local/share/android-ssh-codex/attachments';
   final script = 'umask 077; '
       'base="\$HOME/$relative"; dir="\$base/$token"; '
@@ -143,17 +163,19 @@ final class SftpAttachmentUploadSession implements AttachmentUploadSession {
   final String path;
 
   static Future<SftpAttachmentUploadSession> open(
-      SshConnection connection, AttachmentUploadTarget target) async {
+      SshConnection connection, AttachmentUploadTarget target,
+      {RemotePlatform platform = RemotePlatform.posix}) async {
     SftpClient? sftp;
     SftpFile? file;
     try {
       final result = await _untilUploadConnectionCloses(
           connection.client,
-          connection.client.runWithResult(
-              attachmentUploadCommand(target.token, target.name)));
+          connection.client.runWithResult(attachmentUploadCommand(
+              target.token, target.name,
+              platform: platform)));
       final path = utf8.decode(result.stdout);
       if (result.exitCode != 0 ||
-          !path.startsWith('/') ||
+          !isRemoteAbsolutePath(path) ||
           path.contains('\n') ||
           path.contains('\r')) {
         throw StateError('Cannot prepare the remote attachment.');
@@ -163,7 +185,7 @@ final class SftpAttachmentUploadSession implements AttachmentUploadSession {
       sftp = openedSftp;
       final openedFile = await _untilUploadConnectionCloses(
           connection.client,
-          openedSftp.open(path,
+          openedSftp.open(remoteSftpPath(path),
               mode: SftpFileOpenMode.create | SftpFileOpenMode.write));
       file = openedFile;
       return SftpAttachmentUploadSession._(

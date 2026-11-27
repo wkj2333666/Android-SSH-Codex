@@ -66,6 +66,14 @@ secure-storage implementation.
 
 ## Remote host requirements
 
+The following shell requirements are for Linux/macOS. Windows uses PowerShell
+and the native Codex control-socket proxy; see [Windows hosts](WINDOWS.md).
+Windows supports Shared and Custom, with explicit drive-path validation and
+byte-preserving SSH proxy transport. Isolated remains POSIX-only.
+Shared requires a non-elevated Windows SSH session. Administrator SSH logins
+must use Custom with a daemon started in a normal terminal under the same user;
+see the administrator SSH setup in that guide.
+
 - `/bin/sh`, a `base64` command, and an OpenSSH server with Unix-socket
   forwarding enabled. The account login shell may be fish, Bash, Zsh, or
   another shell that supports ordinary commands, quoting, and pipelines.
@@ -90,7 +98,7 @@ interpolation. Every Host independently selects one app-server mode:
 
 - Shared runs `codex app-server daemon start`, parses its JSON `socketPath`, and
   reuses that Codex-managed daemon without restarting or stopping it.
-- Custom attaches to the configured absolute Unix socket without running any
+- Custom attaches to the configured absolute control socket without running any
   lifecycle command.
 - Isolated creates
   `${XDG_CACHE_HOME:-$HOME/.cache}/android-ssh-codex/app-server.sock`. When the

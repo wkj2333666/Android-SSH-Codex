@@ -4,6 +4,8 @@ import 'dart:typed_data';
 
 import 'package:dartssh2/dartssh2.dart';
 
+import 'remote_path.dart';
+
 const maxDownloadBytes = 1024 * 1024 * 1024;
 const downloadChunkBytes = 256 * 1024;
 
@@ -35,6 +37,15 @@ class FileDownloadException implements Exception {
 
 String? remoteFilePath(String value, String cwd) {
   try {
+    if (value.startsWith(r'\\') ||
+        value.startsWith('//') ||
+        value.contains(RegExp(r'[\x00-\x1f\x7f]'))) {
+      return null;
+    }
+    if (isWindowsAbsolutePath(value)) {
+      return normalizeRemotePath(value)
+          .replaceFirst(RegExp(r':\d+(?::\d+)?$'), '');
+    }
     final uri = Uri.parse(value);
     if (uri.hasAuthority && !(uri.scheme == 'file' && uri.host.isEmpty)) {
       return null;
@@ -54,7 +65,18 @@ String? remoteFilePath(String value, String cwd) {
     }
     // Desktop source links sometimes include a line suffix.
     path = path.replaceFirst(RegExp(r':\d+(?::\d+)?$'), '');
+    if (isWindowsAbsolutePath(path)) return normalizeRemotePath(path);
+    if (path.startsWith('/') && isWindowsAbsolutePath(path.substring(1))) {
+      return normalizeRemotePath(path.substring(1));
+    }
     if (!path.startsWith('/')) {
+      if (uri.scheme.isEmpty && isWindowsAbsolutePath(cwd)) {
+        final base = Uri(path: '/${normalizeRemotePath(cwd)}/');
+        final resolved =
+            base.resolveUri(Uri(path: path.replaceAll('\\', '/'))).path;
+        final result = resolved.substring(1);
+        return isWindowsAbsolutePath(result) ? result : null;
+      }
       if (uri.scheme.isNotEmpty || !cwd.startsWith('/')) return null;
       path =
           '/${Uri(path: '$cwd/').resolveUri(Uri(path: path)).pathSegments.join('/')}';
@@ -66,7 +88,7 @@ String? remoteFilePath(String value, String cwd) {
 }
 
 void validateRemoteFilePath(String path) {
-  if (!path.startsWith('/') ||
+  if (!isRemoteAbsolutePath(path) ||
       path.contains('\u0000') ||
       path.contains('\n') ||
       path.contains('\r')) {
