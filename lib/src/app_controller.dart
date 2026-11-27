@@ -1169,6 +1169,7 @@ final class AppController extends ChangeNotifier {
       await _keepAlive.setEnabled(
         !_disposed && (_connectionWantsKeepAlive || _downloadWantsKeepAlive),
         verifyNative: verifyNative,
+        downloadActive: !_disposed && _downloadWantsKeepAlive,
       );
       if (attempt == _connectionAttempt) _keepAliveWarning = null;
     } catch (exception) {
@@ -2014,11 +2015,13 @@ final class AppController extends ChangeNotifier {
     final threadId = created.id;
     draftForTask(threadId).permissionMode = permissionMode;
     _subscribedThreadIds = {..._subscribedThreadIds, threadId};
-    draftForTask(threadId).settings = TurnSettings(
-      model: model,
-      effort: effort,
-      serviceTier: serviceTier,
-    );
+    draftForTask(threadId).setSettings(
+        TurnSettings(
+          model: model,
+          effort: effort,
+          serviceTier: serviceTier,
+        ),
+        explicit: model != null || effort != null || serviceTier != null);
     _selectedTaskId = threadId;
     _taskReducer.applyEvent(
       _epoch,

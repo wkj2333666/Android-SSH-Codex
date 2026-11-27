@@ -3,7 +3,7 @@ set -euo pipefail
 android_root=${1:-android}
 template_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/android" && pwd)
 manifest="$android_root/app/src/main/AndroidManifest.xml"
-for permission in FOREGROUND_SERVICE FOREGROUND_SERVICE_SPECIAL_USE POST_NOTIFICATIONS WAKE_LOCK ACCESS_NETWORK_STATE; do
+for permission in FOREGROUND_SERVICE FOREGROUND_SERVICE_SPECIAL_USE FOREGROUND_SERVICE_DATA_SYNC POST_NOTIFICATIONS WAKE_LOCK ACCESS_NETWORK_STATE; do
   if ! grep -Fq "android.permission.$permission\"" "$manifest"; then
     sed -i "/<manifest/a\\    <uses-permission android:name=\"android.permission.$permission\" />" "$manifest"
   fi
@@ -12,7 +12,7 @@ if ! grep -Fq 'android.permission.WRITE_EXTERNAL_STORAGE' "$manifest"; then
   sed -i '/<manifest/a\    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />' "$manifest"
 fi
 if ! grep -Fq 'android:name=".ConnectionService"' "$manifest"; then
-  sed -i '/<\/application>/i\        <service android:name=".ConnectionService" android:exported="false" android:stopWithTask="true" android:foregroundServiceType="specialUse">\n            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Maintains a user-initiated interactive SSH tunnel to a remote coding agent while switching apps." />\n        </service>' "$manifest"
+  sed -i '/<\/application>/i\        <service android:name=".ConnectionService" android:exported="false" android:stopWithTask="true" android:foregroundServiceType="specialUse|dataSync">\n            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Maintains a user-initiated interactive SSH tunnel and file transfer to a remote coding agent while switching apps." />\n        </service>' "$manifest"
 fi
 if ! grep -Fq 'android:name=".VideoPreviewActivity"' "$manifest"; then
   sed -i '/<\/application>/i\        <activity android:name=".VideoPreviewActivity" android:exported="false" android:configChanges="orientation|screenSize" android:theme="@android:style/Theme.Material.NoActionBar" />' "$manifest"
@@ -41,4 +41,5 @@ cp "$template_root/PublicDownloads.kt" "$kotlin_dir/"
 cp "$template_root/VideoPreviewActivity.kt" "$kotlin_dir/"
 cp "$template_root/ConnectionDiagnostics.kt" "$kotlin_dir/"
 cp "$template_root/ConnectionRuntime.kt" "$kotlin_dir/"
+cp "$template_root/ConnectionNetworkBinding.kt" "$kotlin_dir/"
 cp "$template_root/ic_connection.xml" "$android_root/app/src/main/res/drawable/"

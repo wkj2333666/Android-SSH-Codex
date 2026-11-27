@@ -19,6 +19,8 @@ class ConnectionService : Service() {
     }
     private var wakeLock: PowerManager.WakeLock? = null
     private var connectionEngine: io.flutter.embedding.engine.FlutterEngine? = null
+    private var downloadMode = false
+    private var networkBinding: ConnectionNetworkBinding? = null
 
     @SuppressLint("WakelockTimeout") // Lifetime is bounded by the visible connection service.
     override fun onCreate() {
@@ -48,19 +50,42 @@ class ConnectionService : Service() {
         wakeLock = getSystemService(PowerManager::class.java)
             .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$packageName:SSHConnection")
             .also { it.setReferenceCounted(false); it.acquire() }
+        networkBinding =
+            ConnectionNetworkBinding(applicationContext).also { it.start() }
         active = true
         connectionEngine = ConnectionRuntime.obtain(applicationContext)
         DiagnosticLog.record(this, "service.foreground", mapOf("wakeLockHeld" to wakeLock?.isHeld))
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.getBooleanExtra("downloadActive", false) == true && !downloadMode) {
+            downloadMode = true
+            if (Build.VERSION.SDK_INT >= 34) {
+                startForeground(
+                    4100,
+                    buildNotification("SSH connection and download active"),
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE or
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
+                )
+            }
+        }
         val power = getSystemService(PowerManager::class.java)
         DiagnosticLog.record(this, "service.start", mapOf(
             "wakeLockHeld" to wakeLock?.isHeld, "deviceIdle" to power.isDeviceIdleMode,
             "powerSave" to power.isPowerSaveMode,
             "batteryExempt" to power.isIgnoringBatteryOptimizations(packageName)))
-        return START_NOT_STICKY
+        return START_STICKY
     }
+
+    private fun buildNotification(text: String): Notification =
+        Notification.Builder(this, "ssh_connection")
+            .setSmallIcon(R.drawable.ic_connection)
+            .setContentTitle("Codex connection active")
+            .setContentText(text)
+            .setOngoing(true)
+            .setShowWhen(false)
+            .setCategory(Notification.CATEGORY_SERVICE)
+            .build()
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onTaskRemoved(rootIntent: Intent?) {
@@ -71,6 +96,8 @@ class ConnectionService : Service() {
     override fun onDestroy() {
         active = false
         connectionEngine = null
+        networkBinding?.stop()
+        networkBinding = null
         DiagnosticLog.record(this, "service.destroy", mapOf("wakeLockHeld" to wakeLock?.isHeld))
         wakeLock?.let { if (it.isHeld) it.release() }
         wakeLock = null
