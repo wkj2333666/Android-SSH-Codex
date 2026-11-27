@@ -204,6 +204,9 @@ an SSH exec channel and renders the resulting tasks and events.
 
 Windows native hosts are supported in **Shared** and **Custom** modes. Select
 **Windows** in the host editor and follow [Windows host setup](docs/WINDOWS.md).
+Shared requires a non-elevated SSH session. Administrator SSH logins should
+start the daemon from a normal Windows terminal and use Custom with its returned
+socket path, as described in that guide.
 The POSIX shell requirements below apply to Linux/macOS hosts.
 
 - A reachable SSH server that allows session and exec channels.

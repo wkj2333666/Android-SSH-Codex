@@ -4,6 +4,27 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets(
+      'Windows modes explain administrator SSH setup without changing selection',
+      (tester) async {
+    await _openEditor(tester,
+        profile: _profile().copyWith(remotePlatform: RemotePlatform.windows));
+    expect(find.textContaining('Shared requires a non-elevated SSH session'),
+        findsOneWidget);
+    expect(
+        tester
+            .widget<SegmentedButton<AppServerMode>>(
+                find.byType(SegmentedButton<AppServerMode>))
+            .selected,
+        {AppServerMode.shared});
+    await _scrollTo(tester, 'Custom');
+    await tester.tap(find.text('Custom'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('returned socketPath'), findsOneWidget);
+    expect(find.textContaining('Shared requires a non-elevated SSH session'),
+        findsNothing);
+  });
+
   testWidgets('Windows host editing preserves the platform and custom socket',
       (tester) async {
     final profile = _profile(

@@ -76,8 +76,9 @@ if (!$codexExecutable) { throw 'Codex not found. Install native Codex or npm @op
 $env:PATH = (Split-Path -Parent $codexExecutable) + ';' + $env:PATH
 ''';
 
-// PowerShell 5.1 pipelines decode native stdout as text. Dedicated .NET threads
-// relay all three byte streams, including blocking Windows console handles.
+// PowerShell 5.1 pipelines decode native stdout as text. Relay output with .NET
+// threads, but let the native child inherit stdin: reading it through a console
+// pump can stall later interactive writes after the first request succeeds.
 const windowsProcessRelayScript = r'''
 function Quote-NativeArgument([string]$value) {
   $value = [regex]::Replace($value, '(\\*)"', '$1$1\"')
@@ -90,7 +91,7 @@ using System.IO;
 using System.Diagnostics;
 using System.Threading;
 public static class CodexSshRelay {
-  static Thread Pump(Stream source, Stream target, Process child, bool closeInput) {
+  static Thread Pump(Stream source, Stream target, Process child) {
     var thread = new Thread(() => {
       try {
         var buffer = new byte[16384];
@@ -101,7 +102,6 @@ public static class CodexSshRelay {
         }
       }
       catch { try { if (!child.HasExited) child.Kill(); } catch {} }
-      finally { if (closeInput) { try { target.Close(); } catch {} } }
     });
     thread.IsBackground = true;
     thread.Start();
@@ -111,14 +111,13 @@ public static class CodexSshRelay {
     using (var child = new Process()) {
       child.StartInfo = new ProcessStartInfo(executable, arguments) {
         UseShellExecute = false, CreateNoWindow = true,
-        RedirectStandardInput = true, RedirectStandardOutput = true,
+        RedirectStandardInput = false, RedirectStandardOutput = true,
         RedirectStandardError = true
       };
       child.Start();
       try {
-        Pump(Console.OpenStandardInput(), child.StandardInput.BaseStream, child, true);
-        var output = Pump(child.StandardOutput.BaseStream, Console.OpenStandardOutput(), child, false);
-        var error = Pump(child.StandardError.BaseStream, Console.OpenStandardError(), child, false);
+        var output = Pump(child.StandardOutput.BaseStream, Console.OpenStandardOutput(), child);
+        var error = Pump(child.StandardError.BaseStream, Console.OpenStandardError(), child);
         child.WaitForExit();
         if (!output.Join(5000) || !error.Join(5000)) throw new IOException("SSH proxy streams did not close.");
         return child.ExitCode;

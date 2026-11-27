@@ -260,6 +260,17 @@ class _ProfileEditorState extends State<ProfileEditor> {
                     onSelectionChanged: (value) =>
                         setState(() => _appServerMode = value.single),
                   ),
+                  if (_remotePlatform == RemotePlatform.windows &&
+                      _appServerMode != AppServerMode.isolated)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        _appServerMode == AppServerMode.shared
+                            ? 'Shared requires a non-elevated SSH session. For administrator SSH logins, start Codex in a normal Windows terminal, then use Custom.'
+                            : 'Start Codex in a non-administrator Windows terminal as the same user, then enter the returned socketPath below.',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
                   if (_appServerMode == AppServerMode.custom) ...[
                     const SizedBox(height: 10),
                     TextFormField(

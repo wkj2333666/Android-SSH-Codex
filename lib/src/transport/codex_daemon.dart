@@ -219,6 +219,23 @@ fi
       environment,
     );
     if (_commandFailed(result)) {
+      if (platform == RemotePlatform.windows &&
+          utf8
+              .decode(result.stderr, allowMalformed: true)
+              .toLowerCase()
+              .contains(
+                  'start the windows daemon from a non-elevated terminal')) {
+        throw CodexBootstrapException(
+          'The Windows SSH session has administrator privileges. Shared startup '
+          'requires a non-elevated session. On the PC, run '
+          '`codex app-server daemon start` in a non-administrator terminal as '
+          'the same Windows user, then select Custom and paste the returned '
+          'socketPath. Start the daemon again after restarting Windows.',
+          reason: 'shared_start_elevated',
+          exitCode: result.exitCode,
+          exitSignal: result.exitSignal,
+        );
+      }
       if (platform == RemotePlatform.posix &&
           _daemonSubcommandIsUnsupported(result)) {
         return _probeExistingSharedSocket(run, environment);

@@ -70,6 +70,9 @@ The following shell requirements are for Linux/macOS. Windows uses PowerShell
 and the native Codex control-socket proxy; see [Windows hosts](WINDOWS.md).
 Windows supports Shared and Custom, with explicit drive-path validation and
 byte-preserving SSH proxy transport. Isolated remains POSIX-only.
+Shared requires a non-elevated Windows SSH session. Administrator SSH logins
+must use Custom with a daemon started in a normal terminal under the same user;
+see the administrator SSH setup in that guide.
 
 - `/bin/sh`, a `base64` command, and an OpenSSH server with Unix-socket
   forwarding enabled. The account login shell may be fish, Bash, Zsh, or

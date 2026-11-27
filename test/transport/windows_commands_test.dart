@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -10,6 +11,61 @@ import 'package:android_ssh_codex/src/transport/windows_commands.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  const elevatedDaemonError = 'Error: start the Windows daemon from a '
+      'non-elevated terminal; shared clients must not inherit administrator privileges';
+
+  test('Windows elevated Shared failure explains explicit Custom setup',
+      () async {
+    var calls = 0;
+    await expectLater(
+      CodexDaemon.startShared((command, {environment}) async {
+        calls++;
+        return SshCommandResult(
+            stdout: [],
+            stderr: utf8.encode(elevatedDaemonError),
+            exitCode: 1,
+            exitSignal: null);
+      }, environment: const {}, platform: RemotePlatform.windows),
+      throwsA(isA<CodexBootstrapException>()
+          .having((e) => e.reason, 'reason', 'shared_start_elevated')
+          .having((e) => e.exitCode, 'exitCode', 1)
+          .having(
+              (e) => e.message,
+              'guidance',
+              allOf(
+                  contains('non-administrator'),
+                  contains('same Windows user'),
+                  contains('codex app-server daemon start'),
+                  contains('Custom'),
+                  contains('socketPath')))),
+    );
+    expect(calls, 1,
+        reason: 'Never switch modes or probe another socket implicitly.');
+  });
+
+  for (final example in [
+    (platform: RemotePlatform.windows, error: 'Access denied.'),
+    (platform: RemotePlatform.posix, error: elevatedDaemonError),
+  ]) {
+    test(
+        '${example.platform.name} unrelated failure keeps its original diagnostic',
+        () async {
+      await expectLater(
+        CodexDaemon.startShared(
+            (command, {environment}) async => SshCommandResult(
+                stdout: [],
+                stderr: utf8.encode(example.error),
+                exitCode: 1,
+                exitSignal: null),
+            environment: const {},
+            platform: example.platform),
+        throwsA(isA<CodexBootstrapException>()
+            .having((e) => e.reason, 'reason', 'shared_start_failed')
+            .having((e) => e.message, 'message', contains(example.error))),
+      );
+    });
+  }
+
   test(
       'Windows uploads resume without truncation and private workspaces are unique',
       () async {
@@ -45,6 +101,71 @@ void main() {
       final root = Directory('${temp.path}/android-ssh-codex');
       expect(await root.exists(), isTrue);
     } finally {
+      await temp.delete(recursive: true);
+    }
+  }, skip: !Platform.isWindows);
+
+  test('Windows proxy supports consecutive interactive binary requests',
+      () async {
+    final temp = await Directory.systemTemp.createTemp('windows-roundtrips.');
+    Process? process;
+    StreamIterator<List<int>>? output;
+    var exited = false;
+    try {
+      final exe = '${temp.path}/echo.exe';
+      const program = r'''
+public static class Echo {
+  [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+  static extern System.IntPtr GetStdHandle(int id);
+  [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+  static extern bool ReadFile(System.IntPtr file, byte[] data, int size, out int count, System.IntPtr overlapped);
+  [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+  static extern bool WriteFile(System.IntPtr file, byte[] data, int size, out int count, System.IntPtr overlapped);
+  public static int Main() {
+    var data = new byte[1];
+    for (int round = 0; round < 3; round++) {
+      int count;
+      if (!ReadFile(GetStdHandle(-10), data, 1, out count, System.IntPtr.Zero) || count != 1) return 9;
+      if (!WriteFile(GetStdHandle(-11), data, 1, out count, System.IntPtr.Zero) || count != 1) return 10;
+    }
+    return 0;
+  }
+}
+''';
+      final compiled = await _run(powershellCommand(
+          'Add-Type -TypeDefinition ${powershellLiteral(program)} '
+          '-OutputAssembly ${powershellLiteral(exe)} -OutputType ConsoleApplication'));
+      expect(compiled.exitCode, 0, reason: compiled.stderr.toString());
+      final command =
+          powershellCommand('\$codexExecutable = ${powershellLiteral(exe)}\n'
+              r'$codexPrefix = @(); $codexArguments = @()'
+              '\n'
+              '$windowsProcessRelayScript');
+      process = await Process.start(
+          'powershell.exe', command.split(' ').skip(1).toList());
+      final errors = process.stderr.drain<void>();
+      output = StreamIterator(process.stdout);
+      for (final value in [42, 0, 255]) {
+        process.stdin.add([value]);
+        await process.stdin.flush();
+        expect(
+            await output.moveNext().timeout(const Duration(seconds: 8),
+                onTimeout: () =>
+                    throw TimeoutException('No reply for byte $value')),
+            isTrue);
+        expect(output.current, [value]);
+      }
+      expect(await process.exitCode.timeout(const Duration(seconds: 5)), 0);
+      exited = true;
+      await errors;
+    } finally {
+      if (process != null) {
+        if (!exited) {
+          await Process.run('taskkill', ['/PID', '${process.pid}', '/T', '/F']);
+        }
+        await process.stdin.close().catchError((_) {});
+      }
+      await output?.cancel();
       await temp.delete(recursive: true);
     }
   }, skip: !Platform.isWindows);
