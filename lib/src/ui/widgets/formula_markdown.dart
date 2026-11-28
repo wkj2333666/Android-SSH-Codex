@@ -1,7 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
+import 'package:flutter_math_fork/tex.dart' show MacroDefinition;
 import 'package:markdown/markdown.dart' as md;
+
+// The renderer's built-in \operatorname tries to consume an extra argument
+// after the name and scripts, failing before \left, \bigl, or spacing commands.
+// Treat the name itself as an upright operator and parse what follows normally.
+final _formulaSettings = TexParserSettings(macros: {
+  r'\operatorname': MacroDefinition.fromString(r'\mathop{\mathrm{#1}}'),
+});
 
 class FormulaInlineSyntax extends md.InlineSyntax {
   FormulaInlineSyntax()
@@ -102,6 +110,7 @@ class FormulaElementBuilder extends MarkdownElementBuilder {
       padding: display ? const EdgeInsets.symmetric(vertical: 6) : null,
       child: Math.tex(
         source,
+        settings: _formulaSettings,
         mathStyle: display ? MathStyle.display : MathStyle.text,
         textStyle: style,
         onErrorFallback: (_) =>
