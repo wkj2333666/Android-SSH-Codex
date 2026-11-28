@@ -68,6 +68,34 @@ y &= \sqrt{x}
     expect(find.text('Further explanation'), findsOneWidget);
   });
 
+  testWidgets('named operators do not consume delimiters or spacing',
+      (tester) async {
+    const formulas = [
+      r'\operatorname{clip}\left(\frac{x}{y},0,1\right)',
+      r'\operatorname{clip}\bigl(x,0,1\bigr)',
+      r'\operatorname{平均}_{t\in W}\left[x_t\right]',
+      r'\boxed{\operatorname{mean}_{j}\!\left[P_j\right]}',
+    ];
+    await _render(
+      tester,
+      [
+        r'\(' + formulas.first + r'\)',
+        for (final source in formulas.skip(1)) r'\[' + source + r'\]',
+      ].join('\n\n'),
+    );
+
+    final math = tester.widgetList<Math>(find.byType(Math)).toList();
+    expect(math, hasLength(formulas.length));
+    expect(math.map((formula) => formula.parseError), everyElement(isNull));
+    expect(math.first.mathStyle, MathStyle.text);
+    expect(math.skip(1).map((formula) => formula.mathStyle),
+        everyElement(MathStyle.display));
+    for (final formula in formulas) {
+      expect(find.text(formula), findsNothing);
+    }
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('unsupported LaTeX falls back without parsing code or prices', (
     tester,
   ) async {
