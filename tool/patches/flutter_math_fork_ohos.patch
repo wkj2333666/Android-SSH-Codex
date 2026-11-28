@@ -1,0 +1,31 @@
+--- a/lib/src/widgets/selectable.dart
++++ b/lib/src/widgets/selectable.dart
+@@ -293,3 +293,4 @@
+       case TargetPlatform.android:
++      case TargetPlatform.ohos:
+       case TargetPlatform.fuchsia:
+       case TargetPlatform.linux:
+@@ -479,4 +480,5 @@
+         return;
+       case TargetPlatform.android:
++      case TargetPlatform.ohos:
+       case TargetPlatform.fuchsia:
+       case TargetPlatform.linux:
+--- a/lib/src/render/layout/line_editable.dart
++++ b/lib/src/render/layout/line_editable.dart
+@@ -478,6 +478,7 @@
+         break;
+       case TargetPlatform.android:
++      case TargetPlatform.ohos:
+       case TargetPlatform.fuchsia:
+       case TargetPlatform.linux:
+       case TargetPlatform.windows:
+         _caretPrototype = Rect.fromLTWH(
+--- a/lib/src/widgets/selection/gesture_detector_builder_selectable.dart
++++ b/lib/src/widgets/selection/gesture_detector_builder_selectable.dart
+@@ -50,4 +50,5 @@
+           break;
+         case TargetPlatform.android:
++        case TargetPlatform.ohos:
+         case TargetPlatform.fuchsia:
+         case TargetPlatform.linux:

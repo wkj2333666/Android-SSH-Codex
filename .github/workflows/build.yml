@@ -185,7 +185,7 @@ jobs:
         working-directory: ohos
         run: ohpm install
       - name: Build unsigned HAP
-        run: flutter build hap --release --no-codesign --target-platform ohos-arm64
+        run: bash tool/build_ohos.sh
       - name: Collect HAP artifact
         run: |
           mkdir -p dist/ohos
