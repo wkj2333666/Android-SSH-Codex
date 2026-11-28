@@ -97,7 +97,7 @@ class MarkdownContent extends StatelessWidget {
         ],
       ),
       builders: {
-        'latex': FormulaElementBuilder(textStyle: theme.textTheme.bodyMedium),
+        'latex': FormulaElementBuilder(),
         'pre': CodeBlockElementBuilder(
           copyText: copyText,
           textStyle: codeTextStyle,

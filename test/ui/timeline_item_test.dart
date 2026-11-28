@@ -9,6 +9,7 @@ import 'package:android_ssh_codex/src/ui/widgets/task_question_panel.dart';
 import 'package:android_ssh_codex/src/ui/widgets/timeline_item.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
+import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -391,9 +392,12 @@ void main() {
 
     final markdown = tester.widget<MarkdownBody>(find.byType(MarkdownBody));
     expect(markdown.selectable, isTrue);
-    expect(markdown.builders, contains('latex'));
     expect(markdown.imageBuilder, isNotNull);
     expect(find.textContaining('Result', findRichText: true), findsOneWidget);
+    final math = tester.widget<Math>(find.byType(Math));
+    expect(math.parseError, isNull);
+    expect(math.mathStyle, MathStyle.text);
+    expect(find.text('x^2 + y^2 = z^2'), findsNothing);
   });
 
   testWidgets('fenced code blocks expose a copy action', (tester) async {
@@ -658,7 +662,10 @@ void main() {
       home: Scaffold(body: MarkdownContent(text: r'$$x^2 + y^2 = z^2$$')),
     ));
 
-    expect(find.text('x^2 + y^2 = z^2'), findsOneWidget);
+    final math = tester.widget<Math>(find.byType(Math));
+    expect(math.parseError, isNull);
+    expect(math.mathStyle, MathStyle.display);
+    expect(find.text('x^2 + y^2 = z^2'), findsNothing);
     expect(find.text(r'$$x^2 + y^2 = z^2$$'), findsNothing);
   });
 
